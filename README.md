@@ -6,3 +6,8 @@ One day, I needed to scan some documents and, like anyone would, I searched the 
 That's when I decided to build my own scanner app: one without those intrusive popup ads (I might only include subtle banner ads at the top or bottom), zero watermarks, and a clean, intuitive UI.
 
 Today (12-09-2026), I am officially starting work on this project! I'll post updates here until it's finished and keep everything documented along the way. If you're a developer and interested in this idea, feel free to reach out to me through any of the links on my profile. I’d love to team up, collaborate, and learn together.
+
+12-09-2026 7:35 (GMT+5:30) :
+So after working on it for whole day, i was able to create the first draft, so the application is succesfully installed on my device, and it is able to click pics and create pdf from it, Toast, sliding through pages, and all the buttons are working as intended, though the edge detection is not working/working not good enough, so need to check that. 
+For development, I Researched and discussed with Gemini, and used Antigravity to define everything and make the baase version. Next i wanna add firebase for anlytics and maybe make the app publish level. Maybe ill add ads on it as banner ads and not fullscrren. 
+In Process, i faced some issues reagding package icon and missing string values, which i fixed easily, the majority of time i spend was a unrelated issue( not even issue), so the gradle wasnt getting downloaded at all cause of net speed nd it kept timing out or network issue and had to restart, it took me about 2.5 hours to deal with it. 
