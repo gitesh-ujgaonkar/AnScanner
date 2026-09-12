@@ -1,0 +1,317 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         SHAPE APPEARANCES
+         ══════════════════════════════════════════════════════════════════ -->
+
+    <style name="ShapeAppearance.AnScanner.SmallComponent" parent="ShapeAppearance.Material3.SmallComponent">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">@dimen/radius_sm</item>
+    </style>
+
+    <style name="ShapeAppearance.AnScanner.MediumComponent" parent="ShapeAppearance.Material3.MediumComponent">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">@dimen/radius_lg</item>
+    </style>
+
+    <style name="ShapeAppearance.AnScanner.LargeComponent" parent="ShapeAppearance.Material3.LargeComponent">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">@dimen/radius_xl</item>
+    </style>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         TEXT APPEARANCES
+         ══════════════════════════════════════════════════════════════════ -->
+
+    <!-- Screen titles: "Scan document", "All Scans", "Settings" -->
+    <style name="TextAppearance.AnScanner.Headline" parent="TextAppearance.Material3.HeadlineSmall">
+        <item name="android:textColor">@color/text_primary</item>
+        <item name="android:textSize">22sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:letterSpacing">-0.01</item>
+    </style>
+
+    <!-- Section headers: "TODAY", "PREVIOUS 7 DAYS", "Storage" -->
+    <style name="TextAppearance.AnScanner.SectionHeader" parent="TextAppearance.Material3.LabelLarge">
+        <item name="android:textColor">@color/text_muted</item>
+        <item name="android:textSize">12sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:textAllCaps">true</item>
+        <item name="android:letterSpacing">0.08</item>
+    </style>
+
+    <!-- Card/list item titles: Document names, setting labels -->
+    <style name="TextAppearance.AnScanner.Title" parent="TextAppearance.Material3.TitleMedium">
+        <item name="android:textColor">@color/text_primary</item>
+        <item name="android:textSize">16sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+    </style>
+
+    <!-- Subtitle text: Page counts, file sizes, timestamps -->
+    <style name="TextAppearance.AnScanner.Subtitle" parent="TextAppearance.Material3.BodyMedium">
+        <item name="android:textColor">@color/text_secondary</item>
+        <item name="android:textSize">14sp</item>
+        <item name="android:fontFamily">sans-serif</item>
+    </style>
+
+    <!-- Body text: Descriptions, hints -->
+    <style name="TextAppearance.AnScanner.Body" parent="TextAppearance.Material3.BodyMedium">
+        <item name="android:textColor">@color/text_secondary</item>
+        <item name="android:textSize">14sp</item>
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="android:lineSpacingMultiplier">1.4</item>
+    </style>
+
+    <!-- Small labels: Badges, format tags, "Stored locally" -->
+    <style name="TextAppearance.AnScanner.Label" parent="TextAppearance.Material3.LabelSmall">
+        <item name="android:textColor">@color/text_muted</item>
+        <item name="android:textSize">11sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+    </style>
+
+    <!-- Button text -->
+    <style name="TextAppearance.AnScanner.Button" parent="TextAppearance.Material3.LabelLarge">
+        <item name="android:textSize">15sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:letterSpacing">0.02</item>
+    </style>
+
+    <!-- Camera framing hint overlay text -->
+    <style name="TextAppearance.AnScanner.Hint" parent="TextAppearance.Material3.BodySmall">
+        <item name="android:textColor">@color/text_secondary</item>
+        <item name="android:textSize">13sp</item>
+        <item name="android:fontFamily">sans-serif</item>
+    </style>
+
+    <!-- Page number badge -->
+    <style name="TextAppearance.AnScanner.Badge" parent="TextAppearance.Material3.LabelSmall">
+        <item name="android:textColor">@color/text_on_accent</item>
+        <item name="android:textSize">11sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+    </style>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         BUTTON STYLES
+         ══════════════════════════════════════════════════════════════════ -->
+
+    <!-- Primary CTA: Mint Green filled button with dark text -->
+    <style name="Widget.AnScanner.Button.Primary" parent="Widget.Material3.Button">
+        <item name="android:minHeight">@dimen/button_height_primary</item>
+        <item name="android:textAppearance">@style/TextAppearance.AnScanner.Button</item>
+        <item name="android:textColor">@color/text_on_accent</item>
+        <item name="backgroundTint">@color/accent_mint</item>
+        <item name="cornerRadius">@dimen/button_corner_radius</item>
+        <item name="android:insetTop">0dp</item>
+        <item name="android:insetBottom">0dp</item>
+        <item name="rippleColor">@color/accent_mint_ripple</item>
+        <item name="android:stateListAnimator">@null</item>
+        <item name="elevation">0dp</item>
+    </style>
+
+    <!-- Secondary: Outline button with mint border -->
+    <style name="Widget.AnScanner.Button.Secondary" parent="Widget.Material3.Button.OutlinedButton">
+        <item name="android:minHeight">@dimen/button_height_secondary</item>
+        <item name="android:textAppearance">@style/TextAppearance.AnScanner.Button</item>
+        <item name="android:textColor">@color/text_primary</item>
+        <item name="strokeColor">@color/divider</item>
+        <item name="strokeWidth">1dp</item>
+        <item name="cornerRadius">@dimen/button_corner_radius</item>
+        <item name="android:insetTop">0dp</item>
+        <item name="android:insetBottom">0dp</item>
+        <item name="rippleColor">@color/accent_mint_ripple</item>
+    </style>
+
+    <!-- Text-only button: Mint Green text, no background -->
+    <style name="Widget.AnScanner.Button.Text" parent="Widget.Material3.Button.TextButton">
+        <item name="android:textAppearance">@style/TextAppearance.AnScanner.Button</item>
+        <item name="android:textColor">@color/accent_mint</item>
+        <item name="rippleColor">@color/accent_mint_ripple</item>
+        <item name="android:minHeight">@dimen/button_height_secondary</item>
+    </style>
+
+    <!-- Icon-only toolbar button -->
+    <style name="Widget.AnScanner.Button.Icon" parent="Widget.Material3.Button.IconButton">
+        <item name="iconTint">@color/text_primary</item>
+        <item name="iconSize">@dimen/icon_md</item>
+        <item name="rippleColor">@color/accent_mint_ripple</item>
+    </style>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         CARD STYLES
+         ══════════════════════════════════════════════════════════════════ -->
+
+    <!-- Standard elevated dark card -->
+    <style name="Widget.AnScanner.CardView" parent="Widget.Material3.CardView.Filled">
+        <item name="cardBackgroundColor">@color/surface_card</item>
+        <item name="cardCornerRadius">@dimen/radius_lg</item>
+        <item name="cardElevation">@dimen/elevation_card</item>
+        <item name="contentPadding">@dimen/card_padding</item>
+        <item name="strokeWidth">0dp</item>
+    </style>
+
+    <!-- Card for settings sections -->
+    <style name="Widget.AnScanner.CardView.Settings" parent="Widget.AnScanner.CardView">
+        <item name="cardBackgroundColor">@color/surface_card</item>
+        <item name="cardCornerRadius">@dimen/radius_lg</item>
+        <item name="cardElevation">0dp</item>
+    </style>
+
+    <!-- Card for library document items -->
+    <style name="Widget.AnScanner.CardView.DocumentItem" parent="Widget.AnScanner.CardView">
+        <item name="cardBackgroundColor">@color/surface_card</item>
+        <item name="cardCornerRadius">@dimen/radius_md</item>
+        <item name="cardElevation">0dp</item>
+        <item name="contentPadding">@dimen/spacing_md</item>
+    </style>
+
+    <!-- Card for page grid thumbnails -->
+    <style name="Widget.AnScanner.CardView.PageThumbnail" parent="Widget.AnScanner.CardView">
+        <item name="cardBackgroundColor">@color/surface_elevated</item>
+        <item name="cardCornerRadius">@dimen/radius_md</item>
+        <item name="cardElevation">0dp</item>
+        <item name="contentPadding">0dp</item>
+    </style>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         TEXT INPUT STYLES
+         ══════════════════════════════════════════════════════════════════ -->
+
+    <style name="Widget.AnScanner.TextInputLayout" parent="Widget.Material3.TextInputLayout.OutlinedBox">
+        <item name="boxCornerRadiusTopStart">@dimen/text_input_corner_radius</item>
+        <item name="boxCornerRadiusTopEnd">@dimen/text_input_corner_radius</item>
+        <item name="boxCornerRadiusBottomStart">@dimen/text_input_corner_radius</item>
+        <item name="boxCornerRadiusBottomEnd">@dimen/text_input_corner_radius</item>
+        <item name="boxStrokeColor">@color/divider</item>
+        <item name="boxStrokeWidth">1dp</item>
+        <item name="boxBackgroundColor">@color/surface_elevated</item>
+        <item name="hintTextColor">@color/text_muted</item>
+        <item name="android:textColorHint">@color/text_muted</item>
+        <item name="boxStrokeWidthFocused">2dp</item>
+    </style>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         BOTTOM SHEET STYLES
+         ══════════════════════════════════════════════════════════════════ -->
+
+    <style name="Widget.AnScanner.BottomSheet" parent="Widget.Material3.BottomSheet">
+        <item name="backgroundTint">@color/surface_card</item>
+        <item name="shapeAppearance">@style/ShapeAppearance.AnScanner.BottomSheet</item>
+    </style>
+
+    <style name="ShapeAppearance.AnScanner.BottomSheet" parent="">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSizeTopLeft">@dimen/radius_bottom_sheet</item>
+        <item name="cornerSizeTopRight">@dimen/radius_bottom_sheet</item>
+        <item name="cornerSizeBottomLeft">0dp</item>
+        <item name="cornerSizeBottomRight">0dp</item>
+    </style>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         TOGGLE GROUP / SEGMENTED BUTTON STYLES
+         ══════════════════════════════════════════════════════════════════ -->
+
+    <!-- Segmented button for format/quality selection -->
+    <style name="Widget.AnScanner.SegmentedButton" parent="Widget.Material3.Button.OutlinedButton">
+        <item name="android:minHeight">40dp</item>
+        <item name="android:textAppearance">@style/TextAppearance.AnScanner.Label</item>
+        <item name="android:textColor">@color/text_primary</item>
+        <item name="strokeColor">@color/divider</item>
+        <item name="strokeWidth">1dp</item>
+        <item name="backgroundTint">@android:color/transparent</item>
+        <item name="cornerRadius">@dimen/radius_sm</item>
+        <item name="android:insetTop">0dp</item>
+        <item name="android:insetBottom">0dp</item>
+    </style>
+
+    <!-- Active/checked segmented button -->
+    <style name="Widget.AnScanner.SegmentedButton.Checked" parent="Widget.AnScanner.SegmentedButton">
+        <item name="backgroundTint">@color/accent_mint</item>
+        <item name="android:textColor">@color/text_on_accent</item>
+        <item name="strokeWidth">0dp</item>
+    </style>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         TOOLBAR STYLES
+         ══════════════════════════════════════════════════════════════════ -->
+
+    <style name="Widget.AnScanner.Toolbar" parent="Widget.Material3.Toolbar">
+        <item name="android:background">@color/background_primary</item>
+        <item name="titleTextColor">@color/text_primary</item>
+        <item name="subtitleTextColor">@color/text_secondary</item>
+        <item name="navigationIconTint">@color/text_primary</item>
+    </style>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         SWITCH / TOGGLE STYLES
+         ══════════════════════════════════════════════════════════════════ -->
+
+    <style name="Widget.AnScanner.Switch" parent="Widget.Material3.CompoundButton.MaterialSwitch">
+        <item name="thumbTint">@color/accent_mint</item>
+        <item name="trackTint">@color/surface_elevated</item>
+        <item name="trackDecorationTint">@color/divider</item>
+    </style>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         CHIP / BADGE STYLES
+         ══════════════════════════════════════════════════════════════════ -->
+
+    <!-- Format badge: "PDF", "JPG" in library list -->
+    <style name="Widget.AnScanner.Chip.FormatBadge" parent="Widget.Material3.Chip.Assist">
+        <item name="chipBackgroundColor">@color/surface_elevated</item>
+        <item name="android:textColor">@color/text_secondary</item>
+        <item name="android:textSize">10sp</item>
+        <item name="chipMinHeight">22dp</item>
+        <item name="chipCornerRadius">@dimen/radius_sm</item>
+        <item name="chipStrokeWidth">0dp</item>
+        <item name="chipMinTouchTargetSize">0dp</item>
+        <item name="ensureMinTouchTargetSize">false</item>
+    </style>
+
+    <!-- On-Device badge: green accent background -->
+    <style name="Widget.AnScanner.Chip.OnDevice" parent="Widget.Material3.Chip.Assist">
+        <item name="chipBackgroundColor">@color/accent_mint_surface</item>
+        <item name="android:textColor">@color/accent_mint</item>
+        <item name="android:textSize">11sp</item>
+        <item name="chipMinHeight">26dp</item>
+        <item name="chipCornerRadius">@dimen/radius_sm</item>
+        <item name="chipStrokeWidth">0dp</item>
+    </style>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         FAB STYLES
+         ══════════════════════════════════════════════════════════════════ -->
+
+    <!-- Camera FAB in bottom navigation -->
+    <style name="Widget.AnScanner.FAB.Camera" parent="Widget.Material3.FloatingActionButton.Primary">
+        <item name="backgroundTint">@color/accent_mint</item>
+        <item name="tint">@color/text_on_accent</item>
+        <item name="elevation">@dimen/camera_fab_elevation</item>
+        <item name="fabSize">normal</item>
+        <item name="shapeAppearance">@style/ShapeAppearance.AnScanner.FAB</item>
+    </style>
+
+    <style name="ShapeAppearance.AnScanner.FAB" parent="">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">50%</item>
+    </style>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         SEARCH VIEW STYLES
+         ══════════════════════════════════════════════════════════════════ -->
+
+    <style name="Widget.AnScanner.SearchView" parent="Widget.Material3.SearchBar">
+        <item name="backgroundTint">@color/surface_card</item>
+        <item name="android:textColorHint">@color/text_muted</item>
+    </style>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         DIVIDER
+         ══════════════════════════════════════════════════════════════════ -->
+
+    <style name="Widget.AnScanner.Divider" parent="Widget.Material3.MaterialDivider">
+        <item name="dividerColor">@color/divider</item>
+        <item name="dividerThickness">1dp</item>
+    </style>
+
+</resources>

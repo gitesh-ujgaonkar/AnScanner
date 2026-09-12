@@ -1,0 +1,182 @@
+[
+    {
+        "merged": "C:\\Users\\ujgon\\.gradle\\daemon\\8.7\\com.anscanner.app-debug-43:\\layout_bottom_sheet_save_scan.xml.flat",
+        "source": "C:\\Users\\ujgon\\.gradle\\daemon\\8.7\\com.anscanner.app-main-45:\\layout\\bottom_sheet_save_scan.xml"
+    },
+    {
+        "merged": "C:\\Users\\ujgon\\.gradle\\daemon\\8.7\\com.anscanner.app-debug-43:\\drawable_ic_privacy.xml.flat",
+        "source": "C:\\Users\\ujgon\\.gradle\\daemon\\8.7\\com.anscanner.app-main-45:\\drawable\\ic_privacy.xml"
+    },
+    {
+        "merged": "C:\\Users\\ujgon\\.gradle\\daemon\\8.7\\com.anscanner.app-debug-43:\\drawable_ic_flash_off.xml.flat",
+        "source": "C:\\Users\\ujgon\\.gradle\\daemon\\8.7\\com.anscanner.app-main-45:\\drawable\\ic_flash_off.xml"
+    },
+    {
+        "merged": "com.anscanner.app-debug-43:/mipmap-hdpi_ic_launcher.webp.flat",
+        "source": "com.anscanner.app-main-45:/mipmap-hdpi/ic_launcher.webp"
+    },
+    {
+        "merged": "com.anscanner.app-debug-43:/mipmap-xxhdpi_ic_launcher_round.webp.flat",
+        "source": "com.anscanner.app-main-45:/mipmap-xxhdpi/ic_launcher_round.webp"
+    },
+    {
+        "merged": "C:\\Users\\ujgon\\.gradle\\daemon\\8.7\\com.anscanner.app-debug-43:\\drawable_ic_flash_on.xml.flat",
+        "source": "C:\\Users\\ujgon\\.gradle\\daemon\\8.7\\com.anscanner.app-main-45:\\drawable\\ic_flash_on.xml"
+    },
+    {
+        "merged": "com.anscanner.app-debug-43:/mipmap-xxhdpi_ic_launcher.webp.flat",
+        "source": "com.anscanner.app-main-45:/mipmap-xxhdpi/ic_launcher.webp"
+    },
+    {
+        "merged": "C:\\Users\\ujgon\\.gradle\\daemon\\8.7\\com.anscanner.app-debug-43:\\drawable_ic_search.xml.flat",
+        "source": "C:\\Users\\ujgon\\.gradle\\daemon\\8.7\\com.anscanner.app-main-45:\\drawable\\ic_search.xml"
+    },
+    {
+        "merged": "C:\\Users\\ujgon\\.gradle\\daemon\\8.7\\com.anscanner.app-debug-43:\\layout_activity_library.xml.flat",
+        "source": "C:\\Users\\ujgon\\.gradle\\daemon\\8.7\\com.anscanner.app-main-45:\\layout\\activity_library.xml"
+    },
+    {
+        "merged": "C:\\Users\\ujgon\\.gradle\\daemon\\8.7\\com.anscanner.app-debug-43:\\layout_item_add_page.xml.flat",
+        "source": "C:\\Users\\ujgon\\.gradle\\daemon\\8.7\\com.anscanner.app-main-45:\\layout\\item_add_page.xml"
+    },
+    {
+        "merged": "C:\\Users\\ujgon\\.gradle\\daemon\\8.7\\com.anscanner.app-debug-43:\\drawable_ic_settings.xml.flat",
+        "source": "C:\\Users\\ujgon\\.gradle\\daemon\\8.7\\com.anscanner.app-main-45:\\drawable\\ic_settings.xml"
+    },
+    {
+        "merged": "C:\\Users\\ujgon\\.gradle\\daemon\\8.7\\com.anscanner.app-debug-43:\\drawable_bg_format_tag.xml.flat",
+        "source": "C:\\Users\\ujgon\\.gradle\\daemon\\8.7\\com.anscanner.app-main-45:\\drawable\\bg_format_tag.xml"
+    },
+    {
+        "merged": "C:\\Users\\ujgon\\.gradle\\daemon\\8.7\\com.anscanner.app-debug-43:\\layout_item_document_row.xml.flat",
+        "source": "C:\\Users\\ujgon\\.gradle\\daemon\\8.7\\com.anscanner.app-main-45:\\layout\\item_document_row.xml"
+    },
+    {
+        "merged": "C:\\Users\\ujgon\\.gradle\\daemon\\8.7\\com.anscanner.app-debug-43:\\drawable_ic_back_arrow.xml.flat",
+        "source": "C:\\Users\\ujgon\\.gradle\\daemon\\8.7\\com.anscanner.app-main-45:\\drawable\\ic_back_arrow.xml"
+    },
+    {
+        "merged": "com.anscanner.app-debug-43:/mipmap-xhdpi_ic_launcher_round.webp.flat",
+        "source": "com.anscanner.app-main-45:/mipmap-xhdpi/ic_launcher_round.webp"
+    },
+    {
+        "merged": "C:\\Users\\ujgon\\.gradle\\daemon\\8.7\\com.anscanner.app-debug-43:\\layout_item_page_thumbnail.xml.flat",
+        "source": "C:\\Users\\ujgon\\.gradle\\daemon\\8.7\\com.anscanner.app-main-45:\\layout\\item_page_thumbnail.xml"
+    },
+    {
+        "merged": "C:\\Users\\ujgon\\.gradle\\daemon\\8.7\\com.anscanner.app-debug-43:\\drawable_ic_rotate.xml.flat",
+        "source": "C:\\Users\\ujgon\\.gradle\\daemon\\8.7\\com.anscanner.app-main-45:\\drawable\\ic_rotate.xml"
+    },
+    {
+        "merged": "C:\\Users\\ujgon\\.gradle\\daemon\\8.7\\com.anscanner.app-debug-43:\\drawable_ic_camera.xml.flat",
+        "source": "C:\\Users\\ujgon\\.gradle\\daemon\\8.7\\com.anscanner.app-main-45:\\drawable\\ic_camera.xml"
+    },
+    {
+        "merged": "C:\\Users\\ujgon\\.gradle\\daemon\\8.7\\com.anscanner.app-debug-43:\\layout_activity_camera.xml.flat",
+        "source": "C:\\Users\\ujgon\\.gradle\\daemon\\8.7\\com.anscanner.app-main-45:\\layout\\activity_camera.xml"
+    },
+    {
+        "merged": "C:\\Users\\ujgon\\.gradle\\daemon\\8.7\\com.anscanner.app-debug-43:\\layout_item_recent_scan.xml.flat",
+        "source": "C:\\Users\\ujgon\\.gradle\\daemon\\8.7\\com.anscanner.app-main-45:\\layout\\item_recent_scan.xml"
+    },
+    {
+        "merged": "C:\\Users\\ujgon\\.gradle\\daemon\\8.7\\com.anscanner.app-debug-43:\\layout_activity_review_scan.xml.flat",
+        "source": "C:\\Users\\ujgon\\.gradle\\daemon\\8.7\\com.anscanner.app-main-45:\\layout\\activity_review_scan.xml"
+    },
+    {
+        "merged": "com.anscanner.app-debug-43:/mipmap-xxxhdpi_ic_launcher.webp.flat",
+        "source": "com.anscanner.app-main-45:/mipmap-xxxhdpi/ic_launcher.webp"
+    },
+    {
+        "merged": "C:\\Users\\ujgon\\.gradle\\daemon\\8.7\\com.anscanner.app-debug-43:\\drawable_ic_chevron_right.xml.flat",
+        "source": "C:\\Users\\ujgon\\.gradle\\daemon\\8.7\\com.anscanner.app-main-45:\\drawable\\ic_chevron_right.xml"
+    },
+    {
+        "merged": "C:\\Users\\ujgon\\.gradle\\daemon\\8.7\\com.anscanner.app-debug-43:\\layout_activity_settings.xml.flat",
+        "source": "C:\\Users\\ujgon\\.gradle\\daemon\\8.7\\com.anscanner.app-main-45:\\layout\\activity_settings.xml"
+    },
+    {
+        "merged": "C:\\Users\\ujgon\\.gradle\\daemon\\8.7\\com.anscanner.app-debug-43:\\drawable_ic_add_page.xml.flat",
+        "source": "C:\\Users\\ujgon\\.gradle\\daemon\\8.7\\com.anscanner.app-main-45:\\drawable\\ic_add_page.xml"
+    },
+    {
+        "merged": "C:\\Users\\ujgon\\.gradle\\daemon\\8.7\\com.anscanner.app-debug-43:\\layout_item_date_header.xml.flat",
+        "source": "C:\\Users\\ujgon\\.gradle\\daemon\\8.7\\com.anscanner.app-main-45:\\layout\\item_date_header.xml"
+    },
+    {
+        "merged": "com.anscanner.app-debug-43:/drawable_ic_launcher_foreground.xml.flat",
+        "source": "com.anscanner.app-main-45:/drawable/ic_launcher_foreground.xml"
+    },
+    {
+        "merged": "com.anscanner.app-debug-43:/mipmap-xxxhdpi_ic_launcher_round.webp.flat",
+        "source": "com.anscanner.app-main-45:/mipmap-xxxhdpi/ic_launcher_round.webp"
+    },
+    {
+        "merged": "C:\\Users\\ujgon\\.gradle\\daemon\\8.7\\com.anscanner.app-debug-43:\\layout_activity_crop_preview.xml.flat",
+        "source": "C:\\Users\\ujgon\\.gradle\\daemon\\8.7\\com.anscanner.app-main-45:\\layout\\activity_crop_preview.xml"
+    },
+    {
+        "merged": "com.anscanner.app-debug-43:/mipmap-xhdpi_ic_launcher.webp.flat",
+        "source": "com.anscanner.app-main-45:/mipmap-xhdpi/ic_launcher.webp"
+    },
+    {
+        "merged": "C:\\Users\\ujgon\\.gradle\\daemon\\8.7\\com.anscanner.app-debug-43:\\drawable_bg_dashed_border.xml.flat",
+        "source": "C:\\Users\\ujgon\\.gradle\\daemon\\8.7\\com.anscanner.app-main-45:\\drawable\\bg_dashed_border.xml"
+    },
+    {
+        "merged": "C:\\Users\\ujgon\\.gradle\\daemon\\8.7\\com.anscanner.app-debug-43:\\drawable_bg_card.xml.flat",
+        "source": "C:\\Users\\ujgon\\.gradle\\daemon\\8.7\\com.anscanner.app-main-45:\\drawable\\bg_card.xml"
+    },
+    {
+        "merged": "com.anscanner.app-debug-43:/mipmap-hdpi_ic_launcher_round.webp.flat",
+        "source": "com.anscanner.app-main-45:/mipmap-hdpi/ic_launcher_round.webp"
+    },
+    {
+        "merged": "com.anscanner.app-debug-43:/mipmap-anydpi-v26_ic_launcher.xml.flat",
+        "source": "com.anscanner.app-main-45:/mipmap-anydpi-v26/ic_launcher.xml"
+    },
+    {
+        "merged": "com.anscanner.app-debug-43:/mipmap-mdpi_ic_launcher.webp.flat",
+        "source": "com.anscanner.app-main-45:/mipmap-mdpi/ic_launcher.webp"
+    },
+    {
+        "merged": "C:\\Users\\ujgon\\.gradle\\daemon\\8.7\\com.anscanner.app-debug-43:\\drawable_ic_library.xml.flat",
+        "source": "C:\\Users\\ujgon\\.gradle\\daemon\\8.7\\com.anscanner.app-main-45:\\drawable\\ic_library.xml"
+    },
+    {
+        "merged": "C:\\Users\\ujgon\\.gradle\\daemon\\8.7\\com.anscanner.app-debug-43:\\drawable_ic_crop.xml.flat",
+        "source": "C:\\Users\\ujgon\\.gradle\\daemon\\8.7\\com.anscanner.app-main-45:\\drawable\\ic_crop.xml"
+    },
+    {
+        "merged": "C:\\Users\\ujgon\\.gradle\\daemon\\8.7\\com.anscanner.app-debug-43:\\drawable_ic_close.xml.flat",
+        "source": "C:\\Users\\ujgon\\.gradle\\daemon\\8.7\\com.anscanner.app-main-45:\\drawable\\ic_close.xml"
+    },
+    {
+        "merged": "C:\\Users\\ujgon\\.gradle\\daemon\\8.7\\com.anscanner.app-debug-43:\\drawable_bg_page_badge.xml.flat",
+        "source": "C:\\Users\\ujgon\\.gradle\\daemon\\8.7\\com.anscanner.app-main-45:\\drawable\\bg_page_badge.xml"
+    },
+    {
+        "merged": "com.anscanner.app-debug-43:/mipmap-mdpi_ic_launcher_round.webp.flat",
+        "source": "com.anscanner.app-main-45:/mipmap-mdpi/ic_launcher_round.webp"
+    },
+    {
+        "merged": "C:\\Users\\ujgon\\.gradle\\daemon\\8.7\\com.anscanner.app-debug-43:\\drawable_bg_corner_handle.xml.flat",
+        "source": "C:\\Users\\ujgon\\.gradle\\daemon\\8.7\\com.anscanner.app-main-45:\\drawable\\bg_corner_handle.xml"
+    },
+    {
+        "merged": "C:\\Users\\ujgon\\.gradle\\daemon\\8.7\\com.anscanner.app-debug-43:\\drawable_bg_shutter_button.xml.flat",
+        "source": "C:\\Users\\ujgon\\.gradle\\daemon\\8.7\\com.anscanner.app-main-45:\\drawable\\bg_shutter_button.xml"
+    },
+    {
+        "merged": "com.anscanner.app-debug-43:/mipmap-anydpi-v26_ic_launcher_round.xml.flat",
+        "source": "com.anscanner.app-main-45:/mipmap-anydpi-v26/ic_launcher_round.xml"
+    },
+    {
+        "merged": "C:\\Users\\ujgon\\.gradle\\daemon\\8.7\\com.anscanner.app-debug-43:\\drawable_ic_delete.xml.flat",
+        "source": "C:\\Users\\ujgon\\.gradle\\daemon\\8.7\\com.anscanner.app-main-45:\\drawable\\ic_delete.xml"
+    },
+    {
+        "merged": "C:\\Users\\ujgon\\.gradle\\daemon\\8.7\\com.anscanner.app-debug-43:\\drawable_ic_filter.xml.flat",
+        "source": "C:\\Users\\ujgon\\.gradle\\daemon\\8.7\\com.anscanner.app-main-45:\\drawable\\ic_filter.xml"
+    }
+]

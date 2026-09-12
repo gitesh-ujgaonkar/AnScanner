@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         AnScanner — Base Application Theme (Material3 Dark)
+         ══════════════════════════════════════════════════════════════════ -->
+    <style name="Theme.AnScanner" parent="Theme.Material3.Dark.NoActionBar">
+
+        <!-- ── Material3 Color System ─────────────────────────────────── -->
+        <item name="colorPrimary">@color/md_theme_primary</item>
+        <item name="colorOnPrimary">@color/md_theme_onPrimary</item>
+        <item name="colorPrimaryContainer">@color/md_theme_primaryContainer</item>
+        <item name="colorOnPrimaryContainer">@color/md_theme_onPrimaryContainer</item>
+
+        <item name="colorSecondary">@color/md_theme_secondary</item>
+        <item name="colorOnSecondary">@color/md_theme_onSecondary</item>
+
+        <item name="colorError">@color/md_theme_error</item>
+        <item name="colorOnError">@color/md_theme_onError</item>
+
+        <item name="android:colorBackground">@color/md_theme_background</item>
+        <item name="colorOnBackground">@color/md_theme_onBackground</item>
+
+        <item name="colorSurface">@color/md_theme_surface</item>
+        <item name="colorOnSurface">@color/md_theme_onSurface</item>
+        <item name="colorSurfaceVariant">@color/md_theme_surfaceVariant</item>
+        <item name="colorOnSurfaceVariant">@color/md_theme_onSurfaceVariant</item>
+
+        <item name="colorOutline">@color/md_theme_outline</item>
+
+        <!-- ── System Bars ────────────────────────────────────────────── -->
+        <item name="android:statusBarColor">@color/status_bar</item>
+        <item name="android:navigationBarColor">@color/navigation_bar</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+
+        <!-- ── Window Background ──────────────────────────────────────── -->
+        <item name="android:windowBackground">@color/background_primary</item>
+
+        <!-- ── Default Text Colors ────────────────────────────────────── -->
+        <item name="android:textColorPrimary">@color/text_primary</item>
+        <item name="android:textColorSecondary">@color/text_secondary</item>
+        <item name="android:textColorHint">@color/text_hint</item>
+
+        <!-- ── Default Widget Styles ──────────────────────────────────── -->
+        <item name="materialButtonStyle">@style/Widget.AnScanner.Button.Primary</item>
+        <item name="materialCardViewStyle">@style/Widget.AnScanner.CardView</item>
+        <item name="textInputStyle">@style/Widget.AnScanner.TextInputLayout</item>
+        <item name="bottomSheetDialogTheme">@style/Theme.AnScanner.BottomSheet</item>
+
+        <!-- ── Shape Appearances ──────────────────────────────────────── -->
+        <item name="shapeAppearanceSmallComponent">@style/ShapeAppearance.AnScanner.SmallComponent</item>
+        <item name="shapeAppearanceMediumComponent">@style/ShapeAppearance.AnScanner.MediumComponent</item>
+        <item name="shapeAppearanceLargeComponent">@style/ShapeAppearance.AnScanner.LargeComponent</item>
+
+    </style>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         Bottom Sheet Dialog Theme
+         ══════════════════════════════════════════════════════════════════ -->
+    <style name="Theme.AnScanner.BottomSheet" parent="ThemeOverlay.Material3.BottomSheetDialog">
+        <item name="bottomSheetStyle">@style/Widget.AnScanner.BottomSheet</item>
+        <item name="android:windowIsFloating">false</item>
+        <item name="android:windowSoftInputMode">adjustResize</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@color/surface_card</item>
+    </style>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         Camera Activity Theme (Fullscreen, immersive)
+         ══════════════════════════════════════════════════════════════════ -->
+    <style name="Theme.AnScanner.Camera" parent="Theme.AnScanner">
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@color/background_primary</item>
+        <item name="android:windowTranslucentStatus">false</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+    </style>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         Crop Preview Activity Theme (Dark with transparent status bar)
+         ══════════════════════════════════════════════════════════════════ -->
+    <style name="Theme.AnScanner.CropPreview" parent="Theme.AnScanner">
+        <item name="android:statusBarColor">@color/background_secondary</item>
+        <item name="android:windowBackground">@color/background_secondary</item>
+    </style>
+
+</resources>

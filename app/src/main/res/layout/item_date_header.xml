@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TextView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/tvDateHeader"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:textAppearance="@style/TextAppearance.AnScanner.SectionHeader"
+    android:paddingHorizontal="@dimen/card_margin_horizontal"
+    android:paddingTop="@dimen/spacing_lg"
+    android:paddingBottom="@dimen/spacing_sm"
+    xmlns:tools="http://schemas.android.com/tools"
+    tools:text="TODAY" />

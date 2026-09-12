@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- ── Standard Spacing ───────────────────────────────────────────── -->
+    <dimen name="spacing_xxs">2dp</dimen>
+    <dimen name="spacing_xs">4dp</dimen>
+    <dimen name="spacing_sm">8dp</dimen>
+    <dimen name="spacing_md">12dp</dimen>
+    <dimen name="spacing_lg">16dp</dimen>
+    <dimen name="spacing_xl">24dp</dimen>
+    <dimen name="spacing_xxl">32dp</dimen>
+    <dimen name="spacing_xxxl">48dp</dimen>
+
+    <!-- ── Corner Radii ───────────────────────────────────────────────── -->
+    <dimen name="radius_sm">8dp</dimen>
+    <dimen name="radius_md">12dp</dimen>
+    <dimen name="radius_lg">16dp</dimen>
+    <dimen name="radius_xl">24dp</dimen>
+    <dimen name="radius_full">100dp</dimen>
+    <dimen name="radius_bottom_sheet">28dp</dimen>
+
+    <!-- ── Elevation ──────────────────────────────────────────────────── -->
+    <dimen name="elevation_card">2dp</dimen>
+    <dimen name="elevation_fab">6dp</dimen>
+    <dimen name="elevation_bottom_sheet">8dp</dimen>
+    <dimen name="elevation_toolbar">4dp</dimen>
+
+    <!-- ── Button Dimensions ──────────────────────────────────────────── -->
+    <dimen name="button_height_primary">52dp</dimen>
+    <dimen name="button_height_secondary">44dp</dimen>
+    <dimen name="button_corner_radius">12dp</dimen>
+    <dimen name="button_min_width">120dp</dimen>
+
+    <!-- ── Shutter Button ─────────────────────────────────────────────── -->
+    <dimen name="shutter_button_size">72dp</dimen>
+    <dimen name="shutter_button_inner">60dp</dimen>
+    <dimen name="shutter_button_ring_width">4dp</dimen>
+
+    <!-- ── Thumbnail Sizes ────────────────────────────────────────────── -->
+    <dimen name="thumbnail_small">48dp</dimen>
+    <dimen name="thumbnail_medium">80dp</dimen>
+    <dimen name="thumbnail_grid">120dp</dimen>
+    <dimen name="thumbnail_recent">64dp</dimen>
+    <dimen name="thumbnail_library">56dp</dimen>
+
+    <!-- ── Icon Sizes ─────────────────────────────────────────────────── -->
+    <dimen name="icon_sm">18dp</dimen>
+    <dimen name="icon_md">24dp</dimen>
+    <dimen name="icon_lg">32dp</dimen>
+    <dimen name="icon_xl">48dp</dimen>
+    <dimen name="icon_toolbar">28dp</dimen>
+
+    <!-- ── Crop Handle Dimensions ─────────────────────────────────────── -->
+    <dimen name="crop_handle_radius">14dp</dimen>
+    <dimen name="crop_handle_touch_radius">32dp</dimen>
+    <dimen name="crop_line_width">2dp</dimen>
+    <dimen name="crop_handle_stroke_width">3dp</dimen>
+
+    <!-- ── Navigation Bar ─────────────────────────────────────────────── -->
+    <dimen name="bottom_nav_height">64dp</dimen>
+    <dimen name="camera_fab_size">56dp</dimen>
+    <dimen name="camera_fab_elevation">8dp</dimen>
+
+    <!-- ── Top Bar ────────────────────────────────────────────────────── -->
+    <dimen name="top_bar_height">56dp</dimen>
+    <dimen name="top_bar_icon_padding">12dp</dimen>
+
+    <!-- ── Card Dimensions ────────────────────────────────────────────── -->
+    <dimen name="card_padding">16dp</dimen>
+    <dimen name="card_margin_horizontal">16dp</dimen>
+    <dimen name="card_margin_vertical">8dp</dimen>
+
+    <!-- ── Grid Spacing ───────────────────────────────────────────────── -->
+    <dimen name="grid_spacing">12dp</dimen>
+    <dimen name="grid_page_badge_size">24dp</dimen>
+    <dimen name="grid_delete_button_size">28dp</dimen>
+
+    <!-- ── Text Input ─────────────────────────────────────────────────── -->
+    <dimen name="text_input_height">56dp</dimen>
+    <dimen name="text_input_corner_radius">12dp</dimen>
+
+    <!-- ── Bottom Sheet ───────────────────────────────────────────────── -->
+    <dimen name="bottom_sheet_drag_handle_width">40dp</dimen>
+    <dimen name="bottom_sheet_drag_handle_height">4dp</dimen>
+    <dimen name="bottom_sheet_peek_height">400dp</dimen>
+
+    <!-- ── Ad Banner ──────────────────────────────────────────────────── -->
+    <dimen name="ad_banner_height">50dp</dimen>
+
+</resources>

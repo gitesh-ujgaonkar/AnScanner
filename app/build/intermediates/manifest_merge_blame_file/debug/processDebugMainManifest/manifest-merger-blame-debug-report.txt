@@ -1,0 +1,228 @@
+1<?xml version="1.0" encoding="utf-8"?>
+2<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+3    package="com.anscanner.app"
+4    android:versionCode="1"
+5    android:versionName="1.0.0" >
+6
+7    <uses-sdk
+8        android:minSdkVersion="24"
+9        android:targetSdkVersion="34" />
+10
+11    <!-- ── Permissions ────────────────────────────────────────────────── -->
+12    <uses-permission android:name="android.permission.CAMERA" />
+12-->D:\engiee\repositories\Sep 26\AnScanner\app\src\main\AndroidManifest.xml:6:5-65
+12-->D:\engiee\repositories\Sep 26\AnScanner\app\src\main\AndroidManifest.xml:6:22-62
+13
+14    <!-- Required hardware feature -->
+15    <uses-feature
+15-->D:\engiee\repositories\Sep 26\AnScanner\app\src\main\AndroidManifest.xml:9:5-11:35
+16        android:name="android.hardware.camera"
+16-->D:\engiee\repositories\Sep 26\AnScanner\app\src\main\AndroidManifest.xml:10:9-47
+17        android:required="true" />
+17-->D:\engiee\repositories\Sep 26\AnScanner\app\src\main\AndroidManifest.xml:11:9-32
+18    <uses-feature
+18-->D:\engiee\repositories\Sep 26\AnScanner\app\src\main\AndroidManifest.xml:12:5-14:36
+19        android:name="android.hardware.camera.autofocus"
+19-->D:\engiee\repositories\Sep 26\AnScanner\app\src\main\AndroidManifest.xml:13:9-57
+20        android:required="false" />
+20-->D:\engiee\repositories\Sep 26\AnScanner\app\src\main\AndroidManifest.xml:14:9-33
+21
+22    <permission
+22-->[androidx.core:core:1.13.1] C:\Users\ujgon\.gradle\caches\transforms-4\491489cac485d13209f149eabe513b49\transformed\core-1.13.1\AndroidManifest.xml:22:5-24:47
+23        android:name="com.anscanner.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+23-->[androidx.core:core:1.13.1] C:\Users\ujgon\.gradle\caches\transforms-4\491489cac485d13209f149eabe513b49\transformed\core-1.13.1\AndroidManifest.xml:23:9-81
+24        android:protectionLevel="signature" />
+24-->[androidx.core:core:1.13.1] C:\Users\ujgon\.gradle\caches\transforms-4\491489cac485d13209f149eabe513b49\transformed\core-1.13.1\AndroidManifest.xml:24:9-44
+25
+26    <uses-permission android:name="com.anscanner.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" />
+26-->[androidx.core:core:1.13.1] C:\Users\ujgon\.gradle\caches\transforms-4\491489cac485d13209f149eabe513b49\transformed\core-1.13.1\AndroidManifest.xml:26:5-97
+26-->[androidx.core:core:1.13.1] C:\Users\ujgon\.gradle\caches\transforms-4\491489cac485d13209f149eabe513b49\transformed\core-1.13.1\AndroidManifest.xml:26:22-94
+27
+28    <application
+28-->D:\engiee\repositories\Sep 26\AnScanner\app\src\main\AndroidManifest.xml:16:5-69:19
+29        android:name="com.anscanner.app.AnScannerApplication"
+29-->D:\engiee\repositories\Sep 26\AnScanner\app\src\main\AndroidManifest.xml:17:9-45
+30        android:allowBackup="true"
+30-->D:\engiee\repositories\Sep 26\AnScanner\app\src\main\AndroidManifest.xml:18:9-35
+31        android:appComponentFactory="androidx.core.app.CoreComponentFactory"
+31-->[androidx.core:core:1.13.1] C:\Users\ujgon\.gradle\caches\transforms-4\491489cac485d13209f149eabe513b49\transformed\core-1.13.1\AndroidManifest.xml:28:18-86
+32        android:debuggable="true"
+33        android:extractNativeLibs="true"
+34        android:icon="@mipmap/ic_launcher"
+34-->D:\engiee\repositories\Sep 26\AnScanner\app\src\main\AndroidManifest.xml:19:9-43
+35        android:label="@string/app_name"
+35-->D:\engiee\repositories\Sep 26\AnScanner\app\src\main\AndroidManifest.xml:21:9-41
+36        android:roundIcon="@mipmap/ic_launcher_round"
+36-->D:\engiee\repositories\Sep 26\AnScanner\app\src\main\AndroidManifest.xml:20:9-54
+37        android:supportsRtl="true"
+37-->D:\engiee\repositories\Sep 26\AnScanner\app\src\main\AndroidManifest.xml:22:9-35
+38        android:testOnly="true"
+39        android:theme="@style/Theme.AnScanner" >
+39-->D:\engiee\repositories\Sep 26\AnScanner\app\src\main\AndroidManifest.xml:23:9-47
+40
+41        <!-- ── Screen 1: Camera (Launcher / Home) ────────────────────── -->
+42        <activity
+42-->D:\engiee\repositories\Sep 26\AnScanner\app\src\main\AndroidManifest.xml:27:9-36:20
+43            android:name="com.anscanner.app.ui.camera.CameraActivity"
+43-->D:\engiee\repositories\Sep 26\AnScanner\app\src\main\AndroidManifest.xml:28:13-53
+44            android:exported="true"
+44-->D:\engiee\repositories\Sep 26\AnScanner\app\src\main\AndroidManifest.xml:29:13-36
+45            android:screenOrientation="portrait"
+45-->D:\engiee\repositories\Sep 26\AnScanner\app\src\main\AndroidManifest.xml:30:13-49
+46            android:theme="@style/Theme.AnScanner.Camera" >
+46-->D:\engiee\repositories\Sep 26\AnScanner\app\src\main\AndroidManifest.xml:31:13-58
+47            <intent-filter>
+47-->D:\engiee\repositories\Sep 26\AnScanner\app\src\main\AndroidManifest.xml:32:13-35:29
+48                <action android:name="android.intent.action.MAIN" />
+48-->D:\engiee\repositories\Sep 26\AnScanner\app\src\main\AndroidManifest.xml:33:17-69
+48-->D:\engiee\repositories\Sep 26\AnScanner\app\src\main\AndroidManifest.xml:33:25-66
+49
+50                <category android:name="android.intent.category.LAUNCHER" />
+50-->D:\engiee\repositories\Sep 26\AnScanner\app\src\main\AndroidManifest.xml:34:17-77
+50-->D:\engiee\repositories\Sep 26\AnScanner\app\src\main\AndroidManifest.xml:34:27-74
+51            </intent-filter>
+52        </activity>
+53
+54        <!-- ── Screen 2: Crop Preview & Manual Edge Cropping ─────────── -->
+55        <activity
+55-->D:\engiee\repositories\Sep 26\AnScanner\app\src\main\AndroidManifest.xml:39:9-43:66
+56            android:name="com.anscanner.app.ui.crop.CropPreviewActivity"
+56-->D:\engiee\repositories\Sep 26\AnScanner\app\src\main\AndroidManifest.xml:40:13-56
+57            android:exported="false"
+57-->D:\engiee\repositories\Sep 26\AnScanner\app\src\main\AndroidManifest.xml:41:13-37
+58            android:screenOrientation="portrait"
+58-->D:\engiee\repositories\Sep 26\AnScanner\app\src\main\AndroidManifest.xml:42:13-49
+59            android:theme="@style/Theme.AnScanner.CropPreview" />
+59-->D:\engiee\repositories\Sep 26\AnScanner\app\src\main\AndroidManifest.xml:43:13-63
+60
+61        <!-- ── Screen 3: Review Scan (Multi-Page Grid) ───────────────── -->
+62        <activity
+62-->D:\engiee\repositories\Sep 26\AnScanner\app\src\main\AndroidManifest.xml:46:9-49:52
+63            android:name="com.anscanner.app.ui.review.ReviewScanActivity"
+63-->D:\engiee\repositories\Sep 26\AnScanner\app\src\main\AndroidManifest.xml:47:13-57
+64            android:exported="false"
+64-->D:\engiee\repositories\Sep 26\AnScanner\app\src\main\AndroidManifest.xml:48:13-37
+65            android:screenOrientation="portrait" />
+65-->D:\engiee\repositories\Sep 26\AnScanner\app\src\main\AndroidManifest.xml:49:13-49
+66
+67        <!-- ── Screen 5: Scanned Documents Library ───────────────────── -->
+68        <activity
+68-->D:\engiee\repositories\Sep 26\AnScanner\app\src\main\AndroidManifest.xml:52:9-55:52
+69            android:name="com.anscanner.app.ui.library.LibraryActivity"
+69-->D:\engiee\repositories\Sep 26\AnScanner\app\src\main\AndroidManifest.xml:53:13-55
+70            android:exported="false"
+70-->D:\engiee\repositories\Sep 26\AnScanner\app\src\main\AndroidManifest.xml:54:13-37
+71            android:screenOrientation="portrait" />
+71-->D:\engiee\repositories\Sep 26\AnScanner\app\src\main\AndroidManifest.xml:55:13-49
+72
+73        <!-- ── Screen 6: Settings & Privacy ──────────────────────────── -->
+74        <activity
+74-->D:\engiee\repositories\Sep 26\AnScanner\app\src\main\AndroidManifest.xml:58:9-61:52
+75            android:name="com.anscanner.app.ui.settings.SettingsActivity"
+75-->D:\engiee\repositories\Sep 26\AnScanner\app\src\main\AndroidManifest.xml:59:13-57
+76            android:exported="false"
+76-->D:\engiee\repositories\Sep 26\AnScanner\app\src\main\AndroidManifest.xml:60:13-37
+77            android:screenOrientation="portrait" />
+77-->D:\engiee\repositories\Sep 26\AnScanner\app\src\main\AndroidManifest.xml:61:13-49
+78
+79        <!--
+80        ── AdMob App ID (uncomment and replace when ready) ────────
+81        <meta-data
+82            android:name="com.google.android.gms.ads.APPLICATION_ID"
+83            android:value="ca-app-pub-xxxxxxxxxxxxxxxx~yyyyyyyyyy" />
+84        ────────────────────────────────────────────────────────────────
+85        -->
+86
+87        <service
+87-->[androidx.camera:camera-camera2:1.3.4] C:\Users\ujgon\.gradle\caches\transforms-4\ef3aeab0b542e08b17a06cc064e78a24\transformed\camera-camera2-1.3.4\AndroidManifest.xml:24:9-33:19
+88            android:name="androidx.camera.core.impl.MetadataHolderService"
+88-->[androidx.camera:camera-camera2:1.3.4] C:\Users\ujgon\.gradle\caches\transforms-4\ef3aeab0b542e08b17a06cc064e78a24\transformed\camera-camera2-1.3.4\AndroidManifest.xml:25:13-75
+89            android:enabled="false"
+89-->[androidx.camera:camera-camera2:1.3.4] C:\Users\ujgon\.gradle\caches\transforms-4\ef3aeab0b542e08b17a06cc064e78a24\transformed\camera-camera2-1.3.4\AndroidManifest.xml:26:13-36
+90            android:exported="false" >
+90-->[androidx.camera:camera-camera2:1.3.4] C:\Users\ujgon\.gradle\caches\transforms-4\ef3aeab0b542e08b17a06cc064e78a24\transformed\camera-camera2-1.3.4\AndroidManifest.xml:27:13-37
+91            <meta-data
+91-->[androidx.camera:camera-camera2:1.3.4] C:\Users\ujgon\.gradle\caches\transforms-4\ef3aeab0b542e08b17a06cc064e78a24\transformed\camera-camera2-1.3.4\AndroidManifest.xml:30:13-32:89
+92                android:name="androidx.camera.core.impl.MetadataHolderService.DEFAULT_CONFIG_PROVIDER"
+92-->[androidx.camera:camera-camera2:1.3.4] C:\Users\ujgon\.gradle\caches\transforms-4\ef3aeab0b542e08b17a06cc064e78a24\transformed\camera-camera2-1.3.4\AndroidManifest.xml:31:17-103
+93                android:value="androidx.camera.camera2.Camera2Config$DefaultProvider" />
+93-->[androidx.camera:camera-camera2:1.3.4] C:\Users\ujgon\.gradle\caches\transforms-4\ef3aeab0b542e08b17a06cc064e78a24\transformed\camera-camera2-1.3.4\AndroidManifest.xml:32:17-86
+94        </service>
+95
+96        <provider
+96-->[androidx.emoji2:emoji2:1.3.0] C:\Users\ujgon\.gradle\caches\transforms-4\ac0583742763417d1135d83982b52659\transformed\emoji2-1.3.0\AndroidManifest.xml:24:9-32:20
+97            android:name="androidx.startup.InitializationProvider"
+97-->[androidx.emoji2:emoji2:1.3.0] C:\Users\ujgon\.gradle\caches\transforms-4\ac0583742763417d1135d83982b52659\transformed\emoji2-1.3.0\AndroidManifest.xml:25:13-67
+98            android:authorities="com.anscanner.app.androidx-startup"
+98-->[androidx.emoji2:emoji2:1.3.0] C:\Users\ujgon\.gradle\caches\transforms-4\ac0583742763417d1135d83982b52659\transformed\emoji2-1.3.0\AndroidManifest.xml:26:13-68
+99            android:exported="false" >
+99-->[androidx.emoji2:emoji2:1.3.0] C:\Users\ujgon\.gradle\caches\transforms-4\ac0583742763417d1135d83982b52659\transformed\emoji2-1.3.0\AndroidManifest.xml:27:13-37
+100            <meta-data
+100-->[androidx.emoji2:emoji2:1.3.0] C:\Users\ujgon\.gradle\caches\transforms-4\ac0583742763417d1135d83982b52659\transformed\emoji2-1.3.0\AndroidManifest.xml:29:13-31:52
+101                android:name="androidx.emoji2.text.EmojiCompatInitializer"
+101-->[androidx.emoji2:emoji2:1.3.0] C:\Users\ujgon\.gradle\caches\transforms-4\ac0583742763417d1135d83982b52659\transformed\emoji2-1.3.0\AndroidManifest.xml:30:17-75
+102                android:value="androidx.startup" />
+102-->[androidx.emoji2:emoji2:1.3.0] C:\Users\ujgon\.gradle\caches\transforms-4\ac0583742763417d1135d83982b52659\transformed\emoji2-1.3.0\AndroidManifest.xml:31:17-49
+103            <meta-data
+103-->[androidx.lifecycle:lifecycle-process:2.8.6] C:\Users\ujgon\.gradle\caches\transforms-4\aa3c5715dc7f0c6f0a572e53904cd1f8\transformed\lifecycle-process-2.8.6\AndroidManifest.xml:29:13-31:52
+104                android:name="androidx.lifecycle.ProcessLifecycleInitializer"
+104-->[androidx.lifecycle:lifecycle-process:2.8.6] C:\Users\ujgon\.gradle\caches\transforms-4\aa3c5715dc7f0c6f0a572e53904cd1f8\transformed\lifecycle-process-2.8.6\AndroidManifest.xml:30:17-78
+105                android:value="androidx.startup" />
+105-->[androidx.lifecycle:lifecycle-process:2.8.6] C:\Users\ujgon\.gradle\caches\transforms-4\aa3c5715dc7f0c6f0a572e53904cd1f8\transformed\lifecycle-process-2.8.6\AndroidManifest.xml:31:17-49
+106            <meta-data
+106-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\ujgon\.gradle\caches\transforms-4\f6c49e7309d412df5a976532433f1c0f\transformed\profileinstaller-1.3.1\AndroidManifest.xml:29:13-31:52
+107                android:name="androidx.profileinstaller.ProfileInstallerInitializer"
+107-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\ujgon\.gradle\caches\transforms-4\f6c49e7309d412df5a976532433f1c0f\transformed\profileinstaller-1.3.1\AndroidManifest.xml:30:17-85
+108                android:value="androidx.startup" />
+108-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\ujgon\.gradle\caches\transforms-4\f6c49e7309d412df5a976532433f1c0f\transformed\profileinstaller-1.3.1\AndroidManifest.xml:31:17-49
+109        </provider>
+110
+111        <service
+111-->[androidx.room:room-runtime:2.6.1] C:\Users\ujgon\.gradle\caches\transforms-4\dde6d087912687c36a659f7dc31d4ebd\transformed\room-runtime-2.6.1\AndroidManifest.xml:24:9-28:63
+112            android:name="androidx.room.MultiInstanceInvalidationService"
+112-->[androidx.room:room-runtime:2.6.1] C:\Users\ujgon\.gradle\caches\transforms-4\dde6d087912687c36a659f7dc31d4ebd\transformed\room-runtime-2.6.1\AndroidManifest.xml:25:13-74
+113            android:directBootAware="true"
+113-->[androidx.room:room-runtime:2.6.1] C:\Users\ujgon\.gradle\caches\transforms-4\dde6d087912687c36a659f7dc31d4ebd\transformed\room-runtime-2.6.1\AndroidManifest.xml:26:13-43
+114            android:exported="false" />
+114-->[androidx.room:room-runtime:2.6.1] C:\Users\ujgon\.gradle\caches\transforms-4\dde6d087912687c36a659f7dc31d4ebd\transformed\room-runtime-2.6.1\AndroidManifest.xml:27:13-37
+115
+116        <receiver
+116-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\ujgon\.gradle\caches\transforms-4\f6c49e7309d412df5a976532433f1c0f\transformed\profileinstaller-1.3.1\AndroidManifest.xml:34:9-52:20
+117            android:name="androidx.profileinstaller.ProfileInstallReceiver"
+117-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\ujgon\.gradle\caches\transforms-4\f6c49e7309d412df5a976532433f1c0f\transformed\profileinstaller-1.3.1\AndroidManifest.xml:35:13-76
+118            android:directBootAware="false"
+118-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\ujgon\.gradle\caches\transforms-4\f6c49e7309d412df5a976532433f1c0f\transformed\profileinstaller-1.3.1\AndroidManifest.xml:36:13-44
+119            android:enabled="true"
+119-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\ujgon\.gradle\caches\transforms-4\f6c49e7309d412df5a976532433f1c0f\transformed\profileinstaller-1.3.1\AndroidManifest.xml:37:13-35
+120            android:exported="true"
+120-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\ujgon\.gradle\caches\transforms-4\f6c49e7309d412df5a976532433f1c0f\transformed\profileinstaller-1.3.1\AndroidManifest.xml:38:13-36
+121            android:permission="android.permission.DUMP" >
+121-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\ujgon\.gradle\caches\transforms-4\f6c49e7309d412df5a976532433f1c0f\transformed\profileinstaller-1.3.1\AndroidManifest.xml:39:13-57
+122            <intent-filter>
+122-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\ujgon\.gradle\caches\transforms-4\f6c49e7309d412df5a976532433f1c0f\transformed\profileinstaller-1.3.1\AndroidManifest.xml:40:13-42:29
+123                <action android:name="androidx.profileinstaller.action.INSTALL_PROFILE" />
+123-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\ujgon\.gradle\caches\transforms-4\f6c49e7309d412df5a976532433f1c0f\transformed\profileinstaller-1.3.1\AndroidManifest.xml:41:17-91
+123-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\ujgon\.gradle\caches\transforms-4\f6c49e7309d412df5a976532433f1c0f\transformed\profileinstaller-1.3.1\AndroidManifest.xml:41:25-88
+124            </intent-filter>
+125            <intent-filter>
+125-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\ujgon\.gradle\caches\transforms-4\f6c49e7309d412df5a976532433f1c0f\transformed\profileinstaller-1.3.1\AndroidManifest.xml:43:13-45:29
+126                <action android:name="androidx.profileinstaller.action.SKIP_FILE" />
+126-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\ujgon\.gradle\caches\transforms-4\f6c49e7309d412df5a976532433f1c0f\transformed\profileinstaller-1.3.1\AndroidManifest.xml:44:17-85
+126-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\ujgon\.gradle\caches\transforms-4\f6c49e7309d412df5a976532433f1c0f\transformed\profileinstaller-1.3.1\AndroidManifest.xml:44:25-82
+127            </intent-filter>
+128            <intent-filter>
+128-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\ujgon\.gradle\caches\transforms-4\f6c49e7309d412df5a976532433f1c0f\transformed\profileinstaller-1.3.1\AndroidManifest.xml:46:13-48:29
+129                <action android:name="androidx.profileinstaller.action.SAVE_PROFILE" />
+129-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\ujgon\.gradle\caches\transforms-4\f6c49e7309d412df5a976532433f1c0f\transformed\profileinstaller-1.3.1\AndroidManifest.xml:47:17-88
+129-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\ujgon\.gradle\caches\transforms-4\f6c49e7309d412df5a976532433f1c0f\transformed\profileinstaller-1.3.1\AndroidManifest.xml:47:25-85
+130            </intent-filter>
+131            <intent-filter>
+131-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\ujgon\.gradle\caches\transforms-4\f6c49e7309d412df5a976532433f1c0f\transformed\profileinstaller-1.3.1\AndroidManifest.xml:49:13-51:29
+132                <action android:name="androidx.profileinstaller.action.BENCHMARK_OPERATION" />
+132-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\ujgon\.gradle\caches\transforms-4\f6c49e7309d412df5a976532433f1c0f\transformed\profileinstaller-1.3.1\AndroidManifest.xml:50:17-95
+132-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\ujgon\.gradle\caches\transforms-4\f6c49e7309d412df5a976532433f1c0f\transformed\profileinstaller-1.3.1\AndroidManifest.xml:50:25-92
+133            </intent-filter>
+134        </receiver>
+135    </application>
+136
+137</manifest>

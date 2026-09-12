@@ -1,0 +1,46 @@
+com.anscanner.app-material-1.12.0-0 C:\Users\ujgon\.gradle\caches\transforms-4\07cd16ac6f2be326c7de94e018572634\transformed\material-1.12.0\res
+com.anscanner.app-customview-poolingcontainer-1.0.0-1 C:\Users\ujgon\.gradle\caches\transforms-4\0e7377f97bdc2c263099d2b27ed6df20\transformed\customview-poolingcontainer-1.0.0\res
+com.anscanner.app-viewpager2-1.1.0-beta02-2 C:\Users\ujgon\.gradle\caches\transforms-4\17bb0b7a782a733551f79b132cf4e06a\transformed\viewpager2-1.1.0-beta02\res
+com.anscanner.app-lifecycle-runtime-release-3 C:\Users\ujgon\.gradle\caches\transforms-4\27ee10899d57f27a0763c7b69644a801\transformed\lifecycle-runtime-release\res
+com.anscanner.app-appcompat-1.7.0-4 C:\Users\ujgon\.gradle\caches\transforms-4\29e1ac83aba876583625cd4c39d92077\transformed\appcompat-1.7.0\res
+com.anscanner.app-camera-core-1.3.4-5 C:\Users\ujgon\.gradle\caches\transforms-4\2cdf719584dd3a9385872a0c25fac498\transformed\camera-core-1.3.4\res
+com.anscanner.app-camera-video-1.3.4-6 C:\Users\ujgon\.gradle\caches\transforms-4\2d294f1506c8b064de8e4e323d93fb48\transformed\camera-video-1.3.4\res
+com.anscanner.app-sqlite-2.4.0-7 C:\Users\ujgon\.gradle\caches\transforms-4\366a2fc7e150965766bc30f37e6be638\transformed\sqlite-2.4.0\res
+com.anscanner.app-camera-view-1.3.4-8 C:\Users\ujgon\.gradle\caches\transforms-4\379d27801a4361908aeda63a1a3b4bea\transformed\camera-view-1.3.4\res
+com.anscanner.app-constraintlayout-2.1.4-9 C:\Users\ujgon\.gradle\caches\transforms-4\38807b1f6329ef11af6f46aeb54c0581\transformed\constraintlayout-2.1.4\res
+com.anscanner.app-appcompat-resources-1.7.0-10 C:\Users\ujgon\.gradle\caches\transforms-4\3e32076cdec8b83d9275d9d84e03e90d\transformed\appcompat-resources-1.7.0\res
+com.anscanner.app-core-1.13.1-11 C:\Users\ujgon\.gradle\caches\transforms-4\491489cac485d13209f149eabe513b49\transformed\core-1.13.1\res
+com.anscanner.app-opencv-4.10.0-12 C:\Users\ujgon\.gradle\caches\transforms-4\513f183240ff531cf89db515aaee1c62\transformed\opencv-4.10.0\res
+com.anscanner.app-lifecycle-livedata-core-2.8.6-13 C:\Users\ujgon\.gradle\caches\transforms-4\549ef7ed76e59c8f8a8605b35a6756f8\transformed\lifecycle-livedata-core-2.8.6\res
+com.anscanner.app-savedstate-1.2.1-14 C:\Users\ujgon\.gradle\caches\transforms-4\5b811257630cd1e65e22adbe511dafeb\transformed\savedstate-1.2.1\res
+com.anscanner.app-annotation-experimental-1.4.0-15 C:\Users\ujgon\.gradle\caches\transforms-4\61627fa3d45371f6b28b31a2997b714c\transformed\annotation-experimental-1.4.0\res
+com.anscanner.app-camera-lifecycle-1.3.4-16 C:\Users\ujgon\.gradle\caches\transforms-4\63ca62c59d0ea08c814141467ba00010\transformed\camera-lifecycle-1.3.4\res
+com.anscanner.app-sqlite-framework-2.4.0-17 C:\Users\ujgon\.gradle\caches\transforms-4\686e8413a9c33b338c67af7bea067002\transformed\sqlite-framework-2.4.0\res
+com.anscanner.app-coordinatorlayout-1.1.0-18 C:\Users\ujgon\.gradle\caches\transforms-4\6a871933fa69b123bd865e186ddbc3db\transformed\coordinatorlayout-1.1.0\res
+com.anscanner.app-core-runtime-2.2.0-19 C:\Users\ujgon\.gradle\caches\transforms-4\6c895e7951c98312f0e84ded96527c83\transformed\core-runtime-2.2.0\res
+com.anscanner.app-drawerlayout-1.1.1-20 C:\Users\ujgon\.gradle\caches\transforms-4\763ed345d12d1ff04d2efe327bbd570b\transformed\drawerlayout-1.1.1\res
+com.anscanner.app-lifecycle-viewmodel-release-21 C:\Users\ujgon\.gradle\caches\transforms-4\83c4330d998a8fbb8ad9cd7abeb88331\transformed\lifecycle-viewmodel-release\res
+com.anscanner.app-lifecycle-livedata-2.8.6-22 C:\Users\ujgon\.gradle\caches\transforms-4\9b7886438bb2d8dc55d37e84e758767b\transformed\lifecycle-livedata-2.8.6\res
+com.anscanner.app-lifecycle-process-2.8.6-23 C:\Users\ujgon\.gradle\caches\transforms-4\aa3c5715dc7f0c6f0a572e53904cd1f8\transformed\lifecycle-process-2.8.6\res
+com.anscanner.app-emoji2-1.3.0-24 C:\Users\ujgon\.gradle\caches\transforms-4\ac0583742763417d1135d83982b52659\transformed\emoji2-1.3.0\res
+com.anscanner.app-activity-1.9.2-25 C:\Users\ujgon\.gradle\caches\transforms-4\adfb0c9849382e21a3a95e89ca86ac81\transformed\activity-1.9.2\res
+com.anscanner.app-cardview-1.0.0-26 C:\Users\ujgon\.gradle\caches\transforms-4\af6131a74caf727662347e3a05c8faa5\transformed\cardview-1.0.0\res
+com.anscanner.app-lifecycle-viewmodel-savedstate-2.8.6-27 C:\Users\ujgon\.gradle\caches\transforms-4\b146009c263de1b8f0e6490bdda76bc8\transformed\lifecycle-viewmodel-savedstate-2.8.6\res
+com.anscanner.app-core-ktx-1.13.1-28 C:\Users\ujgon\.gradle\caches\transforms-4\b660a3a424c21afe6b17f02b3dcb100d\transformed\core-ktx-1.13.1\res
+com.anscanner.app-transition-1.5.0-29 C:\Users\ujgon\.gradle\caches\transforms-4\b93cf8a9901f64bff48c9135147ba566\transformed\transition-1.5.0\res
+com.anscanner.app-startup-runtime-1.1.1-30 C:\Users\ujgon\.gradle\caches\transforms-4\c497bc2ddf49190cf2d329341cf76de0\transformed\startup-runtime-1.1.1\res
+com.anscanner.app-emoji2-views-helper-1.3.0-31 C:\Users\ujgon\.gradle\caches\transforms-4\c8da50ae7f3c96426ae344a8ccfe5d61\transformed\emoji2-views-helper-1.3.0\res
+com.anscanner.app-room-runtime-2.6.1-32 C:\Users\ujgon\.gradle\caches\transforms-4\dde6d087912687c36a659f7dc31d4ebd\transformed\room-runtime-2.6.1\res
+com.anscanner.app-recyclerview-1.3.2-33 C:\Users\ujgon\.gradle\caches\transforms-4\e79e17ea93f78947a90c7f0bf54caf01\transformed\recyclerview-1.3.2\res
+com.anscanner.app-camera-camera2-1.3.4-34 C:\Users\ujgon\.gradle\caches\transforms-4\ef3aeab0b542e08b17a06cc064e78a24\transformed\camera-camera2-1.3.4\res
+com.anscanner.app-profileinstaller-1.3.1-35 C:\Users\ujgon\.gradle\caches\transforms-4\f6c49e7309d412df5a976532433f1c0f\transformed\profileinstaller-1.3.1\res
+com.anscanner.app-lifecycle-livedata-core-ktx-2.8.6-36 C:\Users\ujgon\.gradle\caches\transforms-4\f738de8842e28ab9c8e9f020ea3ac648\transformed\lifecycle-livedata-core-ktx-2.8.6\res
+com.anscanner.app-fragment-1.8.4-37 C:\Users\ujgon\.gradle\caches\transforms-4\fbf5306d46430864e46fae40a67d40e7\transformed\fragment-1.8.4\res
+com.anscanner.app-pngs-38 D:\engiee\repositories\Sep 26\AnScanner\app\build\generated\res\pngs\debug
+com.anscanner.app-res-39 D:\engiee\repositories\Sep 26\AnScanner\app\build\generated\res\processDebugGoogleServices
+com.anscanner.app-resValues-40 D:\engiee\repositories\Sep 26\AnScanner\app\build\generated\res\resValues\debug
+com.anscanner.app-packageDebugResources-41 D:\engiee\repositories\Sep 26\AnScanner\app\build\intermediates\incremental\debug\packageDebugResources\merged.dir
+com.anscanner.app-packageDebugResources-42 D:\engiee\repositories\Sep 26\AnScanner\app\build\intermediates\incremental\debug\packageDebugResources\stripped.dir
+com.anscanner.app-debug-43 D:\engiee\repositories\Sep 26\AnScanner\app\build\intermediates\merged_res\debug\mergeDebugResources
+com.anscanner.app-debug-44 D:\engiee\repositories\Sep 26\AnScanner\app\src\debug\res
+com.anscanner.app-main-45 D:\engiee\repositories\Sep 26\AnScanner\app\src\main\res

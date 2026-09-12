@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- ── Primary Backgrounds ────────────────────────────────────────── -->
+    <color name="background_primary">#FF121212</color>
+    <color name="background_secondary">#FF1A1A1A</color>
+
+    <!-- ── Surfaces & Cards ───────────────────────────────────────────── -->
+    <color name="surface_card">#FF242424</color>
+    <color name="surface_elevated">#FF2C2C2C</color>
+    <color name="surface_overlay">#FF303030</color>
+
+    <!-- ── Accent / Brand — Mint Green ────────────────────────────────── -->
+    <color name="accent_mint">#FF68D391</color>
+    <color name="accent_mint_dark">#FF48BB78</color>
+    <color name="accent_mint_light">#FF9AE6B4</color>
+    <color name="accent_mint_surface">#1A68D391</color>  <!-- 10% opacity mint -->
+    <color name="accent_mint_ripple">#3368D391</color>   <!-- 20% opacity mint -->
+
+    <!-- ── Text Colors ────────────────────────────────────────────────── -->
+    <color name="text_primary">#FFFFFFFF</color>
+    <color name="text_secondary">#FFB0B0B0</color>
+    <color name="text_muted">#FF6B6B6B</color>
+    <color name="text_on_accent">#FF121212</color>       <!-- Dark text on mint buttons -->
+    <color name="text_hint">#FF555555</color>
+
+    <!-- ── Semantic Colors ────────────────────────────────────────────── -->
+    <color name="error_red">#FFEF4444</color>
+    <color name="error_red_surface">#1AEF4444</color>
+    <color name="warning_amber">#FFFBBF24</color>
+    <color name="success_green">#FF22C55E</color>
+
+    <!-- ── Dividers & Borders ─────────────────────────────────────────── -->
+    <color name="divider">#FF333333</color>
+    <color name="border_subtle">#FF2A2A2A</color>
+    <color name="border_dashed">#FF444444</color>
+
+    <!-- ── Overlay & Scrim ────────────────────────────────────────────── -->
+    <color name="scrim_dark">#B3000000</color>           <!-- 70% black overlay -->
+    <color name="crop_overlay">#6668D391</color>          <!-- 40% mint for crop region -->
+    <color name="crop_handle_fill">#FF68D391</color>
+    <color name="crop_handle_stroke">#FFFFFFFF</color>
+
+    <!-- ── Bottom Navigation ──────────────────────────────────────────── -->
+    <color name="nav_bar_background">#FF1A1A1A</color>
+    <color name="nav_icon_active">#FF68D391</color>
+    <color name="nav_icon_inactive">#FF6B6B6B</color>
+
+    <!-- ── Status Bar & System Bars ───────────────────────────────────── -->
+    <color name="status_bar">#FF121212</color>
+    <color name="navigation_bar">#FF1A1A1A</color>
+
+    <!-- ── Material Theme Color Slots ─────────────────────────────────── -->
+    <color name="md_theme_primary">#FF68D391</color>
+    <color name="md_theme_onPrimary">#FF121212</color>
+    <color name="md_theme_primaryContainer">#FF2C2C2C</color>
+    <color name="md_theme_onPrimaryContainer">#FF9AE6B4</color>
+    <color name="md_theme_secondary">#FF48BB78</color>
+    <color name="md_theme_onSecondary">#FF121212</color>
+    <color name="md_theme_background">#FF121212</color>
+    <color name="md_theme_onBackground">#FFFFFFFF</color>
+    <color name="md_theme_surface">#FF1A1A1A</color>
+    <color name="md_theme_onSurface">#FFFFFFFF</color>
+    <color name="md_theme_surfaceVariant">#FF242424</color>
+    <color name="md_theme_onSurfaceVariant">#FFB0B0B0</color>
+    <color name="md_theme_outline">#FF333333</color>
+    <color name="md_theme_error">#FFEF4444</color>
+    <color name="md_theme_onError">#FFFFFFFF</color>
+
+</resources>

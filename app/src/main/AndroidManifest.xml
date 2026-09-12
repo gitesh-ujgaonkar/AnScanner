@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- ── Permissions ────────────────────────────────────────────────── -->
+    <uses-permission android:name="android.permission.CAMERA" />
+
+    <!-- Required hardware feature -->
+    <uses-feature
+        android:name="android.hardware.camera"
+        android:required="true" />
+    <uses-feature
+        android:name="android.hardware.camera.autofocus"
+        android:required="false" />
+
+    <application
+        android:name=".AnScannerApplication"
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.AnScanner"
+        tools:targetApi="34">
+
+        <!-- ── Screen 1: Camera (Launcher / Home) ────────────────────── -->
+        <activity
+            android:name=".ui.camera.CameraActivity"
+            android:exported="true"
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.AnScanner.Camera">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- ── Screen 2: Crop Preview & Manual Edge Cropping ─────────── -->
+        <activity
+            android:name=".ui.crop.CropPreviewActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.AnScanner.CropPreview" />
+
+        <!-- ── Screen 3: Review Scan (Multi-Page Grid) ───────────────── -->
+        <activity
+            android:name=".ui.review.ReviewScanActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
+
+        <!-- ── Screen 5: Scanned Documents Library ───────────────────── -->
+        <activity
+            android:name=".ui.library.LibraryActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
+
+        <!-- ── Screen 6: Settings & Privacy ──────────────────────────── -->
+        <activity
+            android:name=".ui.settings.SettingsActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
+
+        <!-- ── AdMob App ID (uncomment and replace when ready) ────────
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="ca-app-pub-xxxxxxxxxxxxxxxx~yyyyyyyyyy" />
+        ──────────────────────────────────────────────────────────────── -->
+
+    </application>
+
+</manifest>

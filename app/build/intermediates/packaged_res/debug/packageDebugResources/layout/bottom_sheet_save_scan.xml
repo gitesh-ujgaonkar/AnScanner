@@ -1,0 +1,181 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="@color/surface_card"
+    android:paddingBottom="24dp">
+
+    <View
+        android:layout_width="@dimen/bottom_sheet_drag_handle_width"
+        android:layout_height="@dimen/bottom_sheet_drag_handle_height"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginTop="12dp"
+        android:layout_marginBottom="16dp"
+        android:background="@color/text_muted" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:paddingHorizontal="24dp"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="16dp">
+        
+        <TextView
+            android:id="@+id/tvSaveTitle"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/save_title"
+            android:textAppearance="@style/TextAppearance.AnScanner.Headline"
+            android:textColor="@color/text_primary" />
+            
+        <TextView
+            android:id="@+id/tvPageCount"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textAppearance="@style/TextAppearance.AnScanner.Subtitle"
+            android:textColor="@color/text_secondary" />
+    </LinearLayout>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/divider"
+        android:layout_marginBottom="16dp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingHorizontal="24dp"
+        android:layout_marginBottom="16dp">
+        
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/save_file_name_label"
+            android:textAppearance="@style/TextAppearance.AnScanner.Label"
+            android:textColor="@color/text_secondary"
+            android:layout_marginBottom="8dp" />
+            
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/tilFileName"
+            style="@style/Widget.AnScanner.TextInputLayout"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:boxCornerRadiusTopStart="@dimen/text_input_corner_radius"
+            app:boxCornerRadiusTopEnd="@dimen/text_input_corner_radius"
+            app:boxCornerRadiusBottomStart="@dimen/text_input_corner_radius"
+            app:boxCornerRadiusBottomEnd="@dimen/text_input_corner_radius">
+            
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/etFileName"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="@string/save_file_name_default"
+                android:inputType="text" />
+        </com.google.android.material.textfield.TextInputLayout>
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingHorizontal="24dp"
+        android:layout_marginBottom="16dp">
+        
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Format"
+            android:textAppearance="@style/TextAppearance.AnScanner.Label"
+            android:textColor="@color/text_secondary"
+            android:layout_marginBottom="8dp" />
+            
+        <com.google.android.material.button.MaterialButtonToggleGroup
+            android:id="@+id/toggleFormat"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:singleSelection="true"
+            app:checkedButton="@+id/btnPdf">
+            
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnPdf"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/save_format_pdf" />
+                
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnJpg"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/save_format_jpg" />
+        </com.google.android.material.button.MaterialButtonToggleGroup>
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingHorizontal="24dp"
+        android:layout_marginBottom="16dp">
+        
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Quality"
+            android:textAppearance="@style/TextAppearance.AnScanner.Label"
+            android:textColor="@color/text_secondary"
+            android:layout_marginBottom="8dp" />
+            
+        <com.google.android.material.button.MaterialButtonToggleGroup
+            android:id="@+id/toggleQuality"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:singleSelection="true"
+            app:checkedButton="@+id/btnHigh">
+            
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnHigh"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/save_quality_high" />
+                
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnNormal"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/save_quality_normal" />
+        </com.google.android.material.button.MaterialButtonToggleGroup>
+    </LinearLayout>
+    
+    <TextView
+        android:id="@+id/tvSizeBadge"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:textAppearance="@style/TextAppearance.AnScanner.Label"
+        android:textColor="@color/text_muted"
+        android:layout_marginHorizontal="24dp"
+        android:layout_marginBottom="16dp" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnSaveShare"
+        style="@style/Widget.AnScanner.Button.Primary"
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/button_height_primary"
+        android:layout_marginHorizontal="24dp"
+        android:text="@string/save_button" />
+
+</LinearLayout>
