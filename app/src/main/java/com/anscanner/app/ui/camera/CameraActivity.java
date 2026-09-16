@@ -9,13 +9,17 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.Log;
 import android.util.Size;
+import android.view.View;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.PickVisualMediaRequest;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.camera.core.Camera;
 import androidx.camera.core.CameraSelector;
@@ -34,14 +38,20 @@ import com.anscanner.app.databinding.ActivityCameraBinding;
 import com.anscanner.app.processing.ImageProcessor;
 import com.anscanner.app.service.CacheManager;
 import com.anscanner.app.service.CrashManager;
+import com.anscanner.app.service.PdfGenerator;
+import com.anscanner.app.service.StorageHelper;
 import com.anscanner.app.ui.crop.CropPreviewActivity;
 import com.anscanner.app.ui.library.LibraryActivity;
 import com.anscanner.app.ui.review.ReviewScanActivity;
 import com.google.android.gms.ads.AdRequest;
 import com.google.android.gms.ads.MobileAds;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.common.util.concurrent.ListenableFuture;
 
 import org.opencv.core.Point;
+
+import java.io.File;
+import java.io.IOException;
 
 import java.io.InputStream;
 import java.nio.ByteBuffer;
@@ -54,6 +64,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class CameraActivity extends AppCompatActivity {
+    private static final String TAG = "CameraActivity";
+
     public static final String EXTRA_IMAGE_PATH = "extra_image_path";
     public static final String EXTRA_IS_ADDING_PAGE = "extra_is_adding_page";
     public static final String EXTRA_CROPPED_PATH = "extra_cropped_path";
@@ -117,6 +129,15 @@ public class CameraActivity extends AppCompatActivity {
                 finish();
             });
 
+    // ── External PDF Compression launcher ─────────────────────────────────
+
+    private final ActivityResultLauncher<String> pickPdfForCompressLauncher =
+            registerForActivityResult(new ActivityResultContracts.GetContent(), uri -> {
+                if (uri != null) {
+                    showCompressionLevelDialog(uri);
+                }
+            });
+
     // ── Lifecycle ────────────────────────────────────────────────────────
 
     @Override
@@ -160,6 +181,9 @@ public class CameraActivity extends AppCompatActivity {
         binding.btnFlash.setOnClickListener(v -> toggleFlash());
         binding.btnScan.setOnClickListener(v -> takePhoto());
         binding.btnGallery.setOnClickListener(v -> openGalleryPicker());
+        binding.btnCompressPdf.setOnClickListener(v -> {
+            pickPdfForCompressLauncher.launch("application/pdf");
+        });
         binding.tvSeeAll.setOnClickListener(v ->
                 startActivity(new Intent(this, LibraryActivity.class)));
 
@@ -463,6 +487,102 @@ public class CameraActivity extends AppCompatActivity {
             } else {
                 // Normal flow — CropPreview handles navigation itself
                 startActivity(intent);
+            }
+        });
+    }
+
+    // ── Standalone External PDF Compression ───────────────────────────────
+
+    private void showCompressionLevelDialog(Uri uri) {
+        final String[] levels = new String[] {
+                getString(R.string.compression_high),
+                getString(R.string.compression_medium),
+                getString(R.string.compression_low)
+        };
+        final int[] qualities = new int[] { 100, 60, 30 };
+        final int[] selectedQuality = new int[] { 60 }; // Default: Medium (60%)
+
+        new MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.compression_quality_title)
+                .setSingleChoiceItems(levels, 1, (dialog, which) -> {
+                    selectedQuality[0] = qualities[which];
+                })
+                .setPositiveButton(R.string.compress_action_compress, (dialog, which) -> {
+                    compressExternalPdf(uri, selectedQuality[0]);
+                })
+                .setNegativeButton(R.string.action_cancel, null)
+                .show();
+    }
+
+    private void compressExternalPdf(Uri sourceUri, int quality) {
+        View dialogView = getLayoutInflater().inflate(R.layout.dialog_progress, null);
+        TextView tvMessage = dialogView.findViewById(R.id.tvProgressMessage);
+        tvMessage.setText(R.string.compressing_pdf);
+
+        AlertDialog progressDialog = new MaterialAlertDialogBuilder(this)
+                .setView(dialogView)
+                .setCancelable(false)
+                .create();
+        progressDialog.show();
+
+        bgExecutor.execute(() -> {
+            try {
+                long timestamp = System.currentTimeMillis();
+                String originalFileName = StorageHelper.getFileName(getContentResolver(), sourceUri);
+                if (originalFileName == null || originalFileName.trim().isEmpty()) {
+                    originalFileName = "Doc_" + timestamp;
+                }
+                if (originalFileName.toLowerCase().endsWith(".pdf")) {
+                    originalFileName = originalFileName.substring(0, originalFileName.length() - 4);
+                }
+                String compressedFileName = originalFileName + "_compressed";
+
+                File tempOutputFile = new File(getCacheDir(), "compressed_" + timestamp + ".pdf");
+
+                // Core compression engine
+                long compressedSize = PdfGenerator.compressPdf(this, sourceUri, tempOutputFile, quality);
+                int pageCount = PdfGenerator.getPdfPageCount(this, sourceUri);
+
+                // Save new compressed PDF to public Scoped Storage via MediaStore
+                Uri savedUri = StorageHelper.savePdfToPublicStorage(this, tempOutputFile, compressedFileName + ".pdf");
+                tempOutputFile.delete();
+
+                if (savedUri != null) {
+                    // Generate permanent thumbnail for Recent Scans row
+                    String thumbPath = PdfGenerator.generateThumbnailFromPdf(this, savedUri, timestamp);
+                    String qualityLabel = quality == 100 ? "High (100%)" : (quality == 60 ? "Medium (60%)" : "Low (30%)");
+
+                    DocumentEntity entity = new DocumentEntity(
+                            compressedFileName,
+                            "PDF",
+                            qualityLabel,
+                            pageCount,
+                            compressedSize,
+                            savedUri.toString(),
+                            thumbPath,
+                            timestamp
+                    );
+                    AppDatabase.getInstance(this).documentDao().insertDocument(entity);
+
+                    runOnUiThread(() -> {
+                        if (progressDialog.isShowing()) {
+                            progressDialog.dismiss();
+                        }
+                        Toast.makeText(this, R.string.compression_complete, Toast.LENGTH_SHORT).show();
+                        loadRecentScans();
+                    });
+                } else {
+                    throw new IOException("Failed to export compressed PDF to storage");
+                }
+
+            } catch (Exception e) {
+                Log.e(TAG, "External PDF compression failed", e);
+                runOnUiThread(() -> {
+                    if (progressDialog.isShowing()) {
+                        progressDialog.dismiss();
+                    }
+                    Toast.makeText(this, R.string.compress_error, Toast.LENGTH_LONG).show();
+                });
             }
         });
     }

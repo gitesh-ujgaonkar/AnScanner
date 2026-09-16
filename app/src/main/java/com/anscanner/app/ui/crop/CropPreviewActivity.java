@@ -12,6 +12,7 @@ import android.view.View;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.activity.OnBackPressedCallback;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 
@@ -21,6 +22,7 @@ import com.anscanner.app.processing.ImageProcessor;
 import com.anscanner.app.service.CacheManager;
 import com.anscanner.app.service.OcrHelper;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+import com.google.mlkit.vision.text.Text;
 import com.anscanner.app.ui.camera.CameraActivity;
 import com.anscanner.app.ui.review.ReviewScanActivity;
 
@@ -34,6 +36,7 @@ public class CropPreviewActivity extends AppCompatActivity {
     public static final String EXTRA_PAGE_PATHS = "extra_page_paths";
     public static final String EXTRA_PAGE_INDEX = "extra_page_index";
     public static final String EXTRA_IS_ADDING_PAGE = "extra_is_adding_page";
+    public static final String EXTRA_CORNER_POINTS = "extra_corner_points";
 
     private ActivityCropPreviewBinding binding;
     private String currentImagePath;
@@ -48,6 +51,7 @@ public class CropPreviewActivity extends AppCompatActivity {
     private boolean currentLoupeOnRight = false;
 
     private ExecutorService executor;
+    private Handler mainHandler;
     private enum Filter { ORIGINAL, MAGIC, BW, GRAYSCALE, SHARPEN, SCAN_ENHANCE }
     private Filter currentFilter = Filter.ORIGINAL;
 
@@ -58,6 +62,7 @@ public class CropPreviewActivity extends AppCompatActivity {
         setContentView(binding.getRoot());
 
         executor = Executors.newSingleThreadExecutor();
+        mainHandler = new Handler(Looper.getMainLooper());
 
         Intent intent = getIntent();
         currentImagePath = intent.getStringExtra(EXTRA_IMAGE_PATH);
@@ -89,6 +94,24 @@ public class CropPreviewActivity extends AppCompatActivity {
         binding.btnClose.setOnClickListener(v -> finish());
         binding.cropOverlay.setImageView(binding.ivDocument);
 
+        // When Lens overlay is dismissed by tapping outside, restore CropOverlayView
+        binding.lensOverlay.setOnDismissListener(() -> {
+            binding.cropOverlay.setVisibility(View.VISIBLE);
+        });
+
+        // Intercept Back press if Lens overlay is currently active
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                if (binding.lensOverlay.getVisibility() == View.VISIBLE) {
+                    dismissLensOverlay();
+                } else {
+                    setEnabled(false);
+                    getOnBackPressedDispatcher().onBackPressed();
+                }
+            }
+        });
+
         // The manual "Crop" button re-detects edges on the pristine source bitmap
         binding.btnCrop.setOnClickListener(v -> redetectEdges());
 
@@ -112,7 +135,20 @@ public class CropPreviewActivity extends AppCompatActivity {
         setupLoupe();
     }
 
+    private void dismissLensOverlay() {
+        if (binding.lensOverlay.getVisibility() == View.VISIBLE) {
+            binding.lensOverlay.setVisibility(View.GONE);
+            binding.lensOverlay.clear();
+            binding.cropOverlay.setVisibility(View.VISIBLE);
+        }
+    }
+
     private void extractTextFromCurrentScan() {
+        if (binding.lensOverlay.getVisibility() == View.VISIBLE) {
+            dismissLensOverlay();
+            return;
+        }
+
         Bitmap activeBitmap = (currentFilteredBitmap != null && !currentFilteredBitmap.isRecycled())
                 ? currentFilteredBitmap : sourceBitmap;
 
@@ -134,10 +170,20 @@ public class CropPreviewActivity extends AppCompatActivity {
 
         OcrHelper.extractText(activeBitmap, this, new OcrHelper.OcrCallback() {
             @Override
-            public void onSuccess(String extractedText) {
+            public void onSuccess(Text visionText) {
                 if (!isFinishing() && !isDestroyed()) {
                     progressDialog.dismiss();
-                    OcrHelper.showExtractedTextDialog(CropPreviewActivity.this, extractedText);
+                    if (visionText == null || visionText.getTextBlocks().isEmpty()) {
+                        Toast.makeText(CropPreviewActivity.this, R.string.ocr_empty, Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+
+                    // Hide crop overlay while lens overlay is active to avoid visual clash
+                    binding.cropOverlay.setVisibility(View.INVISIBLE);
+                    binding.lensOverlay.setTargetRect(null);
+                    binding.lensOverlay.setVisionText(visionText, activeBitmap.getWidth(), activeBitmap.getHeight());
+                    binding.lensOverlay.setVisibility(View.VISIBLE);
+                    Toast.makeText(CropPreviewActivity.this, R.string.ocr_lens_hint, Toast.LENGTH_SHORT).show();
                 }
             }
 
@@ -155,9 +201,9 @@ public class CropPreviewActivity extends AppCompatActivity {
         binding.cropOverlay.setOnCornerDragListener(new CropOverlayView.OnCornerDragListener() {
             @Override
             public void onCornerDragStarted(int cornerIndex, float x, float y) {
-                float containerWidth = binding.frameCenter.getWidth();
+                float containerWidth = (float) binding.frameCenter.getWidth();
                 float loupeSize = getResources().getDimension(R.dimen.loupe_size);
-                float margin = getResources().getDisplayMetrics().density * 16;
+                float margin = getResources().getDisplayMetrics().density * 16f;
 
                 boolean isTouchOnLeft = x < containerWidth / 2f;
                 currentLoupeOnRight = isTouchOnLeft;
@@ -166,18 +212,18 @@ public class CropPreviewActivity extends AppCompatActivity {
 
                 binding.cardLoupe.setTranslationX(targetX);
                 binding.cardLoupe.setTranslationY(targetY);
-                updateLoupe(x, y);
 
                 binding.cardLoupe.setAlpha(0f);
                 binding.cardLoupe.setVisibility(View.VISIBLE);
+                updateLoupe(x, y);
                 binding.cardLoupe.animate().alpha(1f).setDuration(150).start();
             }
 
             @Override
             public void onCornerDragging(int cornerIndex, float x, float y) {
-                float containerWidth = binding.frameCenter.getWidth();
+                float containerWidth = (float) binding.frameCenter.getWidth();
                 float loupeSize = getResources().getDimension(R.dimen.loupe_size);
-                float margin = getResources().getDisplayMetrics().density * 16;
+                float margin = getResources().getDisplayMetrics().density * 16f;
 
                 boolean isTouchOnLeft = x < containerWidth / 2f;
                 if (isTouchOnLeft != currentLoupeOnRight) {
@@ -210,20 +256,19 @@ public class CropPreviewActivity extends AppCompatActivity {
 
         PointF bmpPt = binding.cropOverlay.getImageCoordinates(viewX, viewY);
 
-        Matrix docMatrix = binding.ivDocument.getImageMatrix();
+        Matrix docMatrix = binding.cropOverlay.getImageViewToOverlayMatrix();
         float[] docValues = new float[9];
         docMatrix.getValues(docValues);
-        float screenScale = docValues[Matrix.MSCALE_X];
+        float screenScale = (float) Math.hypot(docValues[Matrix.MSCALE_X], docValues[Matrix.MSKEW_Y]);
         if (screenScale <= 0f) screenScale = 1.0f;
         float zoomScale = screenScale * 2.2f;
 
-        float loupeHalfWidth = binding.cardLoupe.getWidth() / 2f;
-        float loupeHalfHeight = binding.cardLoupe.getHeight() / 2f;
-        if (loupeHalfWidth <= 0f) {
-            float loupeSize = getResources().getDimension(R.dimen.loupe_size);
-            loupeHalfWidth = loupeSize / 2f;
-            loupeHalfHeight = loupeSize / 2f;
-        }
+        float loupeHalfWidth = binding.ivLoupe.getWidth() > 0
+                ? (float) binding.ivLoupe.getWidth() / 2f
+                : (float) getResources().getDimension(R.dimen.loupe_size) / 2f;
+        float loupeHalfHeight = binding.ivLoupe.getHeight() > 0
+                ? (float) binding.ivLoupe.getHeight() / 2f
+                : (float) getResources().getDimension(R.dimen.loupe_size) / 2f;
 
         Matrix loupeMatrix = new Matrix();
         loupeMatrix.postTranslate(-bmpPt.x, -bmpPt.y);
@@ -284,6 +329,7 @@ public class CropPreviewActivity extends AppCompatActivity {
      */
     private void applyFilter(Filter filter) {
         if (sourceBitmap == null || filter == currentFilter) return;
+        dismissLensOverlay();
         currentFilter = filter;
 
         if (filter == Filter.ORIGINAL) {
@@ -388,6 +434,7 @@ public class CropPreviewActivity extends AppCompatActivity {
 
     private void redetectEdges() {
         if (sourceBitmap == null) return;
+        dismissLensOverlay();
 
         executor.execute(() -> {
             org.opencv.core.Point[] opencvEdges = ImageProcessor.detectDocumentEdges(sourceBitmap);
@@ -424,6 +471,7 @@ public class CropPreviewActivity extends AppCompatActivity {
 
     private void doRotate() {
         if (sourceBitmap == null) return;
+        dismissLensOverlay();
 
         executor.execute(() -> {
             Bitmap rotated = ImageProcessor.rotateBitmap(sourceBitmap, 90);

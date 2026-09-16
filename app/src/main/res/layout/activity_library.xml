@@ -213,19 +213,6 @@
         app:layout_constraintTop_toTopOf="@id/bottomNavBar"
         app:layout_constraintBottom_toBottomOf="@id/bottomNavBar" />
 
-    <com.google.android.material.floatingactionbutton.FloatingActionButton
-        android:id="@+id/fabCompress"
-        style="@style/Widget.AnScanner.FAB.Compress"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="14dp"
-        android:contentDescription="@string/cd_compress_button"
-        android:src="@drawable/ic_compress"
-        app:elevation="@dimen/camera_fab_elevation"
-        app:tint="@color/accent_mint"
-        app:layout_constraintStart_toEndOf="@id/fabCamera"
-        app:layout_constraintTop_toTopOf="@id/fabCamera"
-        app:layout_constraintBottom_toBottomOf="@id/fabCamera" />
 
     <com.google.android.gms.ads.AdView
         android:id="@+id/adView"

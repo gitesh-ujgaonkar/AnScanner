@@ -81,10 +81,29 @@ public class CropOverlayView extends View {
 
     public void setImageView(ImageView iv) {
         this.imageView = iv;
+        if (this.imageView != null) {
+            this.imageView.addOnLayoutChangeListener((v, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> {
+                if (imageCorners != null && imageCorners.length == 4) {
+                    updateViewCorners();
+                    invalidate();
+                }
+            });
+        }
     }
 
     public void setOnCornerDragListener(OnCornerDragListener listener) {
         this.cornerDragListener = listener;
+    }
+
+    public Matrix getImageViewToOverlayMatrix() {
+        if (imageView == null || imageView.getDrawable() == null) {
+            return new Matrix();
+        }
+        Matrix matrix = new Matrix(imageView.getImageMatrix());
+        float offsetX = (float) (imageView.getLeft() - getLeft() + imageView.getPaddingLeft());
+        float offsetY = (float) (imageView.getTop() - getTop() + imageView.getPaddingTop());
+        matrix.postTranslate(offsetX, offsetY);
+        return matrix;
     }
 
     public PointF getImageCoordinates(float viewX, float viewY) {
@@ -92,7 +111,7 @@ public class CropOverlayView extends View {
             return new PointF(viewX, viewY);
         }
         Matrix inverse = new Matrix();
-        if (imageView.getImageMatrix().invert(inverse)) {
+        if (getImageViewToOverlayMatrix().invert(inverse)) {
             float[] pts = new float[]{viewX, viewY};
             inverse.mapPoints(pts);
             return new PointF(pts[0], pts[1]);
@@ -109,10 +128,10 @@ public class CropOverlayView extends View {
     }
     
     public Point[] getCornerPoints() {
-        if (imageCorners == null || imageView == null || imageView.getDrawable() == null) return null;
+        if (imageView == null || imageView.getDrawable() == null) return null;
         
         Matrix inverse = new Matrix();
-        imageView.getImageMatrix().invert(inverse);
+        if (!getImageViewToOverlayMatrix().invert(inverse)) return null;
         
         Point[] result = new Point[4];
         float[] pts = new float[2];
@@ -121,7 +140,7 @@ public class CropOverlayView extends View {
             pts[0] = viewCorners[i].x;
             pts[1] = viewCorners[i].y;
             inverse.mapPoints(pts);
-            result[i] = new Point((int) pts[0], (int) pts[1]);
+            result[i] = new Point(Math.round(pts[0]), Math.round(pts[1]));
         }
         return result;
     }
@@ -129,7 +148,7 @@ public class CropOverlayView extends View {
     private void updateViewCorners() {
         if (imageCorners == null || imageView == null || imageView.getDrawable() == null) return;
         
-        Matrix matrix = imageView.getImageMatrix();
+        Matrix matrix = getImageViewToOverlayMatrix();
         float[] pts = new float[2];
         
         for (int i = 0; i < 4; i++) {
@@ -137,6 +156,15 @@ public class CropOverlayView extends View {
             pts[1] = imageCorners[i].y;
             matrix.mapPoints(pts);
             viewCorners[i].set(pts[0], pts[1]);
+        }
+    }
+
+    @Override
+    protected void onSizeChanged(int w, int h, int oldw, int oldh) {
+        super.onSizeChanged(w, h, oldw, oldh);
+        if (imageCorners != null && imageCorners.length == 4) {
+            updateViewCorners();
+            invalidate();
         }
     }
 
@@ -197,9 +225,9 @@ public class CropOverlayView extends View {
 
             case MotionEvent.ACTION_MOVE:
                 if (draggingCornerIndex != -1) {
-                    // Get image bounds in view coordinates to clamp
-                    RectF bounds = new RectF(0, 0, imageView.getDrawable().getIntrinsicWidth(), imageView.getDrawable().getIntrinsicHeight());
-                    imageView.getImageMatrix().mapRect(bounds);
+                    // Get image bounds in view coordinates to clamp using accurate matrix
+                    RectF bounds = new RectF(0, 0, (float) imageView.getDrawable().getIntrinsicWidth(), (float) imageView.getDrawable().getIntrinsicHeight());
+                    getImageViewToOverlayMatrix().mapRect(bounds);
                     
                     float clampedX = Math.max(bounds.left, Math.min(x, bounds.right));
                     float clampedY = Math.max(bounds.top, Math.min(y, bounds.bottom));
@@ -215,6 +243,30 @@ public class CropOverlayView extends View {
                 break;
 
             case MotionEvent.ACTION_UP:
+                if (draggingCornerIndex != -1) {
+                    RectF bounds = new RectF(0, 0, (float) imageView.getDrawable().getIntrinsicWidth(), (float) imageView.getDrawable().getIntrinsicHeight());
+                    getImageViewToOverlayMatrix().mapRect(bounds);
+                    
+                    float clampedX = Math.max(bounds.left, Math.min(x, bounds.right));
+                    float clampedY = Math.max(bounds.top, Math.min(y, bounds.bottom));
+                    
+                    viewCorners[draggingCornerIndex].set(clampedX, clampedY);
+                    
+                    Point[] currentCorners = getCornerPoints();
+                    if (currentCorners != null) {
+                        this.imageCorners = currentCorners;
+                    }
+                    invalidate();
+
+                    if (cornerDragListener != null) {
+                        cornerDragListener.onCornerDragging(draggingCornerIndex, clampedX, clampedY);
+                        cornerDragListener.onCornerDragEnded();
+                    }
+                    draggingCornerIndex = -1;
+                    return true;
+                }
+                break;
+
             case MotionEvent.ACTION_CANCEL:
                 if (draggingCornerIndex != -1) {
                     draggingCornerIndex = -1;

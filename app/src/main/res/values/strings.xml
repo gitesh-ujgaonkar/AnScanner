@@ -182,6 +182,8 @@
     <string name="ocr_copied">Text copied to clipboard</string>
     <string name="ocr_extracting">Extracting text…</string>
     <string name="ocr_error">Failed to extract text from page</string>
+    <string name="ocr_copied_snippet">Copied: %1$s</string>
+    <string name="ocr_lens_hint">Tap on highlighted text to copy</string>
 
     <!-- ── Onboarding Flow ──────────────────────────────────────────────── -->
     <string name="onboarding_skip">Skip</string>

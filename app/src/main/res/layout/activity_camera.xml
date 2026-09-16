@@ -144,9 +144,14 @@
                 android:layout_height="1dp"
                 android:layout_weight="1" />
 
-            <Space
+            <ImageButton
+                android:id="@+id/btnCompressPdf"
                 android:layout_width="48dp"
-                android:layout_height="48dp" />
+                android:layout_height="48dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/cd_compress_button"
+                android:src="@drawable/ic_compress"
+                app:tint="@android:color/white" />
 
         </LinearLayout>
 

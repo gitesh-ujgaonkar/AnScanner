@@ -14,8 +14,6 @@ import android.widget.Toast;
 import android.util.Log;
 import android.widget.TextView;
 
-import androidx.activity.result.ActivityResultLauncher;
-import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
@@ -26,7 +24,6 @@ import com.anscanner.app.data.dao.DocumentDao;
 import com.anscanner.app.data.entity.DocumentEntity;
 import com.anscanner.app.databinding.ActivityLibraryBinding;
 import com.anscanner.app.service.CrashManager;
-import com.anscanner.app.service.PdfGenerator;
 import com.anscanner.app.service.StorageHelper;
 import com.anscanner.app.ui.camera.CameraActivity;
 import com.anscanner.app.ui.settings.SettingsActivity;
@@ -36,7 +33,6 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.tabs.TabLayout;
 
 import java.io.File;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
@@ -52,13 +48,6 @@ public class LibraryActivity extends AppCompatActivity {
     private DocumentDao documentDao;
     private ExecutorService executor;
     private int currentTab = 0; // 0 = Scanned in App, 1 = All Device PDFs
-
-    private final ActivityResultLauncher<String> pickPdfForCompressLauncher =
-            registerForActivityResult(new ActivityResultContracts.GetContent(), uri -> {
-                if (uri != null) {
-                    showCompressionLevelDialog(uri);
-                }
-            });
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -152,9 +141,6 @@ public class LibraryActivity extends AppCompatActivity {
             startActivity(new Intent(this, CameraActivity.class));
         });
 
-        binding.fabCompress.setOnClickListener(v -> {
-            pickPdfForCompressLauncher.launch("application/pdf");
-        });
 
         binding.navSettings.setOnClickListener(v -> {
             startActivity(new Intent(this, SettingsActivity.class));
@@ -469,99 +455,6 @@ public class LibraryActivity extends AppCompatActivity {
         });
     }
 
-    private void showCompressionLevelDialog(Uri uri) {
-        final String[] levels = new String[] {
-                getString(R.string.compression_high),
-                getString(R.string.compression_medium),
-                getString(R.string.compression_low)
-        };
-        final int[] qualities = new int[] { 100, 60, 30 };
-        final int[] selectedQuality = new int[] { 60 }; // Default: Medium (60%)
-
-        new MaterialAlertDialogBuilder(this)
-                .setTitle(R.string.compression_quality_title)
-                .setSingleChoiceItems(levels, 1, (dialog, which) -> {
-                    selectedQuality[0] = qualities[which];
-                })
-                .setPositiveButton(R.string.compress_action_compress, (dialog, which) -> {
-                    compressExternalPdf(uri, selectedQuality[0]);
-                })
-                .setNegativeButton(R.string.action_cancel, null)
-                .show();
-    }
-
-    private void compressExternalPdf(Uri sourceUri, int quality) {
-        View dialogView = getLayoutInflater().inflate(R.layout.dialog_progress, null);
-        TextView tvMessage = dialogView.findViewById(R.id.tvProgressMessage);
-        tvMessage.setText(R.string.compressing_pdf);
-
-        AlertDialog progressDialog = new MaterialAlertDialogBuilder(this)
-                .setView(dialogView)
-                .setCancelable(false)
-                .create();
-        progressDialog.show();
-
-        executor.execute(() -> {
-            try {
-                long timestamp = System.currentTimeMillis();
-                String originalFileName = StorageHelper.getFileName(getContentResolver(), sourceUri);
-                if (originalFileName == null || originalFileName.trim().isEmpty()) {
-                    originalFileName = "Doc_" + timestamp;
-                }
-                if (originalFileName.toLowerCase().endsWith(".pdf")) {
-                    originalFileName = originalFileName.substring(0, originalFileName.length() - 4);
-                }
-                String compressedFileName = originalFileName + "_compressed";
-
-                File tempOutputFile = new File(getCacheDir(), "compressed_" + timestamp + ".pdf");
-
-                // Core compression engine
-                long compressedSize = PdfGenerator.compressPdf(this, sourceUri, tempOutputFile, quality);
-                int pageCount = PdfGenerator.getPdfPageCount(this, sourceUri);
-
-                // Save new compressed PDF to public Scoped Storage via MediaStore
-                Uri savedUri = StorageHelper.savePdfToPublicStorage(this, tempOutputFile, compressedFileName + ".pdf");
-                tempOutputFile.delete();
-
-                if (savedUri != null) {
-                    // Generate permanent thumbnail for Library row
-                    String thumbPath = PdfGenerator.generateThumbnailFromPdf(this, savedUri, timestamp);
-                    String qualityLabel = quality == 100 ? "High (100%)" : (quality == 60 ? "Medium (60%)" : "Low (30%)");
-
-                    DocumentEntity entity = new DocumentEntity(
-                            compressedFileName,
-                            "PDF",
-                            qualityLabel,
-                            pageCount,
-                            compressedSize,
-                            savedUri.toString(),
-                            thumbPath,
-                            timestamp
-                    );
-                    documentDao.insertDocument(entity);
-
-                    runOnUiThread(() -> {
-                        if (progressDialog.isShowing()) {
-                            progressDialog.dismiss();
-                        }
-                        Toast.makeText(this, R.string.compression_complete, Toast.LENGTH_SHORT).show();
-                        refreshDocuments(binding.searchView.getText().toString());
-                    });
-                } else {
-                    throw new IOException("Failed to export compressed PDF to storage");
-                }
-
-            } catch (Exception e) {
-                Log.e(TAG, "External PDF compression failed", e);
-                runOnUiThread(() -> {
-                    if (progressDialog.isShowing()) {
-                        progressDialog.dismiss();
-                    }
-                    Toast.makeText(this, R.string.compress_error, Toast.LENGTH_LONG).show();
-                });
-            }
-        });
-    }
 
     @Override
     protected void onDestroy() {

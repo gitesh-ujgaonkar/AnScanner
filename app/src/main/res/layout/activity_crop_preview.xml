@@ -60,13 +60,20 @@
             android:id="@+id/ivDocument"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:adjustViewBounds="true"
+            android:layout_gravity="center"
+            android:adjustViewBounds="false"
             android:scaleType="centerInside" />
 
         <com.anscanner.app.ui.crop.CropOverlayView
             android:id="@+id/cropOverlay"
             android:layout_width="match_parent"
             android:layout_height="match_parent" />
+
+        <com.anscanner.app.ui.custom.LensOverlayView
+            android:id="@+id/lensOverlay"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="gone" />
 
         <!-- Floating Corner Magnifier / Loupe -->
         <com.google.android.material.card.MaterialCardView
@@ -77,6 +84,9 @@
             android:visibility="gone"
             app:cardCornerRadius="@dimen/loupe_corner_radius"
             app:cardElevation="10dp"
+            app:cardPreventCornerOverlap="false"
+            app:contentPadding="0dp"
+            app:useCompatPadding="false"
             app:strokeColor="@color/accent_mint"
             app:strokeWidth="2dp"
             app:cardBackgroundColor="@color/background_primary">

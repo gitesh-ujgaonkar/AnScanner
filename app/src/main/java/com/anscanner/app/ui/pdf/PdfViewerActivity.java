@@ -4,6 +4,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.database.Cursor;
 import android.graphics.Bitmap;
+import android.graphics.RectF;
 import android.graphics.pdf.PdfRenderer;
 import android.net.Uri;
 import android.os.Bundle;
@@ -15,6 +16,7 @@ import android.util.Log;
 import android.view.View;
 import android.widget.Toast;
 
+import androidx.activity.OnBackPressedCallback;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
@@ -25,6 +27,7 @@ import com.anscanner.app.databinding.ActivityPdfViewerBinding;
 import com.anscanner.app.service.CacheManager;
 import com.anscanner.app.service.OcrHelper;
 import com.anscanner.app.ui.crop.CropPreviewActivity;
+import com.google.mlkit.vision.text.Text;
 
 import java.io.File;
 import java.util.UUID;
@@ -76,6 +79,25 @@ public class PdfViewerActivity extends AppCompatActivity {
         binding.btnPrint.setOnClickListener(v -> printDocument());
         binding.btnExtractText.setOnClickListener(v -> extractTextFromCurrentPage());
         binding.btnEdit.setOnClickListener(v -> editCurrentPage());
+
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                if (binding.lensOverlay.getVisibility() == View.VISIBLE) {
+                    dismissLensOverlay();
+                } else {
+                    setEnabled(false);
+                    getOnBackPressedDispatcher().onBackPressed();
+                }
+            }
+        });
+    }
+
+    private void dismissLensOverlay() {
+        if (binding.lensOverlay.getVisibility() == View.VISIBLE) {
+            binding.lensOverlay.setVisibility(View.GONE);
+            binding.lensOverlay.clear();
+        }
     }
 
     private void loadPdfDocument() {
@@ -153,6 +175,9 @@ public class PdfViewerActivity extends AppCompatActivity {
                 @Override
                 public void onScrolled(RecyclerView recyclerView, int dx, int dy) {
                     super.onScrolled(recyclerView, dx, dy);
+                    if (dy != 0 || dx != 0) {
+                        dismissLensOverlay();
+                    }
                     if (layoutManager != null) {
                         int firstVisible = layoutManager.findFirstVisibleItemPosition();
                         if (firstVisible >= 0 && firstVisible < pageCount) {
@@ -256,6 +281,11 @@ public class PdfViewerActivity extends AppCompatActivity {
     // ── OCR Text Extraction (ML Kit) ─────────────────────────────────────
 
     private void extractTextFromCurrentPage() {
+        if (binding.lensOverlay.getVisibility() == View.VISIBLE) {
+            dismissLensOverlay();
+            return;
+        }
+
         if (pageAdapter == null || layoutManager == null) return;
 
         int currentVisiblePage = layoutManager.findFirstVisibleItemPosition();
@@ -274,14 +304,43 @@ public class PdfViewerActivity extends AppCompatActivity {
                     return;
                 }
 
+                final int bitmapWidth = bitmap.getWidth();
+                final int bitmapHeight = bitmap.getHeight();
+
                 OcrHelper.extractText(bitmap, PdfViewerActivity.this, new OcrHelper.OcrCallback() {
                     @Override
-                    public void onSuccess(String extractedText) {
+                    public void onSuccess(Text visionText) {
                         binding.pbLoading.setVisibility(View.GONE);
                         if (!bitmap.isRecycled()) {
                             bitmap.recycle();
                         }
-                        OcrHelper.showExtractedTextDialog(PdfViewerActivity.this, extractedText);
+
+                        if (isFinishing() || isDestroyed()) return;
+
+                        if (visionText == null || visionText.getTextBlocks().isEmpty()) {
+                            Toast.makeText(PdfViewerActivity.this, R.string.ocr_empty, Toast.LENGTH_SHORT).show();
+                            return;
+                        }
+
+                        // Align overlay perfectly over the visible page item
+                        View pageView = layoutManager.findViewByPosition(pageToExtract);
+                        View pageImageView = (pageView != null) ? pageView.findViewById(R.id.ivPdfPage) : null;
+                        if (pageImageView != null && pageImageView.getWidth() > 0 && pageImageView.getHeight() > 0) {
+                            int[] overlayLocation = new int[2];
+                            binding.lensOverlay.getLocationOnScreen(overlayLocation);
+                            int[] imgLocation = new int[2];
+                            pageImageView.getLocationOnScreen(imgLocation);
+                            float left = imgLocation[0] - overlayLocation[0];
+                            float top = imgLocation[1] - overlayLocation[1];
+                            RectF targetRect = new RectF(left, top, left + pageImageView.getWidth(), top + pageImageView.getHeight());
+                            binding.lensOverlay.setTargetRect(targetRect);
+                        } else {
+                            binding.lensOverlay.setTargetRect(null);
+                        }
+
+                        binding.lensOverlay.setVisionText(visionText, bitmapWidth, bitmapHeight);
+                        binding.lensOverlay.setVisibility(View.VISIBLE);
+                        Toast.makeText(PdfViewerActivity.this, R.string.ocr_lens_hint, Toast.LENGTH_SHORT).show();
                     }
 
                     @Override
