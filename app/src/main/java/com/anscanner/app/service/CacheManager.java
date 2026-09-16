@@ -103,6 +103,54 @@ public final class CacheManager {
     }
 
     /**
+     * Calculates the optimal inSampleSize for downscaling images.
+     */
+    public static int calculateInSampleSize(BitmapFactory.Options options, int reqWidth, int reqHeight) {
+        final int height = options.outHeight;
+        final int width = options.outWidth;
+        int inSampleSize = 1;
+
+        if (height > reqHeight || width > reqWidth) {
+            final int halfHeight = height / 2;
+            final int halfWidth = width / 2;
+
+            while ((halfHeight / inSampleSize) >= reqHeight && (halfWidth / inSampleSize) >= reqWidth) {
+                inSampleSize *= 2;
+            }
+        }
+        return inSampleSize;
+    }
+
+    /**
+     * Decodes a down-sampled bitmap from disk on a background thread matching requested dimensions.
+     *
+     * @param filePath Absolute path to the JPEG file.
+     * @param reqWidth Target width in pixels.
+     * @param reqHeight Target height in pixels.
+     * @return Decoded and sampled bitmap, or null on failure.
+     */
+    public static Bitmap decodeSampledBitmap(String filePath, int reqWidth, int reqHeight) {
+        if (filePath == null) return null;
+        File file = new File(filePath);
+        if (!file.exists()) return null;
+
+        try {
+            BitmapFactory.Options options = new BitmapFactory.Options();
+            options.inJustDecodeBounds = true;
+            BitmapFactory.decodeFile(filePath, options);
+
+            options.inSampleSize = calculateInSampleSize(options, reqWidth, reqHeight);
+            options.inJustDecodeBounds = false;
+            options.inPreferredConfig = Bitmap.Config.RGB_565;
+
+            return BitmapFactory.decodeFile(filePath, options);
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to decode sampled bitmap: " + filePath, e);
+            return null;
+        }
+    }
+
+    /**
      * Loads a down-sampled thumbnail from a cached file path.
      * Uses inSampleSize to avoid loading full-resolution images into RAM.
      *
@@ -111,35 +159,7 @@ public final class CacheManager {
      * @return Down-sampled bitmap, or null on failure.
      */
     public static Bitmap loadThumbnail(String filePath, int maxDimPx) {
-        if (filePath == null) return null;
-        File file = new File(filePath);
-        if (!file.exists()) return null;
-
-        try {
-            // First pass: decode bounds only (no pixel allocation)
-            BitmapFactory.Options boundsOpts = new BitmapFactory.Options();
-            boundsOpts.inJustDecodeBounds = true;
-            BitmapFactory.decodeFile(filePath, boundsOpts);
-
-            int width = boundsOpts.outWidth;
-            int height = boundsOpts.outHeight;
-
-            // Calculate the largest inSampleSize that keeps both dimensions ≥ maxDimPx
-            int inSampleSize = 1;
-            while ((width / (inSampleSize * 2)) >= maxDimPx
-                    && (height / (inSampleSize * 2)) >= maxDimPx) {
-                inSampleSize *= 2;
-            }
-
-            // Second pass: decode at reduced resolution
-            BitmapFactory.Options decodeOpts = new BitmapFactory.Options();
-            decodeOpts.inSampleSize = inSampleSize;
-            return BitmapFactory.decodeFile(filePath, decodeOpts);
-
-        } catch (Exception e) {
-            Log.e(TAG, "Failed to load thumbnail: " + filePath, e);
-            return null;
-        }
+        return decodeSampledBitmap(filePath, maxDimPx, maxDimPx);
     }
 
     /**
@@ -166,35 +186,89 @@ public final class CacheManager {
     }
 
     // ════════════════════════════════════════════════════════════════════
-    // Persistent Thumbnail Storage (for library display)
+    // Persistent Thumbnail Storage (for library & recent display)
     // ════════════════════════════════════════════════════════════════════
 
     /**
-     * Saves a down-sampled thumbnail to persistent internal storage.
-     * These survive scan cache clears and are used by the Library screen.
+     * Downscales the first page image to a permanent thumbnail (~200x200)
+     * using BitmapFactory.Options and saves it in context.getFilesDir().
      *
      * @param context     Application context.
-     * @param sourcePath  Path to the full-resolution page image.
-     * @param documentId  Document ID for unique naming.
-     * @return Absolute path to the saved thumbnail, or null on failure.
+     * @param sourcePath  Path to the source page image.
+     * @param documentId  Unique document identifier or timestamp.
+     * @return Absolute file path to the permanent thumbnail JPEG, or null on failure.
+     */
+    public static String savePermanentThumbnail(Context context, String sourcePath, long documentId) {
+        if (context == null || sourcePath == null) {
+            Log.e(TAG, "savePermanentThumbnail: context or sourcePath is null");
+            return null;
+        }
+
+        File sourceFile = new File(sourcePath);
+        if (!sourceFile.exists()) {
+            Log.e(TAG, "savePermanentThumbnail: source file does not exist: " + sourcePath);
+            return null;
+        }
+
+        try {
+            // 1. Decode bounds only
+            BitmapFactory.Options boundsOpts = new BitmapFactory.Options();
+            boundsOpts.inJustDecodeBounds = true;
+            BitmapFactory.decodeFile(sourcePath, boundsOpts);
+
+            int origWidth = boundsOpts.outWidth;
+            int origHeight = boundsOpts.outHeight;
+            if (origWidth <= 0 || origHeight <= 0) {
+                Log.e(TAG, "savePermanentThumbnail: invalid image bounds (" + origWidth + "x" + origHeight + ")");
+                return null;
+            }
+
+            // 2. Downscale targeting 200x200 using inSampleSize
+            final int targetDim = 200;
+            BitmapFactory.Options decodeOpts = new BitmapFactory.Options();
+            decodeOpts.inSampleSize = calculateInSampleSize(boundsOpts, targetDim, targetDim);
+            decodeOpts.inPreferredConfig = Bitmap.Config.RGB_565;
+
+            Bitmap sampledBitmap = BitmapFactory.decodeFile(sourcePath, decodeOpts);
+            if (sampledBitmap == null) {
+                Log.e(TAG, "savePermanentThumbnail: failed to decode sampled bitmap from " + sourcePath);
+                return null;
+            }
+
+            // 3. Scale precisely to max 200x200 preserving aspect ratio
+            float scale = Math.min((float) targetDim / sampledBitmap.getWidth(),
+                                   (float) targetDim / sampledBitmap.getHeight());
+            int finalWidth = Math.max(1, Math.round(sampledBitmap.getWidth() * scale));
+            int finalHeight = Math.max(1, Math.round(sampledBitmap.getHeight() * scale));
+
+            Bitmap finalThumb = Bitmap.createScaledBitmap(sampledBitmap, finalWidth, finalHeight, true);
+            if (finalThumb != sampledBitmap) {
+                sampledBitmap.recycle();
+            }
+
+            // 4. Save to permanent location in context.getFilesDir() (e.g., "thumb_" + documentId + ".jpg")
+            File thumbFile = new File(context.getFilesDir(), "thumb_" + documentId + ".jpg");
+            try (FileOutputStream fos = new FileOutputStream(thumbFile)) {
+                finalThumb.compress(Bitmap.CompressFormat.JPEG, 85, fos);
+                fos.flush();
+            } finally {
+                finalThumb.recycle();
+            }
+
+            Log.i(TAG, "Permanent thumbnail saved: " + thumbFile.getAbsolutePath() + " (" + thumbFile.length() + " bytes)");
+            return thumbFile.getAbsolutePath();
+
+        } catch (Exception e) {
+            Log.e(TAG, "savePermanentThumbnail failed", e);
+            return null;
+        }
+    }
+
+    /**
+     * Alias for {@link #savePermanentThumbnail(Context, String, long)} for backward compatibility.
      */
     public static String savePersistentThumbnail(Context context, String sourcePath, long documentId) {
-        Bitmap thumb = loadThumbnail(sourcePath, 200);
-        if (thumb == null) return null;
-
-        File thumbDir = getThumbDir(context);
-        File thumbFile = new File(thumbDir, "doc_" + documentId + "_thumb.jpg");
-
-        try (FileOutputStream fos = new FileOutputStream(thumbFile)) {
-            thumb.compress(Bitmap.CompressFormat.JPEG, THUMBNAIL_JPEG_QUALITY, fos);
-            fos.flush();
-            return thumbFile.getAbsolutePath();
-        } catch (IOException e) {
-            Log.e(TAG, "Failed to save persistent thumbnail", e);
-            return null;
-        } finally {
-            thumb.recycle();
-        }
+        return savePermanentThumbnail(context, sourcePath, documentId);
     }
 
     // ════════════════════════════════════════════════════════════════════

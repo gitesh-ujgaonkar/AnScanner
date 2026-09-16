@@ -26,14 +26,21 @@ public class PageGridAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
     }
 
     public PageGridAdapter(List<String> pagePaths, PageInteractionListener listener) {
-        this.pagePaths = new ArrayList<>(pagePaths);
+        this.pagePaths = pagePaths;
         this.listener = listener;
     }
 
     public void updatePages(List<String> paths) {
-        this.pagePaths.clear();
-        this.pagePaths.addAll(paths);
+        this.pagePaths = paths;
         notifyDataSetChanged();
+    }
+
+    public void swapPages(int fromPosition, int toPosition) {
+        if (fromPosition >= 0 && fromPosition < pagePaths.size()
+                && toPosition >= 0 && toPosition < pagePaths.size()) {
+            java.util.Collections.swap(pagePaths, fromPosition, toPosition);
+            notifyItemMoved(fromPosition, toPosition);
+        }
     }
 
     @Override

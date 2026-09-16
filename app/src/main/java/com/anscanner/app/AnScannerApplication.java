@@ -9,7 +9,7 @@ import org.opencv.android.OpenCVLoader;
  * AnScanner Application class.
  * Initializes OpenCV native libraries and Room database on app startup.
  */
-public class AnScannerApplication extends Application {
+public class AnScannerApplication extends AnScannerApp {
 
     private static final String TAG = "AnScannerApp";
 

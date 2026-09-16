@@ -85,5 +85,17 @@
                     tools:text="PDF" />
             </LinearLayout>
         </LinearLayout>
+
+        <ImageButton
+            android:id="@+id/btnMore"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_marginStart="@dimen/spacing_sm"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/cd_more_options"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_more_vert"
+            app:tint="@color/text_secondary" />
+
     </LinearLayout>
 </com.google.android.material.card.MaterialCardView>

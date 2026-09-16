@@ -1,5 +1,6 @@
 package com.anscanner.app.ui.save;
 
+import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
@@ -19,6 +20,7 @@ import com.anscanner.app.data.entity.PageEntity;
 import com.anscanner.app.databinding.BottomSheetSaveScanBinding;
 import com.anscanner.app.service.CacheManager;
 import com.anscanner.app.service.PdfGenerator;
+import com.anscanner.app.service.ReviewHelper;
 import com.anscanner.app.service.StorageHelper;
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment;
 import java.io.File;
@@ -78,73 +80,101 @@ public class SaveScanBottomSheet extends BottomSheetDialogFragment {
             if (isChecked) updateSizeEstimate();
         });
         
-        binding.toggleQuality.addOnButtonCheckedListener((group, checkedId, isChecked) -> {
-            if (isChecked) updateSizeEstimate();
+        binding.rgQuality.setOnCheckedChangeListener((group, checkedId) -> {
+            updateSizeEstimate();
         });
         
         updateSizeEstimate();
         
         binding.btnSaveShare.setOnClickListener(v -> saveAndShare());
     }
+
+    private int getSelectedQuality() {
+        int checkedId = binding.rgQuality.getCheckedRadioButtonId();
+        if (checkedId == R.id.rbLow) {
+            return 30;
+        } else if (checkedId == R.id.rbMedium) {
+            return 60;
+        } else {
+            return 100;
+        }
+    }
     
     private void updateSizeEstimate() {
         boolean isPdf = binding.toggleFormat.getCheckedButtonId() == R.id.btnPdf;
-        String sizeStr = StorageHelper.estimateFileSize(pagePaths, isPdf);
+        int quality = getSelectedQuality();
+        String sizeStr = StorageHelper.estimateFileSize(pagePaths, isPdf, quality);
         binding.tvSizeBadge.setText(sizeStr + " · Stored locally");
     }
     
     private void saveAndShare() {
+        if (pagePaths == null || pagePaths.isEmpty()) {
+            Toast.makeText(requireContext(), "No pages to save", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
         binding.btnSaveShare.setEnabled(false);
         binding.btnSaveShare.setText("Generating...");
-        
-        String fileName = binding.etFileName.getText() != null ? binding.etFileName.getText().toString() : "Document";
-        boolean isPdf = binding.toggleFormat.getCheckedButtonId() == R.id.btnPdf;
-        boolean isHighQuality = binding.toggleQuality.getCheckedButtonId() == R.id.btnHigh;
-        
+
+        final Context appContext = requireContext().getApplicationContext();
+        String nameInput = binding.etFileName.getText() != null ? binding.etFileName.getText().toString().trim() : "";
+        if (nameInput.isEmpty()) {
+            nameInput = "Doc_" + new SimpleDateFormat("yyyy_MM_dd", Locale.getDefault()).format(new Date());
+        }
+        final String fileName = nameInput;
+        final boolean isPdf = binding.toggleFormat.getCheckedButtonId() == R.id.btnPdf;
+        final int quality = getSelectedQuality();
+        final String qualityLabel = quality == 100 ? "High (100%)" : (quality == 60 ? "Medium (60%)" : "Low (30%)");
+        final List<String> currentPages = new ArrayList<>(pagePaths);
+
         executor.execute(() -> {
             try {
                 Uri savedUri = null;
                 long fileSize = 0;
-                
+                long docTimestamp = System.currentTimeMillis();
+
                 if (isPdf) {
-                    File tempPdf = new File(requireContext().getCacheDir(), "temp_doc.pdf");
-                    PdfGenerator.createPdfFromPages(pagePaths, tempPdf, isHighQuality);
-                    savedUri = StorageHelper.savePdfToPublicStorage(requireContext(), tempPdf, fileName);
+                    File tempPdf = new File(appContext.getCacheDir(), "temp_doc_" + docTimestamp + ".pdf");
+                    PdfGenerator.createPdfFromPages(currentPages, tempPdf, quality);
+                    savedUri = StorageHelper.savePdfToPublicStorage(appContext, tempPdf, fileName);
                     fileSize = tempPdf.length();
                     tempPdf.delete();
                 } else {
-                    if (!pagePaths.isEmpty()) {
-                        int quality = isHighQuality ? 95 : 70;
-                        savedUri = StorageHelper.saveJpgToPublicStorage(requireContext(), pagePaths.get(0), fileName, quality);
-                        fileSize = new File(pagePaths.get(0)).length(); // Approximation
-                    }
+                    savedUri = StorageHelper.saveJpgToPublicStorage(appContext, currentPages.get(0), fileName, quality);
+                    fileSize = new File(currentPages.get(0)).length();
                 }
-                
+
                 if (savedUri != null) {
-                    String thumbPath = CacheManager.savePersistentThumbnail(requireContext(), pagePaths.get(0), System.currentTimeMillis());
-                    
-                    DocumentEntity doc = new DocumentEntity(fileName, isPdf ? "PDF" : "JPG", 
-                            isHighQuality ? "High" : "Normal", pagePaths.size(), fileSize, savedUri.toString(), thumbPath, System.currentTimeMillis());
-                            
+                    // Downscale first page to 200x200 and save permanently to getFilesDir()
+                    String thumbPath = CacheManager.savePermanentThumbnail(appContext, currentPages.get(0), docTimestamp);
+
+                    DocumentEntity doc = new DocumentEntity(fileName, isPdf ? "PDF" : "JPG",
+                            qualityLabel, currentPages.size(), fileSize,
+                            savedUri.toString(), thumbPath, docTimestamp);
+
                     List<PageEntity> pages = new ArrayList<>();
-                    for (int i = 0; i < pagePaths.size(); i++) {
-                        pages.add(new PageEntity(0, i + 1, pagePaths.get(i), "Original", System.currentTimeMillis()));
+                    for (int i = 0; i < currentPages.size(); i++) {
+                        pages.add(new PageEntity(0, i + 1, currentPages.get(i), "Original", docTimestamp));
                     }
-                    
-                    DocumentDao dao = AppDatabase.getInstance(requireContext()).documentDao();
+
+                    DocumentDao dao = AppDatabase.getInstance(appContext).documentDao();
                     dao.insertDocumentWithPages(doc, pages);
-                    
-                    CacheManager.clearScanCache(requireContext());
-                    
+
+                    // Clear temporary scan cache files after thumbnail and doc are committed
+                    CacheManager.clearScanCache(appContext);
+
                     final Uri finalUri = savedUri;
                     mainHandler.post(() -> {
-                        Toast.makeText(requireContext(), R.string.save_success, Toast.LENGTH_SHORT).show();
+                        if (!isAdded()) return;
+                        Toast.makeText(appContext, R.string.save_success, Toast.LENGTH_SHORT).show();
                         Intent shareIntent = StorageHelper.createShareIntent(finalUri, isPdf ? "application/pdf" : "image/jpeg", fileName);
                         startActivity(Intent.createChooser(shareIntent, "Share via"));
-                        
-                        Intent intent = new Intent();
-                        intent.setClassName(requireContext(), "com.anscanner.app.ui.library.LibraryActivity");
-                        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
+
+                        // Track successful save for Google Play In-App Review (prompts at count == 3)
+                        ReviewHelper.onDocumentSaved(getActivity());
+
+                        Intent intent = new Intent(appContext, com.anscanner.app.ui.library.LibraryActivity.class);
+                        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
                         startActivity(intent);
                         dismiss();
                     });
@@ -154,6 +184,7 @@ public class SaveScanBottomSheet extends BottomSheetDialogFragment {
             } catch (Exception e) {
                 e.printStackTrace();
                 mainHandler.post(() -> {
+                    if (!isAdded()) return;
                     Toast.makeText(requireContext(), R.string.save_error, Toast.LENGTH_SHORT).show();
                     binding.btnSaveShare.setEnabled(true);
                     binding.btnSaveShare.setText(R.string.save_button);

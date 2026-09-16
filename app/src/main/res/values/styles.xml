@@ -291,6 +291,15 @@
         <item name="shapeAppearance">@style/ShapeAppearance.AnScanner.FAB</item>
     </style>
 
+    <!-- Compress FAB in bottom navigation -->
+    <style name="Widget.AnScanner.FAB.Compress" parent="Widget.Material3.FloatingActionButton.Secondary">
+        <item name="backgroundTint">@color/surface_elevated</item>
+        <item name="tint">@color/accent_mint</item>
+        <item name="elevation">@dimen/camera_fab_elevation</item>
+        <item name="fabSize">mini</item>
+        <item name="shapeAppearance">@style/ShapeAppearance.AnScanner.FAB</item>
+    </style>
+
     <style name="ShapeAppearance.AnScanner.FAB" parent="">
         <item name="cornerFamily">rounded</item>
         <item name="cornerSize">50%</item>

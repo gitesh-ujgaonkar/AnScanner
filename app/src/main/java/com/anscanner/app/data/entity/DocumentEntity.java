@@ -63,6 +63,7 @@ public class DocumentEntity {
     /**
      * Full constructor for creating a new document record.
      */
+    @androidx.room.Ignore
     public DocumentEntity(String title, String format, String quality,
                           int pageCount, long fileSizeBytes, String fileUri,
                           String thumbnailPath, long createdAt) {
@@ -75,5 +76,36 @@ public class DocumentEntity {
         this.thumbnailPath = thumbnailPath;
         this.createdAt = createdAt;
         this.updatedAt = createdAt;
+    }
+
+    /**
+     * Resolves the physical file path for this document, or returns the URI string.
+     */
+    @androidx.room.Ignore
+    public String getFilePath() {
+        if (fileUri != null && !fileUri.startsWith("content://")) {
+            if (fileUri.startsWith("file://")) {
+                return android.net.Uri.parse(fileUri).getPath();
+            }
+            return fileUri;
+        }
+        // If fileUri is a MediaStore content:// URI, check standard public directory
+        String subDir = "PDF".equalsIgnoreCase(format) ? android.os.Environment.DIRECTORY_DOCUMENTS : android.os.Environment.DIRECTORY_PICTURES;
+        java.io.File publicDir = new java.io.File(android.os.Environment.getExternalStoragePublicDirectory(subDir), "AnScanner");
+        String name = title != null ? title : "document";
+        String ext = "PDF".equalsIgnoreCase(format) ? ".pdf" : ".jpg";
+        if (!name.toLowerCase(java.util.Locale.US).endsWith(ext)) {
+            name = name + ext;
+        }
+        java.io.File expectedFile = new java.io.File(publicDir, name);
+        if (expectedFile.exists()) {
+            return expectedFile.getAbsolutePath();
+        }
+        return fileUri != null ? fileUri : "";
+    }
+
+    @androidx.room.Ignore
+    public String getThumbnailPath() {
+        return thumbnailPath;
     }
 }

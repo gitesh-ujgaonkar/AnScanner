@@ -29,6 +29,13 @@ public class CropOverlayView extends View {
     private PointF[] viewCorners = new PointF[4];
     private ImageView imageView;
     
+    public interface OnCornerDragListener {
+        void onCornerDragStarted(int cornerIndex, float x, float y);
+        void onCornerDragging(int cornerIndex, float x, float y);
+        void onCornerDragEnded();
+    }
+
+    private OnCornerDragListener cornerDragListener;
     private int draggingCornerIndex = -1;
     private final float touchRadius;
     private final float handleRadius;
@@ -74,6 +81,23 @@ public class CropOverlayView extends View {
 
     public void setImageView(ImageView iv) {
         this.imageView = iv;
+    }
+
+    public void setOnCornerDragListener(OnCornerDragListener listener) {
+        this.cornerDragListener = listener;
+    }
+
+    public PointF getImageCoordinates(float viewX, float viewY) {
+        if (imageView == null || imageView.getDrawable() == null) {
+            return new PointF(viewX, viewY);
+        }
+        Matrix inverse = new Matrix();
+        if (imageView.getImageMatrix().invert(inverse)) {
+            float[] pts = new float[]{viewX, viewY};
+            inverse.mapPoints(pts);
+            return new PointF(pts[0], pts[1]);
+        }
+        return new PointF(viewX, viewY);
     }
 
     public void setCorners(Point[] corners) {
@@ -163,7 +187,13 @@ public class CropOverlayView extends View {
                         draggingCornerIndex = i;
                     }
                 }
-                return draggingCornerIndex != -1;
+                if (draggingCornerIndex != -1) {
+                    if (cornerDragListener != null) {
+                        cornerDragListener.onCornerDragStarted(draggingCornerIndex, viewCorners[draggingCornerIndex].x, viewCorners[draggingCornerIndex].y);
+                    }
+                    return true;
+                }
+                return false;
 
             case MotionEvent.ACTION_MOVE:
                 if (draggingCornerIndex != -1) {
@@ -176,13 +206,22 @@ public class CropOverlayView extends View {
                     
                     viewCorners[draggingCornerIndex].set(clampedX, clampedY);
                     invalidate();
+
+                    if (cornerDragListener != null) {
+                        cornerDragListener.onCornerDragging(draggingCornerIndex, clampedX, clampedY);
+                    }
                     return true;
                 }
                 break;
 
             case MotionEvent.ACTION_UP:
             case MotionEvent.ACTION_CANCEL:
-                draggingCornerIndex = -1;
+                if (draggingCornerIndex != -1) {
+                    draggingCornerIndex = -1;
+                    if (cornerDragListener != null) {
+                        cornerDragListener.onCornerDragEnded();
+                    }
+                }
                 break;
         }
 

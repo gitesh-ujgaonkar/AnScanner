@@ -46,6 +46,64 @@ public class SettingsActivity extends AppCompatActivity {
         });
 
         binding.rowPrivacyPolicy.setOnClickListener(v -> showPrivacyPolicy());
+        binding.rowFeedback.setOnClickListener(v -> showFeedbackDialog());
+    }
+
+    private void showFeedbackDialog() {
+        com.anscanner.app.databinding.DialogFeedbackBinding dialogBinding =
+                com.anscanner.app.databinding.DialogFeedbackBinding.inflate(getLayoutInflater());
+        androidx.appcompat.app.AlertDialog dialog = new MaterialAlertDialogBuilder(this)
+                .setView(dialogBinding.getRoot())
+                .setCancelable(true)
+                .create();
+
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+        }
+
+        dialogBinding.btnFeedbackCancel.setOnClickListener(v -> dialog.dismiss());
+
+        dialogBinding.btnFeedbackSubmit.setOnClickListener(v -> {
+            String message = dialogBinding.etFeedbackMessage.getText() != null
+                    ? dialogBinding.etFeedbackMessage.getText().toString().trim()
+                    : "";
+
+            if (message.isEmpty()) {
+                dialogBinding.tilFeedback.setError(getString(R.string.feedback_empty_error));
+                return;
+            }
+            dialogBinding.tilFeedback.setError(null);
+
+            // Disable submit button & cancel button, show loading indicator
+            dialogBinding.btnFeedbackSubmit.setEnabled(false);
+            dialogBinding.btnFeedbackCancel.setEnabled(false);
+            dialogBinding.pbFeedbackLoading.setVisibility(android.view.View.VISIBLE);
+
+            // Prepare feedback payload
+            java.util.HashMap<String, Object> feedbackMap = new java.util.HashMap<>();
+            feedbackMap.put("message", message);
+            feedbackMap.put("timestamp", com.google.firebase.firestore.FieldValue.serverTimestamp());
+            feedbackMap.put("device_model", android.os.Build.MODEL);
+            feedbackMap.put("os_version", android.os.Build.VERSION.RELEASE);
+
+            com.google.firebase.firestore.FirebaseFirestore db = com.google.firebase.firestore.FirebaseFirestore.getInstance();
+            db.collection("feedbacks")
+                    .add(feedbackMap)
+                    .addOnSuccessListener(documentReference -> {
+                        if (isFinishing() || isDestroyed()) return;
+                        dialog.dismiss();
+                        Toast.makeText(this, R.string.feedback_success, Toast.LENGTH_SHORT).show();
+                    })
+                    .addOnFailureListener(e -> {
+                        if (isFinishing() || isDestroyed()) return;
+                        dialogBinding.btnFeedbackSubmit.setEnabled(true);
+                        dialogBinding.btnFeedbackCancel.setEnabled(true);
+                        dialogBinding.pbFeedbackLoading.setVisibility(android.view.View.GONE);
+                        Toast.makeText(this, R.string.feedback_error, Toast.LENGTH_SHORT).show();
+                    });
+        });
+
+        dialog.show();
     }
 
     private void updateCacheSize() {

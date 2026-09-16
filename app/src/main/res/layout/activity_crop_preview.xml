@@ -35,9 +35,14 @@
             android:textAppearance="@style/TextAppearance.AnScanner.Title"
             android:textColor="@android:color/white" />
 
-        <Space
+        <ImageButton
+            android:id="@+id/btnExtractText"
             android:layout_width="48dp"
-            android:layout_height="48dp" />
+            android:layout_height="48dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/cd_extract_text"
+            android:src="@drawable/ic_ocr_text"
+            app:tint="@android:color/white" />
 
     </LinearLayout>
 
@@ -62,6 +67,40 @@
             android:id="@+id/cropOverlay"
             android:layout_width="match_parent"
             android:layout_height="match_parent" />
+
+        <!-- Floating Corner Magnifier / Loupe -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/cardLoupe"
+            android:layout_width="@dimen/loupe_size"
+            android:layout_height="@dimen/loupe_size"
+            android:layout_gravity="top|start"
+            android:visibility="gone"
+            app:cardCornerRadius="@dimen/loupe_corner_radius"
+            app:cardElevation="10dp"
+            app:strokeColor="@color/accent_mint"
+            app:strokeWidth="2dp"
+            app:cardBackgroundColor="@color/background_primary">
+
+            <FrameLayout
+                android:layout_width="match_parent"
+                android:layout_height="match_parent">
+
+                <ImageView
+                    android:id="@+id/ivLoupe"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:scaleType="matrix" />
+
+                <!-- Reticle crosshair in the center of the loupe -->
+                <ImageView
+                    android:id="@+id/ivLoupeCrosshair"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:layout_gravity="center"
+                    android:src="@drawable/ic_crosshair"
+                    app:tint="@color/accent_mint" />
+            </FrameLayout>
+        </com.google.android.material.card.MaterialCardView>
     </FrameLayout>
 
     <LinearLayout
@@ -108,7 +147,31 @@
                     style="@style/Widget.Material3.Button.TonalButton"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:layout_marginEnd="@dimen/spacing_sm"
                     android:text="B&amp;W Clean" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnFilterGrayscale"
+                    style="@style/Widget.Material3.Button.TonalButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="@dimen/spacing_sm"
+                    android:text="Grayscale" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnFilterSharpen"
+                    style="@style/Widget.Material3.Button.TonalButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="@dimen/spacing_sm"
+                    android:text="Sharpen" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnFilterScanEnhance"
+                    style="@style/Widget.Material3.Button.TonalButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Scan Enhance" />
             </LinearLayout>
         </HorizontalScrollView>
 

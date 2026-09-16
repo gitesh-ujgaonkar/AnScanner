@@ -130,34 +130,45 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Quality"
+            android:text="Compression Quality"
             android:textAppearance="@style/TextAppearance.AnScanner.Label"
             android:textColor="@color/text_secondary"
             android:layout_marginBottom="8dp" />
             
-        <com.google.android.material.button.MaterialButtonToggleGroup
-            android:id="@+id/toggleQuality"
+        <RadioGroup
+            android:id="@+id/rgQuality"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            app:singleSelection="true"
-            app:checkedButton="@+id/btnHigh">
-            
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnHigh"
-                style="@style/Widget.Material3.Button.OutlinedButton"
+            android:orientation="horizontal">
+
+            <com.google.android.material.radiobutton.MaterialRadioButton
+                android:id="@+id/rbHigh"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="@string/save_quality_high" />
-                
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnNormal"
-                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:checked="true"
+                android:text="High (100%)"
+                android:textSize="12sp"
+                android:textColor="@color/text_primary" />
+
+            <com.google.android.material.radiobutton.MaterialRadioButton
+                android:id="@+id/rbMedium"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="@string/save_quality_normal" />
-        </com.google.android.material.button.MaterialButtonToggleGroup>
+                android:text="Med (60%)"
+                android:textSize="12sp"
+                android:textColor="@color/text_primary" />
+
+            <com.google.android.material.radiobutton.MaterialRadioButton
+                android:id="@+id/rbLow"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Low (30%)"
+                android:textSize="12sp"
+                android:textColor="@color/text_primary" />
+        </RadioGroup>
     </LinearLayout>
     
     <TextView

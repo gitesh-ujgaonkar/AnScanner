@@ -235,6 +235,18 @@ public final class StorageHelper {
      * @return Estimated size string.
      */
     public static String estimateFileSize(java.util.List<String> pagePaths, boolean isPdf) {
+        return estimateFileSize(pagePaths, isPdf, 100);
+    }
+
+    /**
+     * Estimates the output file size for a given set of page paths, format, and compression quality.
+     *
+     * @param pagePaths List of cached page image paths.
+     * @param isPdf     True for PDF, false for JPG.
+     * @param quality   Compression quality (1-100).
+     * @return Formatted size string.
+     */
+    public static String estimateFileSize(java.util.List<String> pagePaths, boolean isPdf, int quality) {
         long totalBytes = 0;
         for (String path : pagePaths) {
             File f = new File(path);
@@ -243,11 +255,35 @@ public final class StorageHelper {
             }
         }
 
-        // PDF adds ~10-15% overhead for document structure; JPG is roughly source size
+        // Adjust estimate based on quality factor
+        float factor = (float) Math.max(25, quality) / 100.0f;
+        totalBytes = (long) (totalBytes * factor);
+
+        // PDF adds ~10-15% overhead for document structure
         if (isPdf) {
             totalBytes = (long) (totalBytes * 1.12);
         }
 
         return formatFileSize(totalBytes);
+    }
+
+    /**
+     * Resolves the display filename from a content or file URI.
+     */
+    public static String getFileName(ContentResolver resolver, Uri uri) {
+        if (uri == null) return null;
+        if ("file".equalsIgnoreCase(uri.getScheme())) {
+            return uri.getLastPathSegment();
+        }
+        try (android.database.Cursor cursor = resolver.query(uri,
+                new String[]{MediaStore.MediaColumns.DISPLAY_NAME}, null, null, null)) {
+            if (cursor != null && cursor.moveToFirst()) {
+                int col = cursor.getColumnIndex(MediaStore.MediaColumns.DISPLAY_NAME);
+                if (col != -1) {
+                    return cursor.getString(col);
+                }
+            }
+        } catch (Exception ignored) {}
+        return uri.getLastPathSegment();
     }
 }

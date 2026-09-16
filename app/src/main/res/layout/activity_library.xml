@@ -56,14 +56,41 @@
         </LinearLayout>
     </LinearLayout>
 
+    <com.google.android.material.tabs.TabLayout
+        android:id="@+id/tabLayout"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:background="@color/background_primary"
+        app:tabIndicatorColor="@color/accent_mint"
+        app:tabIndicatorHeight="3dp"
+        app:tabSelectedTextColor="@color/accent_mint"
+        app:tabTextColor="@color/text_secondary"
+        app:tabMode="fixed"
+        app:tabGravity="fill"
+        app:tabRippleColor="@color/accent_mint_ripple"
+        app:layout_constraintTop_toBottomOf="@id/topSection"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <com.google.android.material.tabs.TabItem
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/tab_scanned_in_app" />
+
+        <com.google.android.material.tabs.TabItem
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/tab_all_device_pdfs" />
+    </com.google.android.material.tabs.TabLayout>
+
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/rvDocuments"
         android:layout_width="0dp"
         android:layout_height="0dp"
         android:clipToPadding="false"
-        android:paddingBottom="@dimen/bottom_nav_height"
-        app:layout_constraintTop_toBottomOf="@id/topSection"
-        app:layout_constraintBottom_toBottomOf="parent"
+        android:paddingBottom="@dimen/spacing_sm"
+        app:layout_constraintTop_toBottomOf="@id/tabLayout"
+        app:layout_constraintBottom_toTopOf="@id/bottomNavBar"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         tools:listitem="@layout/item_document_row" />
@@ -75,8 +102,8 @@
         android:gravity="center"
         android:orientation="vertical"
         android:visibility="gone"
-        app:layout_constraintTop_toBottomOf="@id/topSection"
-        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/tabLayout"
+        app:layout_constraintBottom_toTopOf="@id/bottomNavBar"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
@@ -87,6 +114,7 @@
             app:tint="@color/text_muted" />
 
         <TextView
+            android:id="@+id/tvEmptyTitle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="@dimen/spacing_md"
@@ -94,6 +122,7 @@
             android:textAppearance="@style/TextAppearance.AnScanner.Title" />
 
         <TextView
+            android:id="@+id/tvEmptySubtitle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="@dimen/spacing_sm"
@@ -107,7 +136,7 @@
         android:layout_width="0dp"
         android:layout_height="@dimen/bottom_nav_height"
         android:background="@color/nav_bar_background"
-        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintBottom_toTopOf="@id/adView"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
@@ -140,23 +169,10 @@
                     android:textColor="@color/nav_icon_active" />
             </LinearLayout>
 
-            <FrameLayout
+            <Space
                 android:layout_width="0dp"
                 android:layout_height="match_parent"
-                android:layout_weight="1"
-                android:clipChildren="false">
-                
-                <com.google.android.material.floatingactionbutton.FloatingActionButton
-                    android:id="@+id/fabCamera"
-                    style="@style/Widget.AnScanner.FAB.Camera"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_gravity="center|top"
-                    android:layout_marginTop="-16dp"
-                    android:src="@drawable/ic_camera"
-                    app:elevation="@dimen/camera_fab_elevation"
-                    app:tint="@color/text_on_accent" />
-            </FrameLayout>
+                android:layout_weight="1" />
 
             <LinearLayout
                 android:id="@+id/navSettings"
@@ -182,4 +198,43 @@
             </LinearLayout>
         </LinearLayout>
     </FrameLayout>
+
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fabCamera"
+        style="@style/Widget.AnScanner.FAB.Camera"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:contentDescription="@string/cd_camera"
+        android:src="@drawable/ic_camera"
+        app:elevation="@dimen/camera_fab_elevation"
+        app:tint="@color/text_on_accent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="@id/bottomNavBar"
+        app:layout_constraintBottom_toBottomOf="@id/bottomNavBar" />
+
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fabCompress"
+        style="@style/Widget.AnScanner.FAB.Compress"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="14dp"
+        android:contentDescription="@string/cd_compress_button"
+        android:src="@drawable/ic_compress"
+        app:elevation="@dimen/camera_fab_elevation"
+        app:tint="@color/accent_mint"
+        app:layout_constraintStart_toEndOf="@id/fabCamera"
+        app:layout_constraintTop_toTopOf="@id/fabCamera"
+        app:layout_constraintBottom_toBottomOf="@id/fabCamera" />
+
+    <com.google.android.gms.ads.AdView
+        android:id="@+id/adView"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        app:adSize="BANNER"
+        app:adUnitId="ca-app-pub-3940256099942544/6300978111"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
 </androidx.constraintlayout.widget.ConstraintLayout>

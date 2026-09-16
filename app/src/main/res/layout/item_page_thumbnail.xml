@@ -46,5 +46,20 @@
             app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintEnd_toEndOf="parent"/>
 
+        <ImageView
+            android:id="@+id/ivDragHandle"
+            android:layout_width="@dimen/grid_delete_button_size"
+            android:layout_height="@dimen/grid_delete_button_size"
+            android:layout_margin="@dimen/spacing_sm"
+            android:background="@drawable/bg_page_badge"
+            android:backgroundTint="#80000000"
+            android:contentDescription="Drag handle"
+            android:padding="4dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_drag_handle"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:tint="@android:color/white" />
+
     </androidx.constraintlayout.widget.ConstraintLayout>
 </com.google.android.material.card.MaterialCardView>

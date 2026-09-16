@@ -20,6 +20,8 @@
     <string name="camera_permission_denied">Camera permission denied. Please enable it in Settings.</string>
     <string name="camera_init_error">Failed to initialize camera</string>
     <string name="camera_capture_error">Failed to capture image</string>
+    <string name="camera_gallery_import">Import from gallery</string>
+    <string name="camera_gallery_error">Failed to import image</string>
 
     <!-- ── Screen 2: Crop Preview ─────────────────────────────────────── -->
     <string name="crop_title">Page %1$d of %2$d</string>
@@ -28,6 +30,7 @@
     <string name="crop_action_rotate">Rotate</string>
     <string name="crop_action_delete">Delete</string>
     <string name="crop_save_document">Save Document →</string>
+    <string name="crop_confirm_next">Confirm \u0026 Next →</string>
     <string name="crop_filter_original">Original</string>
     <string name="crop_filter_magic_color">Magic Color</string>
     <string name="crop_filter_bw_clean">B\u0026W Clean</string>
@@ -75,6 +78,14 @@
     <string name="library_delete_confirm">Delete \"%1$s\"?</string>
     <string name="library_delete_confirm_message">This action cannot be undone.</string>
     <string name="library_deleted">Document deleted</string>
+    <string name="action_remove_from_app">Remove from App</string>
+    <string name="action_delete_permanently">Delete Permanently</string>
+    <string name="library_remove_confirm">Remove \'%1$s\' from the app?</string>
+    <string name="library_remove_confirm_message">The document record will be removed from AnScanner. The original file remains in device storage.</string>
+    <string name="library_delete_permanently_confirm">Permanently delete \'%1$s\' from storage?</string>
+    <string name="library_delete_permanently_message">This will permanently delete the file and its thumbnail from device storage. This action cannot be undone.</string>
+    <string name="library_removed_from_app">Removed from app</string>
+    <string name="library_deleted_permanently">File deleted permanently</string>
 
     <!-- ── Screen 6: Settings ─────────────────────────────────────────── -->
     <string name="settings_title">Settings</string>
@@ -111,6 +122,7 @@
     <string name="cd_scan_button">Scan document</string>
     <string name="cd_close_button">Close</string>
     <string name="cd_back_button">Go back</string>
+    <string name="cd_gallery_button">Import from gallery</string>
     <string name="cd_delete_page">Delete page</string>
     <string name="cd_add_page">Add another page</string>
     <string name="cd_document_thumbnail">Document thumbnail</string>
@@ -126,5 +138,65 @@
     <string name="see_all">See all ></string>
     <string name="cd_close">Close</string>
     <string name="cd_recent_scan">Recent scan thumbnail</string>
+
+    <!-- ── PDF Viewer & Context Menu ──────────────────────────────────── -->
+    <string name="pdf_viewer_title">PDF Viewer</string>
+    <string name="pdf_page_indicator">Page %1$d of %2$d</string>
+    <string name="action_print">Print</string>
+    <string name="action_edit_page">Edit</string>
+    <string name="action_open">Open</string>
+    <string name="pdf_load_error">Failed to load PDF document</string>
+    <string name="print_error">Failed to initiate printing</string>
+    <string name="cd_more_options">More options</string>
+    <string name="cd_print">Print document</string>
+    <string name="cd_edit_page">Edit current page</string>
+
+    <!-- ── In-App Feedback System ─────────────────────────────────────── -->
+    <string name="feedback_title">Send Feedback</string>
+    <string name="feedback_subtitle">Tell us what you think or report an issue</string>
+    <string name="feedback_hint">Tell us how we can improve…</string>
+    <string name="feedback_submit">Submit</string>
+    <string name="feedback_cancel">Cancel</string>
+    <string name="feedback_empty_error">Please enter your feedback before submitting</string>
+    <string name="feedback_success">Feedback sent! Thank you.</string>
+    <string name="feedback_error">Failed to send feedback. Please try again.</string>
+    <string name="settings_send_feedback">Send Feedback</string>
+
+    <!-- ── PDF Compression ─────────────────────────────────────────────── -->
+    <string name="action_compress_pdf">Compress PDF</string>
+    <string name="cd_compress_button">Compress external PDF</string>
+    <string name="compressing_pdf">Compressing PDF…</string>
+    <string name="compression_complete">Compression Complete</string>
+    <string name="compression_quality_title">Select Compression Level</string>
+    <string name="compression_high">High (100% Quality)</string>
+    <string name="compression_medium">Medium (60% Quality)</string>
+    <string name="compression_low">Low (30% Quality)</string>
+    <string name="compress_error">Failed to compress PDF. File may be corrupted or password-protected.</string>
+    <string name="compress_action_compress">Compress</string>
+
+    <!-- ── Offline Text Extraction (ML Kit OCR) ────────────────────────── -->
+    <string name="cd_extract_text">Extract text from current page</string>
+    <string name="ocr_title">Extracted Text</string>
+    <string name="ocr_empty">No text detected on this page.</string>
+    <string name="ocr_copy">Copy to Clipboard</string>
+    <string name="ocr_copied">Text copied to clipboard</string>
+    <string name="ocr_extracting">Extracting text…</string>
+    <string name="ocr_error">Failed to extract text from page</string>
+
+    <!-- ── Onboarding Flow ──────────────────────────────────────────────── -->
+    <string name="onboarding_skip">Skip</string>
+    <string name="onboarding_next">Next</string>
+    <string name="onboarding_get_started">Get Started</string>
+    <string name="onboarding_slide1_title">Scan Documents</string>
+    <string name="onboarding_slide1_desc">Capture multi-page paper documents, receipts, and notes with real-time automatic edge detection and OpenCV clarity enhancement.</string>
+    <string name="onboarding_slide2_title">Drag to Reorder</string>
+    <string name="onboarding_slide2_desc">Effortlessly rearrange, rotate, or apply custom filters to your scanned pages before exporting to PDF.</string>
+    <string name="onboarding_slide3_title">Extract Text</string>
+    <string name="onboarding_slide3_desc">Extract text from any document or PDF instantly on your device with 100% offline machine learning. No cloud needed.</string>
+
+    <!-- ── Dual-Folder Tab System ───────────────────────────────────── -->
+    <string name="tab_scanned_in_app">Scanned in App</string>
+    <string name="tab_all_device_pdfs">All Device PDFs</string>
+    <string name="library_empty_device_pdfs">No PDF documents found on this device.</string>
 
 </resources>

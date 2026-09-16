@@ -4,6 +4,9 @@
 
     <!-- ── Permissions ────────────────────────────────────────────────── -->
     <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
 
     <!-- Required hardware feature -->
     <uses-feature
@@ -14,7 +17,7 @@
         android:required="false" />
 
     <application
-        android:name=".AnScannerApplication"
+        android:name=".AnScannerApp"
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
@@ -22,6 +25,12 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.AnScanner"
         tools:targetApi="34">
+
+        <!-- ── Screen 0: Onboarding ──────────────────────────────────── -->
+        <activity
+            android:name=".ui.onboarding.OnboardingActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
 
         <!-- ── Screen 1: Camera (Launcher / Home) ────────────────────── -->
         <activity
@@ -60,11 +69,40 @@
             android:exported="false"
             android:screenOrientation="portrait" />
 
-        <!-- ── AdMob App ID (uncomment and replace when ready) ────────
+        <!-- ── Screen 7: Native PDF Viewer ────────────────────────────── -->
+        <activity
+            android:name=".ui.pdf.PdfViewerActivity"
+            android:exported="true"
+            android:screenOrientation="portrait">
+            <intent-filter tools:ignore="AppLinkUrlError">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:mimeType="application/pdf" />
+            </intent-filter>
+        </activity>
+
+        <!-- ── FileProvider for Secure Sharing ────────────────────────── -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.provider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
+        <!-- ── AdMob App ID ────────────────────────────────────────────────────── -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="ca-app-pub-xxxxxxxxxxxxxxxx~yyyyyyyyyy" />
-        ──────────────────────────────────────────────────────────────── -->
+            android:value="ca-app-pub-3940256099942544~3347511713" />
+
+        <!-- ── AdServices Config Conflict Resolution (AdMob vs Firebase) ── -->
+        <property
+            android:name="android.adservices.AD_SERVICES_CONFIG"
+            android:resource="@xml/gma_ad_services_config"
+            tools:replace="android:resource" />
 
     </application>
 

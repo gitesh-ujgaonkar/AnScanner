@@ -52,10 +52,11 @@ android {
         viewBinding true
     }
 
-    // Prevent compression of OpenCV native libs (required for proper loading)
+    // Enforce 16 KB page-alignment for native libraries (.so)
     packaging {
         jniLibs {
-            useLegacyPackaging true
+            useLegacyPackaging false
+            pickFirsts += ['**/libc++_shared.so']
         }
     }
 }
@@ -90,12 +91,22 @@ dependencies {
     // ── OpenCV Android SDK (official Maven Central artifact) ────────────
     implementation 'org.opencv:opencv:4.10.0'
 
-    // ── Google AdMob (uncomment when google-services.json is added) ─────
-    // implementation 'com.google.android.gms:play-services-ads:23.3.0'
+    // ── Google AdMob ────────────────────────────────────────────────────
+    implementation 'com.google.android.gms:play-services-ads:23.3.0'
 
-    // ── Firebase Analytics (uncomment when google-services.json is added)
-    // implementation platform('com.google.firebase:firebase-bom:33.4.0')
-    // implementation 'com.google.firebase:firebase-analytics'
+    // ── Firebase (BoM + Firestore + Analytics) ──────────────────────────
+    implementation platform('com.google.firebase:firebase-bom:33.4.0')
+    implementation 'com.google.firebase:firebase-firestore'
+    implementation 'com.google.firebase:firebase-analytics'
+
+    // ── Google Play In-App Review ──────────────────────────────────────
+    implementation 'com.google.android.play:review:2.0.2'
+
+    // ── Google ML Kit Text Recognition (On-Device OCR, 16 KB Aligned) ──
+    implementation 'com.google.android.gms:play-services-mlkit-text-recognition:19.0.1'
+
+    // ── ViewPager2 (Onboarding Flow) ───────────────────────────────────
+    implementation 'androidx.viewpager2:viewpager2:1.1.0'
 
     // ── Guava (required by CameraX ListenableFuture) ────────────────────
     implementation 'com.google.guava:guava:32.1.3-android'
