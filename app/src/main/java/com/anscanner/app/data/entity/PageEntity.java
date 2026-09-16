@@ -60,6 +60,7 @@ public class PageEntity {
     /**
      * Full constructor for creating a new page record.
      */
+    @androidx.room.Ignore
     public PageEntity(long documentId, int pageNumber, String imagePath,
                       String filterApplied, long createdAt) {
         this.documentId = documentId;

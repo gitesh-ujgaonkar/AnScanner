@@ -248,6 +248,256 @@ public final class PdfGenerator {
         }
     }
 
+    public interface CompressionProgressListener {
+        void onProgress(int currentPage, int totalPages);
+    }
+
+    /**
+     * Compresses an external PDF using an iterative binary search loop to match the
+     * resulting byte array size to the requested target size as closely as possible.
+     *
+     * @param context         Application context.
+     * @param sourcePdfUri    Uri of the external PDF to compress.
+     * @param outputFile      Destination file for the compressed PDF.
+     * @param targetSizeBytes Requested target size in bytes.
+     * @param listener        Optional progress listener.
+     * @return Resulting compressed file size in bytes.
+     * @throws IOException If file operations fail.
+     */
+    public static long compressPdfToTargetSize(Context context,
+                                               Uri sourcePdfUri,
+                                               File outputFile,
+                                               long targetSizeBytes,
+                                               CompressionProgressListener listener) throws IOException {
+        ParcelFileDescriptor pfd = context.getContentResolver().openFileDescriptor(sourcePdfUri, "r");
+        if (pfd == null) {
+            throw new IOException("Unable to open file descriptor for URI: " + sourcePdfUri);
+        }
+
+        PdfRenderer renderer = null;
+        PdfDocument document = null;
+        try {
+            renderer = new PdfRenderer(pfd);
+            int pageCount = renderer.getPageCount();
+            if (pageCount == 0) {
+                throw new IOException("PDF contains 0 pages");
+            }
+
+            document = new PdfDocument();
+            Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+
+            // Reserve ~8% overhead for PDF headers, xref tables, and trailer structures
+            long totalTargetImageBytes = Math.max(16384L, (long) (targetSizeBytes * 0.92));
+            long targetBytesPerPage = Math.max(8192L, totalTargetImageBytes / pageCount);
+
+            for (int i = 0; i < pageCount; i++) {
+                if (listener != null) {
+                    listener.onProgress(i + 1, pageCount);
+                }
+
+                PdfRenderer.Page page = renderer.openPage(i);
+                int pageW = page.getWidth();
+                int pageH = page.getHeight();
+
+                // High-resolution rendering
+                int renderW = Math.max(pageW * 2, PAGE_WIDTH_A4);
+                int renderH = Math.round((float) renderW * pageH / pageW);
+
+                Bitmap pageBitmap = Bitmap.createBitmap(renderW, renderH, Bitmap.Config.ARGB_8888);
+                Canvas pageCanvas = new Canvas(pageBitmap);
+                pageCanvas.drawColor(android.graphics.Color.WHITE);
+                page.render(pageBitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
+                page.close();
+
+                Bitmap compressedBitmap = null;
+                try {
+                    // Iterative binary search loop adjusting Bitmap.compress quality (0-100)
+                    int low = 5;
+                    int high = 100;
+                    int bestQuality = 60;
+                    long bestDiff = Long.MAX_VALUE;
+                    byte[] bestBytes = null;
+
+                    while (low <= high) {
+                        int mid = (low + high) / 2;
+                        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+                        pageBitmap.compress(Bitmap.CompressFormat.JPEG, mid, outputStream);
+                        byte[] currentBytes = outputStream.toByteArray();
+                        long currentSize = currentBytes.length;
+                        long diff = Math.abs(currentSize - targetBytesPerPage);
+
+                        if (diff < bestDiff) {
+                            bestDiff = diff;
+                            bestQuality = mid;
+                            bestBytes = currentBytes;
+                        }
+
+                        if (currentSize > targetBytesPerPage) {
+                            high = mid - 1;
+                        } else if (currentSize < targetBytesPerPage) {
+                            low = mid + 1;
+                        } else {
+                            bestQuality = mid;
+                            bestBytes = currentBytes;
+                            break;
+                        }
+                    }
+
+                    if (bestBytes != null && bestBytes.length > 0) {
+                        compressedBitmap = BitmapFactory.decodeByteArray(bestBytes, 0, bestBytes.length);
+                    }
+
+                    PdfDocument.PageInfo pageInfo = new PdfDocument.PageInfo.Builder(pageW, pageH, i + 1).create();
+                    PdfDocument.Page docPage = document.startPage(pageInfo);
+                    Canvas docCanvas = docPage.getCanvas();
+                    RectF destRect = new RectF(0, 0, pageW, pageH);
+
+                    if (compressedBitmap != null) {
+                        docCanvas.drawBitmap(compressedBitmap, null, destRect, paint);
+                    } else {
+                        docCanvas.drawBitmap(pageBitmap, null, destRect, paint);
+                    }
+                    document.finishPage(docPage);
+
+                } finally {
+                    if (compressedBitmap != null && !compressedBitmap.isRecycled()) {
+                        compressedBitmap.recycle();
+                    }
+                    if (pageBitmap != null && !pageBitmap.isRecycled()) {
+                        pageBitmap.recycle();
+                    }
+                }
+            }
+
+            try (FileOutputStream fos = new FileOutputStream(outputFile)) {
+                document.writeTo(fos);
+                fos.flush();
+            }
+
+            long fileSize = outputFile.length();
+            Log.i(TAG, "Target-size PDF compressed: " + outputFile.getAbsolutePath() + " (" + fileSize + " bytes, target=" + targetSizeBytes + ")");
+            return fileSize;
+
+        } finally {
+            if (document != null) {
+                document.close();
+            }
+            if (renderer != null) {
+                renderer.close();
+            }
+            pfd.close();
+        }
+    }
+
+    /**
+     * Creates a PDF from page image paths using an iterative binary search loop to match
+     * the requested target file size.
+     */
+    public static long createPdfToTargetSize(List<String> pagePaths,
+                                             File outputFile,
+                                             long targetSizeBytes) throws IOException {
+        if (pagePaths == null || pagePaths.isEmpty()) {
+            throw new IllegalArgumentException("Page paths list cannot be empty");
+        }
+
+        PdfDocument document = new PdfDocument();
+        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+
+        try {
+            int pageCount = pagePaths.size();
+            long totalTargetImageBytes = Math.max(16384L, (long) (targetSizeBytes * 0.92));
+            long targetBytesPerPage = Math.max(8192L, totalTargetImageBytes / pageCount);
+
+            int pageNumber = 1;
+            for (String pagePath : pagePaths) {
+                Bitmap bitmap = loadBitmapFromPath(pagePath);
+                if (bitmap == null) {
+                    pageNumber++;
+                    continue;
+                }
+
+                Bitmap tempBitmap = null;
+                try {
+                    PdfDocument.PageInfo pageInfo = new PdfDocument.PageInfo.Builder(
+                            PAGE_WIDTH_A4, PAGE_HEIGHT_A4, pageNumber
+                    ).create();
+
+                    PdfDocument.Page page = document.startPage(pageInfo);
+                    Canvas canvas = page.getCanvas();
+
+                    RectF destRect = calculateFitRect(
+                            bitmap.getWidth(), bitmap.getHeight(),
+                            PAGE_WIDTH_A4, PAGE_HEIGHT_A4,
+                            PAGE_MARGIN
+                    );
+
+                    // Iterative binary search loop
+                    int low = 5;
+                    int high = 100;
+                    int bestQuality = 60;
+                    long bestDiff = Long.MAX_VALUE;
+                    byte[] bestBytes = null;
+
+                    while (low <= high) {
+                        int mid = (low + high) / 2;
+                        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+                        bitmap.compress(Bitmap.CompressFormat.JPEG, mid, outputStream);
+                        byte[] currentBytes = outputStream.toByteArray();
+                        long currentSize = currentBytes.length;
+                        long diff = Math.abs(currentSize - targetBytesPerPage);
+
+                        if (diff < bestDiff) {
+                            bestDiff = diff;
+                            bestQuality = mid;
+                            bestBytes = currentBytes;
+                        }
+
+                        if (currentSize > targetBytesPerPage) {
+                            high = mid - 1;
+                        } else if (currentSize < targetBytesPerPage) {
+                            low = mid + 1;
+                        } else {
+                            bestQuality = mid;
+                            bestBytes = currentBytes;
+                            break;
+                        }
+                    }
+
+                    if (bestBytes != null && bestBytes.length > 0) {
+                        tempBitmap = BitmapFactory.decodeByteArray(bestBytes, 0, bestBytes.length);
+                    }
+
+                    if (tempBitmap != null) {
+                        canvas.drawBitmap(tempBitmap, null, destRect, paint);
+                    } else {
+                        canvas.drawBitmap(bitmap, null, destRect, paint);
+                    }
+
+                    document.finishPage(page);
+                    pageNumber++;
+
+                } finally {
+                    if (tempBitmap != null && !tempBitmap.isRecycled()) {
+                        tempBitmap.recycle();
+                    }
+                    if (bitmap != null && !bitmap.isRecycled()) {
+                        bitmap.recycle();
+                    }
+                }
+            }
+
+            try (FileOutputStream fos = new FileOutputStream(outputFile)) {
+                document.writeTo(fos);
+                fos.flush();
+            }
+
+            return outputFile.length();
+
+        } finally {
+            document.close();
+        }
+    }
+
     /**
      * Extracts a permanent 200x200 thumbnail from the first page of a PDF.
      */

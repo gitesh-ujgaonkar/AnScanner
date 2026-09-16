@@ -36,113 +36,31 @@ public final class ImageProcessor {
     }
 
     // ════════════════════════════════════════════════════════════════════
-    // Edge Detection
+    // AI Document Boundary Detection (delegates to DocumentDetector)
     // ════════════════════════════════════════════════════════════════════
 
     /**
-     * Detects document edges in the given bitmap.
+     * Detects document corners using the on-device TensorFlow Lite DocumentDetector.
      *
-     * <p>Pipeline: RGBA → Gray → GaussianBlur → Canny → findContours
-     * → largest 4-point contour.</p>
-     *
-     * @param src Source bitmap (not mutated).
-     * @return Array of 4 corner {@link Point}s in order:
-     *         [top-left, top-right, bottom-right, bottom-left],
-     *         or {@code null} if no document boundary is found.
+     * @param context Application context to load model.
+     * @param src     Source bitmap (not mutated).
+     * @return Ordered corner points [TL, TR, BR, BL] or fallback bounds.
      */
-    public static Point[] detectDocumentEdges(Bitmap src) {
-        Mat rgba = new Mat();
-        Mat gray = new Mat();
-        Mat blurred = new Mat();
-        Mat edges = new Mat();
-
-        try {
-            Utils.bitmapToMat(src, rgba);
-            Imgproc.cvtColor(rgba, gray, Imgproc.COLOR_RGBA2GRAY);
-            Imgproc.GaussianBlur(gray, blurred, new Size(5, 5), 0);
-            Imgproc.Canny(blurred, edges, 75, 200);
-
-            // Dilate edges to close gaps in contour boundaries
-            Mat kernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(3, 3));
-            Imgproc.dilate(edges, edges, kernel);
-            kernel.release();
-
-            return DocumentDetector.findDocumentContour(edges, src.getWidth(), src.getHeight());
-
-        } catch (Exception e) {
-            Log.e(TAG, "Edge detection failed", e);
+    public static Point[] detectDocumentEdges(android.content.Context context, Bitmap src) {
+        if (src == null || src.isRecycled()) {
             return null;
-        } finally {
-            rgba.release();
-            gray.release();
-            blurred.release();
-            edges.release();
         }
+        return DocumentDetector.getInstance(context).detectCorners(src);
     }
 
-    // ════════════════════════════════════════════════════════════════════
-    // Real-time Frame Analysis (for live preview edge detection)
-    // ════════════════════════════════════════════════════════════════════
-
     /**
-     * Detects document edges from a YUV_420_888 frame provided as a
-     * grayscale byte array. Designed for real-time CameraX ImageAnalysis.
-     *
-     * <p>This method creates Mats from raw byte data, runs the full
-     * edge detection pipeline, and <strong>strictly releases all Mats</strong>
-     * before returning to prevent memory leaks during continuous analysis.</p>
-     *
-     * @param yuvData     Grayscale (Y-plane) byte array from ImageProxy.
-     * @param width       Frame width in pixels.
-     * @param height      Frame height in pixels.
-     * @param rowStride   Row stride of the Y plane.
-     * @return Ordered corners [TL, TR, BR, BL] or null if no document found.
+     * Overload for backward compatibility with existing callers.
      */
-    public static Point[] detectDocumentEdgesFromFrame(
-            byte[] yuvData, int width, int height, int rowStride) {
-
-        Mat gray = null;
-        Mat blurred = null;
-        Mat edges = null;
-        Mat kernel = null;
-
-        try {
-            // Create a Mat from the raw Y-plane bytes
-            // rowStride may be larger than width, so we create from the stride
-            gray = new Mat(height, rowStride, CvType.CV_8UC1);
-            gray.put(0, 0, yuvData);
-
-            // Crop to actual width if rowStride > width
-            if (rowStride > width) {
-                Mat cropped = gray.submat(0, height, 0, width);
-                gray.release();
-                gray = cropped;
-            }
-
-            // Blur to remove noise and paper texture
-            blurred = new Mat();
-            Imgproc.GaussianBlur(gray, blurred, new Size(5, 5), 0);
-
-            // Canny edge detection
-            edges = new Mat();
-            Imgproc.Canny(blurred, edges, 50, 150);
-
-            // Dilate to close gaps in contour boundaries
-            kernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(3, 3));
-            Imgproc.dilate(edges, edges, kernel);
-
-            // Find the document contour
-            return DocumentDetector.findDocumentContour(edges, width, height);
-
-        } catch (Exception e) {
-            Log.e(TAG, "Real-time edge detection failed", e);
+    public static Point[] detectDocumentEdges(Bitmap src) {
+        if (src == null || src.isRecycled()) {
             return null;
-        } finally {
-            if (gray != null) gray.release();
-            if (blurred != null) blurred.release();
-            if (edges != null) edges.release();
-            if (kernel != null) kernel.release();
         }
+        return DocumentDetector.getDefaultCorners(src.getWidth(), src.getHeight());
     }
 
     // ════════════════════════════════════════════════════════════════════

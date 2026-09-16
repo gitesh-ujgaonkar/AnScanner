@@ -29,3 +29,7 @@
 
 # ── Prevent obfuscation of data entity classes ───────────────────────────
 -keep class com.anscanner.app.data.entity.** { *; }
+
+# ── PhotoView ────────────────────────────────────────────────────────────
+-keep class com.github.chrisbanes.photoview.** { *; }
+-dontwarn com.github.chrisbanes.photoview.**

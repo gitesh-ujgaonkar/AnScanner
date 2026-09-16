@@ -201,4 +201,33 @@
     <string name="tab_all_device_pdfs">All Device PDFs</string>
     <string name="library_empty_device_pdfs">No PDF documents found on this device.</string>
 
+    <!-- ── File Properties Dialog ───────────────────────────────────── -->
+    <string name="action_ok">OK</string>
+    <string name="action_properties">Properties</string>
+    <string name="properties_title">File Properties</string>
+    <string name="properties_file_name">File Name</string>
+    <string name="properties_location">Location Path</string>
+    <string name="properties_file_size">File Size</string>
+    <string name="properties_date_modified">Date Modified</string>
+    <string name="properties_page_count">Pages</string>
+    <string name="properties_format">Format</string>
+
+    <!-- ── Target-Size PDF Compression ──────────────────────────────── -->
+    <string name="compress_target_size_format">Target: %1$s</string>
+    <string name="compress_original_size_format">Original: %1$s</string>
+    <string name="compress_reduction_format">%1$d%% reduction</string>
+    <string name="compress_open_action">Compress &amp; Open</string>
+    <string name="compress_calculating">Estimating target…</string>
+    <string name="compress_success">PDF compressed successfully</string>
+    <!-- ── Annotations & Multi-Page OCR ─────────────────────────────── -->
+    <string name="cd_annotate">Annotate / Sign</string>
+    <string name="annotate_save">Save Annotations</string>
+    <string name="annotate_saved">Annotations saved</string>
+    <string name="annotate_empty">No annotations drawn</string>
+    <string name="annotate_undo">Undo</string>
+    <string name="annotate_clear">Clear</string>
+    <string name="ocr_dialog_title">Extracted Text</string>
+    <string name="ocr_dialog_copy">Copy All</string>
+    <string name="ocr_dialog_share">Share</string>
+    <string name="ocr_no_text">No text could be extracted from this document.</string>
 </resources>

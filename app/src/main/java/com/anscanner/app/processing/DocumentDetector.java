@@ -1,145 +1,182 @@
 package com.anscanner.app.processing;
 
+import android.content.Context;
+import android.content.res.AssetFileDescriptor;
+import android.graphics.Bitmap;
 import android.util.Log;
 
-import org.opencv.core.Mat;
-import org.opencv.core.MatOfPoint;
-import org.opencv.core.MatOfPoint2f;
 import org.opencv.core.Point;
-import org.opencv.imgproc.Imgproc;
+import org.tensorflow.lite.DataType;
+import org.tensorflow.lite.Interpreter;
+import org.tensorflow.lite.support.common.ops.NormalizeOp;
+import org.tensorflow.lite.support.image.ImageProcessor;
+import org.tensorflow.lite.support.image.TensorImage;
+import org.tensorflow.lite.support.image.ops.ResizeOp;
+import org.tensorflow.lite.support.tensorbuffer.TensorBuffer;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.List;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.MappedByteBuffer;
+import java.nio.channels.FileChannel;
 
 /**
- * Analyzes edge-detected images to find document contours.
+ * On-Device TensorFlow Lite Document Corner Detector.
  *
- * <p>Given a Canny edge output, this class finds the largest quadrilateral
- * contour that could represent a document boundary. The corner points are
- * returned in a consistent order: [top-left, top-right, bottom-right, bottom-left].</p>
+ * <p>Replaces traditional OpenCV Canny/findContours heuristic detection with
+ * a deep learning localization model capable of detecting documents, receipts,
+ * and ID cards against complex backgrounds.</p>
  *
- * <p>If no suitable quadrilateral is found, returns the full image bounds
- * as fallback corners so the user can still proceed with manual cropping.</p>
+ * <p><strong>Pipeline:</strong></p>
+ * <ol>
+ *   <li><strong>Preprocessing:</strong> Downscales input frame/bitmap to model input
+ *       dimensions (256x256), normalizes RGB values to [0.0, 1.0].</li>
+ *   <li><strong>Inference:</strong> Executes TFLite Interpreter to predict the 4 corner points.</li>
+ *   <li><strong>Post-processing:</strong> Extracts 4 normalized coordinates, scales them
+ *       back to original bitmap dimensions, and sorts them into [TL, TR, BR, BL] order.</li>
+ * </ol>
  */
-public final class DocumentDetector {
+public class DocumentDetector {
 
     private static final String TAG = "DocumentDetector";
+    public static final String MODEL_FILE_NAME = "document_corner_detector.tflite";
+    public static final int INPUT_SIZE = 256;
 
-    /**
-     * Minimum contour area as a fraction of the total image area.
-     * Contours smaller than this are discarded as noise.
-     */
-    private static final double MIN_AREA_RATIO = 0.1;
+    private static volatile DocumentDetector instance;
 
-    /**
-     * Maximum contour area as a fraction of the total image area.
-     */
-    private static final double MAX_AREA_RATIO = 0.95;
+    private Interpreter interpreter;
+    private boolean isModelLoaded = false;
+    private final ImageProcessor imageProcessor;
 
-    /**
-     * Epsilon factor for polygon approximation.
-     * Lower values require the contour to more closely match a polygon.
-     */
-    private static final double EPSILON_FACTOR = 0.02;
+    public static DocumentDetector getInstance(Context context) {
+        if (instance == null) {
+            synchronized (DocumentDetector.class) {
+                if (instance == null) {
+                    instance = new DocumentDetector(context.getApplicationContext());
+                }
+            }
+        }
+        return instance;
+    }
 
-    private DocumentDetector() {
-        // Static utility class
+    public DocumentDetector(Context context) {
+        this.imageProcessor = new ImageProcessor.Builder()
+                .add(new ResizeOp(INPUT_SIZE, INPUT_SIZE, ResizeOp.ResizeMethod.BILINEAR))
+                .add(new NormalizeOp(0.0f, 255.0f))
+                .build();
+
+        try {
+            MappedByteBuffer modelBuffer = loadModelFile(context, MODEL_FILE_NAME);
+            Interpreter.Options options = new Interpreter.Options();
+            options.setNumThreads(4);
+            this.interpreter = new Interpreter(modelBuffer, options);
+            this.isModelLoaded = true;
+            Log.i(TAG, "TFLite Document Corner Detector initialized successfully.");
+        } catch (Exception e) {
+            Log.w(TAG, "TFLite model not loaded or placeholder detected. Falling back to default corners.", e);
+            this.isModelLoaded = false;
+        }
     }
 
     /**
-     * Finds the largest 4-point document contour in a Canny edge map.
+     * Detects 4 document corners from an input bitmap using TFLite.
      *
-     * @param edges      Single-channel Canny edge Mat.
-     * @param imgWidth   Original image width (for fallback bounds).
-     * @param imgHeight  Original image height (for fallback bounds).
-     * @return Ordered corners [TL, TR, BR, BL], or fallback full-image corners.
+     * @param src Source bitmap (not mutated).
+     * @return 4 ordered corner points [TL, TR, BR, BL] scaled to src dimensions.
      */
-    public static Point[] findDocumentContour(Mat edges, int imgWidth, int imgHeight) {
-        List<MatOfPoint> contours = new ArrayList<>();
-        Mat hierarchy = new Mat();
+    public Point[] detectCorners(Bitmap src) {
+        if (src == null || src.isRecycled()) {
+            return null;
+        }
+
+        int origWidth = src.getWidth();
+        int origHeight = src.getHeight();
+
+        if (!isModelLoaded || interpreter == null) {
+            return getDefaultCorners(origWidth, origHeight);
+        }
 
         try {
-            // Find all external contours
-            Imgproc.findContours(edges, contours, hierarchy,
-                    Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE);
+            // 1. Preprocessing: convert Bitmap to TensorImage (256x256, normalized)
+            TensorImage tensorImage = preprocess(src);
 
-            double totalArea = (double) imgWidth * imgHeight;
-            double bestArea = 0;
-            Point[] bestCorners = null;
+            // 2. Prepare output buffer matching model tensor shape (e.g. [1, 8] or [1, 4, 2])
+            int[] outputShape = interpreter.getOutputTensor(0).shape();
+            TensorBuffer outputBuffer = TensorBuffer.createFixedSize(outputShape, DataType.FLOAT32);
 
-            // Sort contours by area (largest first) for early exit
-            Collections.sort(contours, (a, b) -> {
-                double areaA = Imgproc.contourArea(a);
-                double areaB = Imgproc.contourArea(b);
-                return Double.compare(areaB, areaA);
-            });
+            // 3. Inference
+            synchronized (this) {
+                interpreter.run(tensorImage.getBuffer(), outputBuffer.getBuffer().rewind());
+            }
 
-            for (MatOfPoint contour : contours) {
-                double area = Imgproc.contourArea(contour);
-                double areaRatio = area / totalArea;
-
-                // Skip contours that are too small or too large
-                if (areaRatio < MIN_AREA_RATIO || areaRatio > MAX_AREA_RATIO) {
-                    continue;
+            // 4. Post-processing
+            float[] flatCoordinates = outputBuffer.getFloatArray();
+            if (flatCoordinates != null && flatCoordinates.length >= 8) {
+                Point[] detected = new Point[4];
+                for (int i = 0; i < 4; i++) {
+                    float normX = Math.max(0.0f, Math.min(1.0f, flatCoordinates[i * 2]));
+                    float normY = Math.max(0.0f, Math.min(1.0f, flatCoordinates[i * 2 + 1]));
+                    detected[i] = new Point(normX * origWidth, normY * origHeight);
                 }
-
-                // Approximate the contour to a polygon
-                MatOfPoint2f contour2f = new MatOfPoint2f(contour.toArray());
-                double peri = Imgproc.arcLength(contour2f, true);
-                MatOfPoint2f approx = new MatOfPoint2f();
-                Imgproc.approxPolyDP(contour2f, approx, EPSILON_FACTOR * peri, true);
-
-                Point[] points = approx.toArray();
-
-                // We want exactly 4 vertices (quadrilateral = document)
-                if (points.length == 4 && area > bestArea) {
-                    // Verify the quadrilateral is convex
-                    if (Imgproc.isContourConvex(new MatOfPoint(points))) {
-                        bestArea = area;
-                        bestCorners = orderCorners(points);
-                    }
-                }
-
-                contour2f.release();
-                approx.release();
+                return orderCorners(detected);
             }
 
-            if (bestCorners != null) {
-                Log.i(TAG, "Document contour found (area ratio: " +
-                        String.format("%.2f", bestArea / totalArea) + ")");
-                return bestCorners;
-            }
-
-            // Fallback: return full image bounds with a small margin
-            Log.i(TAG, "No document contour found, returning full image bounds");
-            return getDefaultCorners(imgWidth, imgHeight);
-
-        } finally {
-            hierarchy.release();
-            for (MatOfPoint contour : contours) {
-                contour.release();
-            }
+        } catch (Exception e) {
+            Log.e(TAG, "TFLite corner inference failed, using fallback bounds", e);
         }
+
+        return getDefaultCorners(origWidth, origHeight);
+    }
+
+    /**
+     * Preprocesses an input Bitmap into a normalized TensorImage.
+     *
+     * @param bitmap Input bitmap.
+     * @return Processed TensorImage ready for TFLite inference.
+     */
+    public TensorImage preprocess(Bitmap bitmap) {
+        TensorImage tensorImage = new TensorImage(DataType.FLOAT32);
+        tensorImage.load(bitmap);
+        return imageProcessor.process(tensorImage);
+    }
+
+    /**
+     * Converts a bitmap into a preprocessed ByteBuffer (useful for custom model pipelines).
+     */
+    public static ByteBuffer preprocessToByteBuffer(Bitmap bitmap, int targetW, int targetH) {
+        Bitmap resized = Bitmap.createScaledBitmap(bitmap, targetW, targetH, true);
+        ByteBuffer byteBuffer = ByteBuffer.allocateDirect(1 * targetW * targetH * 3 * 4);
+        byteBuffer.order(ByteOrder.nativeOrder());
+
+        int[] intValues = new int[targetW * targetH];
+        resized.getPixels(intValues, 0, targetW, 0, 0, targetW, targetH);
+        if (resized != bitmap) {
+            resized.recycle();
+        }
+
+        for (int pixelValue : intValues) {
+            float r = ((pixelValue >> 16) & 0xFF) / 255.0f;
+            float g = ((pixelValue >> 8) & 0xFF) / 255.0f;
+            float b = (pixelValue & 0xFF) / 255.0f;
+            byteBuffer.putFloat(r);
+            byteBuffer.putFloat(g);
+            byteBuffer.putFloat(b);
+        }
+        byteBuffer.rewind();
+        return byteBuffer;
     }
 
     /**
      * Orders 4 corner points in consistent order:
      * [top-left, top-right, bottom-right, bottom-left].
-     *
-     * <p>Algorithm: sort by sum (x+y) for TL/BR diagonal,
-     * sort by difference (y-x) for TR/BL diagonal.</p>
      */
     public static Point[] orderCorners(Point[] pts) {
-        if (pts.length != 4) {
-            throw new IllegalArgumentException("Exactly 4 points required, got " + pts.length);
+        if (pts == null || pts.length != 4) {
+            throw new IllegalArgumentException("Exactly 4 points required, got " + (pts != null ? pts.length : 0));
         }
 
         Point[] ordered = new Point[4];
-
-        // Calculate sum and difference for each point
         double[] sums = new double[4];
         double[] diffs = new double[4];
         for (int i = 0; i < 4; i++) {
@@ -148,20 +185,13 @@ public final class DocumentDetector {
         }
 
         // Top-left has smallest sum (closest to origin)
-        int tlIdx = indexOfMin(sums);
-        ordered[0] = pts[tlIdx];
-
+        ordered[0] = pts[indexOfMin(sums)];
         // Bottom-right has largest sum (farthest from origin)
-        int brIdx = indexOfMax(sums);
-        ordered[2] = pts[brIdx];
-
+        ordered[2] = pts[indexOfMax(sums)];
         // Top-right has smallest difference (y - x is most negative)
-        int trIdx = indexOfMin(diffs);
-        ordered[1] = pts[trIdx];
-
+        ordered[1] = pts[indexOfMin(diffs)];
         // Bottom-left has largest difference (y - x is most positive)
-        int blIdx = indexOfMax(diffs);
-        ordered[3] = pts[blIdx];
+        ordered[3] = pts[indexOfMax(diffs)];
 
         return ordered;
     }
@@ -173,14 +203,30 @@ public final class DocumentDetector {
         double marginX = width * 0.05;
         double marginY = height * 0.05;
         return new Point[]{
-                new Point(marginX, marginY),                          // Top-left
-                new Point(width - marginX, marginY),                  // Top-right
-                new Point(width - marginX, height - marginY),         // Bottom-right
-                new Point(marginX, height - marginY)                  // Bottom-left
+                new Point(marginX, marginY),
+                new Point(width - marginX, marginY),
+                new Point(width - marginX, height - marginY),
+                new Point(marginX, height - marginY)
         };
     }
 
-    // ── Private Helpers ──────────────────────────────────────────────────
+    private static MappedByteBuffer loadModelFile(Context context, String modelPath) throws IOException {
+        AssetFileDescriptor fileDescriptor = context.getAssets().openFd(modelPath);
+        try (FileInputStream inputStream = new FileInputStream(fileDescriptor.getFileDescriptor())) {
+            FileChannel fileChannel = inputStream.getChannel();
+            long startOffset = fileDescriptor.getStartOffset();
+            long declaredLength = fileDescriptor.getDeclaredLength();
+            return fileChannel.map(FileChannel.MapMode.READ_ONLY, startOffset, declaredLength);
+        }
+    }
+
+    public synchronized void close() {
+        if (interpreter != null) {
+            interpreter.close();
+            interpreter = null;
+            isModelLoaded = false;
+        }
+    }
 
     private static int indexOfMin(double[] arr) {
         int idx = 0;

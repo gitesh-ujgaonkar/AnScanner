@@ -59,6 +59,10 @@ android {
             pickFirsts += ['**/libc++_shared.so']
         }
     }
+
+    aaptOptions {
+        noCompress 'tflite'
+    }
 }
 
 dependencies {
@@ -107,6 +111,13 @@ dependencies {
 
     // ── ViewPager2 (Onboarding Flow) ───────────────────────────────────
     implementation 'androidx.viewpager2:viewpager2:1.1.0'
+
+    // ── TensorFlow Lite (On-Device AI Document Corner Detection) ────────
+    implementation 'org.tensorflow:tensorflow-lite:2.16.1'
+    implementation 'org.tensorflow:tensorflow-lite-support:0.4.4'
+
+    // ── PhotoView (Native Pinch-to-Zoom Image Viewer) ──────────────────
+    implementation 'com.github.chrisbanes:PhotoView:2.3.0'
 
     // ── Guava (required by CameraX ListenableFuture) ────────────────────
     implementation 'com.google.guava:guava:32.1.3-android'

@@ -38,6 +38,7 @@ public class DocumentListAdapter extends RecyclerView.Adapter<RecyclerView.ViewH
     public interface DocumentClickListener {
         void onDocumentClick(DocumentEntity document);
         void onDocumentShare(DocumentEntity document);
+        void onDocumentProperties(DocumentEntity document);
         void onDocumentRemoveAppOnly(DocumentEntity document);
         void onDocumentDeletePermanently(DocumentEntity document);
     }
@@ -208,6 +209,9 @@ public class DocumentListAdapter extends RecyclerView.Adapter<RecyclerView.ViewH
                     return true;
                 } else if (id == R.id.action_share) {
                     listener.onDocumentShare(document);
+                    return true;
+                } else if (id == R.id.action_properties) {
+                    listener.onDocumentProperties(document);
                     return true;
                 } else if (id == R.id.action_remove_from_app) {
                     listener.onDocumentRemoveAppOnly(document);

@@ -35,6 +35,7 @@ import com.anscanner.app.R;
 import com.anscanner.app.data.AppDatabase;
 import com.anscanner.app.data.entity.DocumentEntity;
 import com.anscanner.app.databinding.ActivityCameraBinding;
+import com.anscanner.app.processing.DocumentDetector;
 import com.anscanner.app.processing.ImageProcessor;
 import com.anscanner.app.service.CacheManager;
 import com.anscanner.app.service.CrashManager;
@@ -43,6 +44,7 @@ import com.anscanner.app.service.StorageHelper;
 import com.anscanner.app.ui.crop.CropPreviewActivity;
 import com.anscanner.app.ui.library.LibraryActivity;
 import com.anscanner.app.ui.review.ReviewScanActivity;
+import com.anscanner.app.ui.save.CompressPdfBottomSheet;
 import com.google.android.gms.ads.AdRequest;
 import com.google.android.gms.ads.MobileAds;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
@@ -134,7 +136,8 @@ public class CameraActivity extends AppCompatActivity {
     private final ActivityResultLauncher<String> pickPdfForCompressLauncher =
             registerForActivityResult(new ActivityResultContracts.GetContent(), uri -> {
                 if (uri != null) {
-                    showCompressionLevelDialog(uri);
+                    CompressPdfBottomSheet sheet = CompressPdfBottomSheet.newInstance(uri);
+                    sheet.show(getSupportFragmentManager(), "CompressPdfBottomSheet");
                 }
             });
 
@@ -289,22 +292,22 @@ public class CameraActivity extends AppCompatActivity {
         }
 
         try {
-            // Extract Y-plane bytes (grayscale)
-            ImageProxy.PlaneProxy yPlane = imageProxy.getPlanes()[0];
-            ByteBuffer yBuffer = yPlane.getBuffer();
-            int rowStride = yPlane.getRowStride();
             int width = imageProxy.getWidth();
             int height = imageProxy.getHeight();
-
-            byte[] yData = new byte[yBuffer.remaining()];
-            yBuffer.get(yData);
 
             // Set analysis dimensions on the overlay for coordinate mapping
             binding.overlayView.setAnalysisDimensions(width, height);
 
-            // Run OpenCV edge detection on the grayscale frame
-            Point[] corners = ImageProcessor.detectDocumentEdgesFromFrame(
-                    yData, width, height, rowStride);
+            // Run TFLite AI corner detection on the frame bitmap
+            Bitmap frameBitmap = imageProxy.toBitmap();
+            Point[] corners = null;
+            if (frameBitmap != null) {
+                try {
+                    corners = DocumentDetector.getInstance(CameraActivity.this).detectCorners(frameBitmap);
+                } finally {
+                    frameBitmap.recycle();
+                }
+            }
 
             // Store the detected corners for use during capture
             lastDetectedCorners = corners;

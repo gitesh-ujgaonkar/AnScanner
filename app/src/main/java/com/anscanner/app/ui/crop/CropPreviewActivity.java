@@ -18,6 +18,7 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import com.anscanner.app.R;
 import com.anscanner.app.databinding.ActivityCropPreviewBinding;
+import com.anscanner.app.processing.DocumentDetector;
 import com.anscanner.app.processing.ImageProcessor;
 import com.anscanner.app.service.CacheManager;
 import com.anscanner.app.service.OcrHelper;
@@ -306,7 +307,7 @@ public class CropPreviewActivity extends AppCompatActivity {
                             new org.opencv.core.Point(preDetectedCorners[6], preDetectedCorners[7])
                     });
                 } else {
-                    org.opencv.core.Point[] opencvEdges = ImageProcessor.detectDocumentEdges(sourceBitmap);
+                    org.opencv.core.Point[] opencvEdges = DocumentDetector.getInstance(CropPreviewActivity.this).detectCorners(sourceBitmap);
                     edges = toAndroidPoints(opencvEdges);
                 }
 
@@ -437,7 +438,7 @@ public class CropPreviewActivity extends AppCompatActivity {
         dismissLensOverlay();
 
         executor.execute(() -> {
-            org.opencv.core.Point[] opencvEdges = ImageProcessor.detectDocumentEdges(sourceBitmap);
+            org.opencv.core.Point[] opencvEdges = DocumentDetector.getInstance(CropPreviewActivity.this).detectCorners(sourceBitmap);
             Point[] edges = toAndroidPoints(opencvEdges);
 
             new Handler(Looper.getMainLooper()).post(() -> {
@@ -511,7 +512,7 @@ public class CropPreviewActivity extends AppCompatActivity {
                 displayBitmap = sourceBitmap;
             }
 
-            org.opencv.core.Point[] opencvEdges = ImageProcessor.detectDocumentEdges(sourceBitmap);
+            org.opencv.core.Point[] opencvEdges = DocumentDetector.getInstance(CropPreviewActivity.this).detectCorners(sourceBitmap);
             Point[] edges = toAndroidPoints(opencvEdges);
 
             new Handler(Looper.getMainLooper()).post(() -> {

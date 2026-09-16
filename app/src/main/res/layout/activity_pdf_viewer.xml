@@ -74,6 +74,16 @@
             app:tint="@color/text_primary" />
 
         <ImageButton
+            android:id="@+id/btnAnnotate"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/cd_annotate"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_draw"
+            app:tint="@color/text_primary" />
+
+        <ImageButton
             android:id="@+id/btnEdit"
             android:layout_width="48dp"
             android:layout_height="48dp"
@@ -92,13 +102,26 @@
         android:background="@color/divider"
         app:layout_constraintTop_toBottomOf="@id/topBar" />
 
-    <!-- ── PDF Pages Scroll List & Lens Overlay Container ──────────────── -->
+    <!-- ── PDF Pages Scroll List, PhotoView, Drawing & Lens Container ───── -->
     <FrameLayout
         android:id="@+id/flPdfContainer"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintBottom_toTopOf="@+id/layoutAnnotationBar"
         app:layout_constraintTop_toBottomOf="@id/topBarDivider">
+
+        <com.github.chrisbanes.photoview.PhotoView
+            android:id="@+id/photoView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:scaleType="fitCenter"
+            android:visibility="gone" />
+
+        <com.anscanner.app.ui.custom.DrawingOverlayView
+            android:id="@+id/drawingOverlay"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="gone" />
 
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/rvPdfPages"
@@ -115,6 +138,103 @@
             android:visibility="gone" />
 
     </FrameLayout>
+
+    <!-- ── Annotation Controls Bar (Visible during annotation mode) ─────── -->
+    <LinearLayout
+        android:id="@+id/layoutAnnotationBar"
+        android:layout_width="match_parent"
+        android:layout_height="64dp"
+        android:background="@color/surface_card"
+        android:elevation="8dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingHorizontal="12dp"
+        android:visibility="gone"
+        app:layout_constraintBottom_toBottomOf="parent">
+
+        <ImageButton
+            android:id="@+id/btnCloseAnnotation"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/action_close"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_close"
+            app:tint="@color/text_secondary" />
+
+        <ImageButton
+            android:id="@+id/btnUndoDrawing"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/annotate_undo"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_undo"
+            app:tint="@color/text_primary" />
+
+        <ImageButton
+            android:id="@+id/btnClearDrawing"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/annotate_clear"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_delete"
+            app:tint="@color/text_primary" />
+
+        <!-- Color selectors -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:orientation="horizontal">
+
+            <View
+                android:id="@+id/colorMint"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:layout_marginHorizontal="6dp"
+                android:background="@drawable/bg_circle_mint" />
+
+            <View
+                android:id="@+id/colorRed"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:layout_marginHorizontal="6dp"
+                android:background="@drawable/bg_circle_red" />
+
+            <View
+                android:id="@+id/colorBlack"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:layout_marginHorizontal="6dp"
+                android:background="@drawable/bg_circle_black" />
+
+            <View
+                android:id="@+id/colorWhite"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:layout_marginHorizontal="6dp"
+                android:background="@drawable/bg_circle_white" />
+
+        </LinearLayout>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnSaveAnnotations"
+            style="@style/Widget.Material3.Button"
+            android:layout_width="wrap_content"
+            android:layout_height="40dp"
+            android:backgroundTint="@color/accent_mint"
+            android:text="@string/annotate_save"
+            android:textAllCaps="false"
+            android:textColor="@color/background_primary"
+            android:textSize="13sp"
+            app:cornerRadius="20dp"
+            app:icon="@drawable/ic_check"
+            app:iconTint="@color/background_primary" />
+
+    </LinearLayout>
 
     <!-- ── Loading Indicator ──────────────────────────────────────────── -->
     <ProgressBar

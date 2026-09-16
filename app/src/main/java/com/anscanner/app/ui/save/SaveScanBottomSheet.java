@@ -73,14 +73,38 @@ public class SaveScanBottomSheet extends BottomSheetDialogFragment {
         
         binding.tvPageCount.setText(getString(R.string.review_page_number, pagePaths.size()));
         
-        String defaultName = "Doc_" + new SimpleDateFormat("yyyy_MM_dd", Locale.getDefault()).format(new Date());
-        binding.etFileName.setText(defaultName);
+        binding.etFileName.setText("");
+        String defaultHint = "AnScanned_" + new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
+        binding.etFileName.setHint(defaultHint);
         
         binding.toggleFormat.addOnButtonCheckedListener((group, checkedId, isChecked) -> {
             if (isChecked) updateSizeEstimate();
         });
+
+        binding.sbQuality.setOnSeekBarChangeListener(new android.widget.SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(android.widget.SeekBar seekBar, int progress, boolean fromUser) {
+                if (fromUser) {
+                    binding.rgQuality.clearCheck();
+                }
+                updateSizeEstimate();
+            }
+
+            @Override
+            public void onStartTrackingTouch(android.widget.SeekBar seekBar) {}
+
+            @Override
+            public void onStopTrackingTouch(android.widget.SeekBar seekBar) {}
+        });
         
         binding.rgQuality.setOnCheckedChangeListener((group, checkedId) -> {
+            if (checkedId == R.id.rbLow) {
+                binding.sbQuality.setProgress(30);
+            } else if (checkedId == R.id.rbMedium) {
+                binding.sbQuality.setProgress(60);
+            } else if (checkedId == R.id.rbHigh) {
+                binding.sbQuality.setProgress(100);
+            }
             updateSizeEstimate();
         });
         
@@ -90,20 +114,15 @@ public class SaveScanBottomSheet extends BottomSheetDialogFragment {
     }
 
     private int getSelectedQuality() {
-        int checkedId = binding.rgQuality.getCheckedRadioButtonId();
-        if (checkedId == R.id.rbLow) {
-            return 30;
-        } else if (checkedId == R.id.rbMedium) {
-            return 60;
-        } else {
-            return 100;
-        }
+        int progress = binding.sbQuality.getProgress();
+        return Math.max(5, progress);
     }
     
     private void updateSizeEstimate() {
         boolean isPdf = binding.toggleFormat.getCheckedButtonId() == R.id.btnPdf;
         int quality = getSelectedQuality();
         String sizeStr = StorageHelper.estimateFileSize(pagePaths, isPdf, quality);
+        binding.tvTargetSize.setText(String.format(getString(R.string.compress_target_size_format), sizeStr));
         binding.tvSizeBadge.setText(sizeStr + " · Stored locally");
     }
     
@@ -119,7 +138,7 @@ public class SaveScanBottomSheet extends BottomSheetDialogFragment {
         final Context appContext = requireContext().getApplicationContext();
         String nameInput = binding.etFileName.getText() != null ? binding.etFileName.getText().toString().trim() : "";
         if (nameInput.isEmpty()) {
-            nameInput = "Doc_" + new SimpleDateFormat("yyyy_MM_dd", Locale.getDefault()).format(new Date());
+            nameInput = "AnScanned_" + new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
         }
         final String fileName = nameInput;
         final boolean isPdf = binding.toggleFormat.getCheckedButtonId() == R.id.btnPdf;
