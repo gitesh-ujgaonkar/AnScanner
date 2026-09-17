@@ -85,6 +85,37 @@ public final class CacheManager {
     }
 
     /**
+     * Copies a content URI (such as an image or PDF from ML Kit Document Scanner)
+     * to a temporary file in the scan cache directory.
+     *
+     * @param context   Application context.
+     * @param uri       Content URI from scanner provider.
+     * @param extension File extension without dot (e.g. "jpg" or "pdf").
+     * @return Absolute file path to the local cached file, or null on failure.
+     */
+    public static String copyUriToTempFile(Context context, android.net.Uri uri, String extension) {
+        if (context == null || uri == null) return null;
+        File tempDir = getTempDir(context);
+        String fileName = UUID.randomUUID().toString() + "." + (extension != null ? extension : "tmp");
+        File outputFile = new File(tempDir, fileName);
+
+        try (java.io.InputStream is = context.getContentResolver().openInputStream(uri);
+             FileOutputStream fos = new FileOutputStream(outputFile)) {
+            if (is == null) return null;
+            byte[] buffer = new byte[8192];
+            int length;
+            while ((length = is.read(buffer)) > 0) {
+                fos.write(buffer, 0, length);
+            }
+            fos.flush();
+            return outputFile.getAbsolutePath();
+        } catch (Exception e) {
+            Log.e(TAG, "copyUriToTempFile failed for URI: " + uri, e);
+            return null;
+        }
+    }
+
+    /**
      * Loads a full-resolution bitmap from a cached file path.
      *
      * <p><strong>Caller must recycle the returned bitmap when done.</strong></p>

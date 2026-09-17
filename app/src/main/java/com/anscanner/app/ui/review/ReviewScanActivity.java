@@ -25,9 +25,11 @@ public class ReviewScanActivity extends AppCompatActivity implements PageGridAda
 
     public static final String EXTRA_PAGE_PATHS = "extra_page_paths";
     public static final String EXTRA_IMAGE_PATH = "extra_image_path";
+    public static final String EXTRA_ORIGINAL_PAGE_PATHS = "extra_original_page_paths";
 
     private ActivityReviewScanBinding binding;
     private ArrayList<String> pagePaths;
+    private ArrayList<String> originalPagePaths;
     private PageGridAdapter adapter;
 
     /**
@@ -50,15 +52,43 @@ public class ReviewScanActivity extends AppCompatActivity implements PageGridAda
                     if (multiplePaths != null && !multiplePaths.isEmpty()) {
                         int startPos = pagePaths.size();
                         pagePaths.addAll(multiplePaths);
+                        originalPagePaths.addAll(multiplePaths);
                         adapter.updatePages(pagePaths);
                         adapter.notifyItemRangeInserted(startPos, multiplePaths.size());
                         updatePageCount();
                     } else if (croppedPath != null) {
                         pagePaths.add(croppedPath);
+                        originalPagePaths.add(croppedPath);
                         int insertedPosition = pagePaths.size() - 1;
                         adapter.updatePages(pagePaths);
                         adapter.notifyItemInserted(insertedPosition);
                         updatePageCount();
+                    }
+                }
+            }
+    );
+
+    private final ActivityResultLauncher<Intent> editPageLauncher = registerForActivityResult(
+            new ActivityResultContracts.StartActivityForResult(),
+            result -> {
+                if (result.getData() != null) {
+                    ArrayList<String> updated = result.getData().getStringArrayListExtra(EXTRA_PAGE_PATHS);
+                    ArrayList<String> updatedOriginal = result.getData().getStringArrayListExtra(EXTRA_ORIGINAL_PAGE_PATHS);
+                    if (updated != null) {
+                        pagePaths.clear();
+                        pagePaths.addAll(updated);
+                        if (updatedOriginal != null) {
+                            originalPagePaths.clear();
+                            originalPagePaths.addAll(updatedOriginal);
+                        }
+                        adapter.updatePages(pagePaths);
+                        updatePageCount();
+                        if (pagePaths.isEmpty()) {
+                            Intent intent = new Intent(this, CameraActivity.class);
+                            intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
+                            startActivity(intent);
+                            finish();
+                        }
                     }
                 }
             }
@@ -73,6 +103,10 @@ public class ReviewScanActivity extends AppCompatActivity implements PageGridAda
         pagePaths = getIntent().getStringArrayListExtra(EXTRA_PAGE_PATHS);
         if (pagePaths == null) {
             pagePaths = new ArrayList<>();
+        }
+        originalPagePaths = getIntent().getStringArrayListExtra(EXTRA_ORIGINAL_PAGE_PATHS);
+        if (originalPagePaths == null || originalPagePaths.size() != pagePaths.size()) {
+            originalPagePaths = new ArrayList<>(pagePaths);
         }
 
         setupRecyclerView();
@@ -100,6 +134,9 @@ public class ReviewScanActivity extends AppCompatActivity implements PageGridAda
                 }
 
                 Collections.swap(pagePaths, fromPosition, toPosition);
+                if (fromPosition < originalPagePaths.size() && toPosition < originalPagePaths.size()) {
+                    Collections.swap(originalPagePaths, fromPosition, toPosition);
+                }
                 adapter.notifyItemMoved(fromPosition, toPosition);
                 return true;
             }
@@ -151,6 +188,9 @@ public class ReviewScanActivity extends AppCompatActivity implements PageGridAda
     public void onPageDeleteClick(int position) {
         if (position >= 0 && position < pagePaths.size()) {
             pagePaths.remove(position);
+            if (position < originalPagePaths.size()) {
+                originalPagePaths.remove(position);
+            }
             adapter.updatePages(pagePaths);
             updatePageCount();
 
@@ -178,6 +218,14 @@ public class ReviewScanActivity extends AppCompatActivity implements PageGridAda
 
     @Override
     public void onPageClick(int position) {
-        // Could open full-page preview or re-edit in CropPreviewActivity
+        if (position >= 0 && position < pagePaths.size()) {
+            Intent intent = new Intent(this, com.anscanner.app.ui.crop.CropPreviewActivity.class);
+            intent.putExtra(com.anscanner.app.ui.crop.CropPreviewActivity.EXTRA_IMAGE_PATH, pagePaths.get(position));
+            intent.putStringArrayListExtra(com.anscanner.app.ui.crop.CropPreviewActivity.EXTRA_PAGE_PATHS, pagePaths);
+            intent.putStringArrayListExtra(com.anscanner.app.ui.crop.CropPreviewActivity.EXTRA_ORIGINAL_PAGE_PATHS, originalPagePaths);
+            intent.putExtra(com.anscanner.app.ui.crop.CropPreviewActivity.EXTRA_PAGE_INDEX, position);
+            intent.putExtra(com.anscanner.app.ui.crop.CropPreviewActivity.EXTRA_FROM_REVIEW, true);
+            editPageLauncher.launch(intent);
+        }
     }
 }

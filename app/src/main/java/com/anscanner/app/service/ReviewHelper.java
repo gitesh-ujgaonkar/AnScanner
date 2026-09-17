@@ -34,12 +34,7 @@ public final class ReviewHelper {
      */
     public static void onDocumentSaved(Activity activity) {
         if (activity == null) return;
-        SharedPreferences prefs = activity.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
-        int currentCount = prefs.getInt(KEY_SUCCESSFUL_SAVES_COUNT, 0) + 1;
-        prefs.edit().putInt(KEY_SUCCESSFUL_SAVES_COUNT, currentCount).apply();
-        Log.i(TAG, "Incremented successful_saves_count to: " + currentCount);
-
-        showRateAppPromptIfNeeded(activity);
+        InAppReviewHelper.onScanCompleted(activity);
     }
 
     /**

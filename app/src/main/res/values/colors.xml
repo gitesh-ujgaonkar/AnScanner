@@ -1,69 +1,70 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <!-- ── Primary Backgrounds ────────────────────────────────────────── -->
-    <color name="background_primary">#FF121212</color>
-    <color name="background_secondary">#FF1A1A1A</color>
+    <!-- ── Primary Backgrounds (Light) ────────────────────────────────── -->
+    <color name="background_primary">#FFF8F9FA</color>
+    <color name="background_secondary">#FFF1F3F5</color>
+    <color name="camera_background">#FF121212</color>
 
-    <!-- ── Surfaces & Cards ───────────────────────────────────────────── -->
-    <color name="surface_card">#FF242424</color>
-    <color name="surface_elevated">#FF2C2C2C</color>
-    <color name="surface_overlay">#FF303030</color>
+    <!-- ── Surfaces & Cards (Light) ───────────────────────────────────── -->
+    <color name="surface_card">#FFFFFFFF</color>
+    <color name="surface_elevated">#FFFFFFFF</color>
+    <color name="surface_overlay">#FFF8F9FA</color>
 
     <!-- ── Accent / Brand — Mint Green ────────────────────────────────── -->
-    <color name="accent_mint">#FF68D391</color>
-    <color name="accent_mint_dark">#FF48BB78</color>
-    <color name="accent_mint_light">#FF9AE6B4</color>
-    <color name="accent_mint_surface">#1A68D391</color>  <!-- 10% opacity mint -->
-    <color name="accent_mint_ripple">#3368D391</color>   <!-- 20% opacity mint -->
+    <color name="accent_mint">#FF10B981</color>
+    <color name="accent_mint_dark">#FF059669</color>
+    <color name="accent_mint_light">#FF6EE7B7</color>
+    <color name="accent_mint_surface">#1A10B981</color>  <!-- 10% opacity mint -->
+    <color name="accent_mint_ripple">#3310B981</color>   <!-- 20% opacity mint -->
 
-    <!-- ── Text Colors ────────────────────────────────────────────────── -->
-    <color name="text_primary">#FFFFFFFF</color>
-    <color name="text_secondary">#FFB0B0B0</color>
-    <color name="text_muted">#FF6B6B6B</color>
-    <color name="text_on_accent">#FF121212</color>       <!-- Dark text on mint buttons -->
-    <color name="text_hint">#FF555555</color>
+    <!-- ── Text Colors (Light) ────────────────────────────────────────── -->
+    <color name="text_primary">#FF111827</color>
+    <color name="text_secondary">#FF4B5563</color>
+    <color name="text_muted">#FF9CA3AF</color>
+    <color name="text_on_accent">#FFFFFFFF</color>       <!-- Crisp white text on mint buttons -->
+    <color name="text_hint">#FF9CA3AF</color>
 
     <!-- ── Semantic Colors ────────────────────────────────────────────── -->
     <color name="error_red">#FFEF4444</color>
     <color name="error_red_surface">#1AEF4444</color>
-    <color name="warning_amber">#FFFBBF24</color>
-    <color name="success_green">#FF22C55E</color>
+    <color name="warning_amber">#FFF59E0B</color>
+    <color name="success_green">#FF10B981</color>
 
-    <!-- ── Dividers & Borders ─────────────────────────────────────────── -->
-    <color name="divider">#FF333333</color>
-    <color name="border_subtle">#FF2A2A2A</color>
-    <color name="border_dashed">#FF444444</color>
+    <!-- ── Dividers & Borders (Light) ─────────────────────────────────── -->
+    <color name="divider">#FFE5E7EB</color>
+    <color name="border_subtle">#FFE5E7EB</color>
+    <color name="border_dashed">#FFD1D5DB</color>
 
     <!-- ── Overlay & Scrim ────────────────────────────────────────────── -->
     <color name="scrim_dark">#B3000000</color>           <!-- 70% black overlay -->
-    <color name="crop_overlay">#6668D391</color>          <!-- 40% mint for crop region -->
-    <color name="crop_handle_fill">#FF68D391</color>
+    <color name="crop_overlay">#6610B981</color>          <!-- 40% mint for crop region -->
+    <color name="crop_handle_fill">#FF10B981</color>
     <color name="crop_handle_stroke">#FFFFFFFF</color>
 
-    <!-- ── Bottom Navigation ──────────────────────────────────────────── -->
-    <color name="nav_bar_background">#FF1A1A1A</color>
-    <color name="nav_icon_active">#FF68D391</color>
-    <color name="nav_icon_inactive">#FF6B6B6B</color>
+    <!-- ── Bottom Navigation (Light) ──────────────────────────────────── -->
+    <color name="nav_bar_background">#FFFFFFFF</color>
+    <color name="nav_icon_active">#FF10B981</color>
+    <color name="nav_icon_inactive">#FF9CA3AF</color>
 
-    <!-- ── Status Bar & System Bars ───────────────────────────────────── -->
-    <color name="status_bar">#FF121212</color>
-    <color name="navigation_bar">#FF1A1A1A</color>
+    <!-- ── Status Bar & System Bars (Light) ───────────────────────────── -->
+    <color name="status_bar">#FFF8F9FA</color>
+    <color name="navigation_bar">#FFFFFFFF</color>
 
-    <!-- ── Material Theme Color Slots ─────────────────────────────────── -->
-    <color name="md_theme_primary">#FF68D391</color>
-    <color name="md_theme_onPrimary">#FF121212</color>
-    <color name="md_theme_primaryContainer">#FF2C2C2C</color>
-    <color name="md_theme_onPrimaryContainer">#FF9AE6B4</color>
-    <color name="md_theme_secondary">#FF48BB78</color>
-    <color name="md_theme_onSecondary">#FF121212</color>
-    <color name="md_theme_background">#FF121212</color>
-    <color name="md_theme_onBackground">#FFFFFFFF</color>
-    <color name="md_theme_surface">#FF1A1A1A</color>
-    <color name="md_theme_onSurface">#FFFFFFFF</color>
-    <color name="md_theme_surfaceVariant">#FF242424</color>
-    <color name="md_theme_onSurfaceVariant">#FFB0B0B0</color>
-    <color name="md_theme_outline">#FF333333</color>
+    <!-- ── Material Theme Color Slots (Light) ─────────────────────────── -->
+    <color name="md_theme_primary">#FF10B981</color>
+    <color name="md_theme_onPrimary">#FFFFFFFF</color>
+    <color name="md_theme_primaryContainer">#FFE6F4EA</color>
+    <color name="md_theme_onPrimaryContainer">#FF065F46</color>
+    <color name="md_theme_secondary">#FF059669</color>
+    <color name="md_theme_onSecondary">#FFFFFFFF</color>
+    <color name="md_theme_background">#FFF8F9FA</color>
+    <color name="md_theme_onBackground">#FF111827</color>
+    <color name="md_theme_surface">#FFFFFFFF</color>
+    <color name="md_theme_onSurface">#FF111827</color>
+    <color name="md_theme_surfaceVariant">#FFF1F3F5</color>
+    <color name="md_theme_onSurfaceVariant">#FF4B5563</color>
+    <color name="md_theme_outline">#FFE5E7EB</color>
     <color name="md_theme_error">#FFEF4444</color>
     <color name="md_theme_onError">#FFFFFFFF</color>
 

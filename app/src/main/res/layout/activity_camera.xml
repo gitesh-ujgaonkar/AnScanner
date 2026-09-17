@@ -4,7 +4,7 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/background_primary">
+    android:background="@color/camera_background">
 
     <androidx.camera.view.PreviewView
         android:id="@+id/previewView"
@@ -65,7 +65,7 @@
         android:id="@+id/bottomSection"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="@color/background_primary"
+        android:background="@color/camera_background"
         android:orientation="vertical"
         android:paddingBottom="@dimen/spacing_xl"
         android:paddingTop="@dimen/spacing_md"
@@ -74,44 +74,200 @@
         app:layout_constraintStart_toStartOf="parent">
 
         <LinearLayout
+            android:id="@+id/layoutRecentScans"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:paddingHorizontal="@dimen/spacing_lg">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/recent_scans"
+                    android:textAppearance="@style/TextAppearance.AnScanner.Label"
+                    android:textColor="@android:color/white" />
+
+                <TextView
+                    android:id="@+id/tvSeeAll"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:background="?attr/selectableItemBackground"
+                    android:text="@string/see_all"
+                    android:textAppearance="@style/TextAppearance.AnScanner.Label"
+                    android:textColor="@color/accent_mint" />
+            </LinearLayout>
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/rvRecentScans"
+                android:layout_width="match_parent"
+                android:layout_height="@dimen/thumbnail_recent"
+                android:layout_marginTop="@dimen/spacing_sm"
+                android:clipToPadding="false"
+                android:orientation="horizontal"
+                android:paddingHorizontal="@dimen/spacing_md"
+                app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
+                tools:listitem="@layout/item_recent_scan" />
+
+        </LinearLayout>
+
+        <!-- Batch Mode Capture Strip -->
+        <LinearLayout
+            android:id="@+id/layoutBatchStrip"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:paddingHorizontal="@dimen/spacing_lg">
+            android:gravity="center_vertical"
+            android:paddingHorizontal="@dimen/spacing_md"
+            android:visibility="gone">
 
-            <TextView
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/rvBatchThumbs"
+                android:layout_width="0dp"
+                android:layout_height="72dp"
+                android:layout_weight="1"
+                android:clipToPadding="false"
+                android:orientation="horizontal"
+                app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager" />
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:gravity="end"
+                android:layout_marginStart="8dp">
+
+                <TextView
+                    android:id="@+id/tvBatchCounter"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="0 pages"
+                    android:textAppearance="@style/TextAppearance.AnScanner.Caption"
+                    android:textColor="@color/accent_mint"
+                    android:textStyle="bold" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnBatchDone"
+                    android:layout_width="wrap_content"
+                    android:layout_height="40dp"
+                    android:layout_marginTop="4dp"
+                    android:text="Review (0) →"
+                    android:textSize="12sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/text_on_accent"
+                    app:backgroundTint="@color/accent_mint"
+                    app:cornerRadius="20dp" />
+
+            </LinearLayout>
+
+        </LinearLayout>
+
+        <!-- ID Card Mode Step Indicator -->
+        <LinearLayout
+            android:id="@+id/layoutIdCardStep"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingHorizontal="@dimen/spacing_lg"
+            android:paddingVertical="@dimen/spacing_xs"
+            android:visibility="gone">
+
+            <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="@string/recent_scans"
-                android:textAppearance="@style/TextAppearance.AnScanner.Label"
-                android:textColor="@android:color/white" />
+                android:orientation="vertical">
 
-            <TextView
-                android:id="@+id/tvSeeAll"
+                <TextView
+                    android:id="@+id/tvIdCardStepTitle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/id_card_step1_title"
+                    android:textAppearance="@style/TextAppearance.AnScanner.Label"
+                    android:textColor="@color/accent_mint"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/tvIdCardStepDesc"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/id_card_step1_hint"
+                    android:textAppearance="@style/TextAppearance.AnScanner.Caption"
+                    android:textColor="@color/text_secondary" />
+            </LinearLayout>
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnIdCardRetakeFront"
+                style="@style/Widget.Material3.Button.TextButton"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:background="?attr/selectableItemBackground"
-                android:text="@string/see_all"
-                android:textAppearance="@style/TextAppearance.AnScanner.Label"
-                android:textColor="@color/accent_mint" />
+                android:text="@string/id_card_retake_front"
+                android:textColor="@color/text_muted"
+                android:textSize="12sp"
+                android:visibility="gone" />
+
         </LinearLayout>
 
-        <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/rvRecentScans"
-            android:layout_width="match_parent"
-            android:layout_height="@dimen/thumbnail_recent"
+        <!-- Camera Mode Toggle Group -->
+        <com.google.android.material.button.MaterialButtonToggleGroup
+            android:id="@+id/toggleMode"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
             android:layout_marginTop="@dimen/spacing_sm"
-            android:clipToPadding="false"
-            android:orientation="horizontal"
-            android:paddingHorizontal="@dimen/spacing_md"
-            app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
-            tools:listitem="@layout/item_recent_scan" />
+            android:layout_marginBottom="@dimen/spacing_xs"
+            app:singleSelection="true"
+            app:selectionRequired="true"
+            app:checkedButton="@+id/btnModeDocument">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnModeDocument"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:paddingHorizontal="14dp"
+                android:paddingVertical="0dp"
+                android:text="@string/mode_document"
+                android:textSize="12sp"
+                android:textColor="@android:color/white"
+                app:strokeColor="@color/divider" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnModeBatch"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:paddingHorizontal="14dp"
+                android:paddingVertical="0dp"
+                android:text="@string/mode_batch"
+                android:textSize="12sp"
+                android:textColor="@android:color/white"
+                app:strokeColor="@color/divider" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnModeIdCard"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:paddingHorizontal="14dp"
+                android:paddingVertical="0dp"
+                android:text="@string/mode_id_card"
+                android:textSize="12sp"
+                android:textColor="@android:color/white"
+                app:strokeColor="@color/divider" />
+
+        </com.google.android.material.button.MaterialButtonToggleGroup>
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="@dimen/spacing_lg"
+            android:layout_marginTop="@dimen/spacing_sm"
             android:gravity="center_vertical"
             android:orientation="horizontal"
             android:paddingHorizontal="@dimen/spacing_xl">

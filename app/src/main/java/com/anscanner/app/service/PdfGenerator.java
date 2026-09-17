@@ -18,6 +18,11 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.List;
 
+import com.tom_roush.pdfbox.android.PDFBoxResourceLoader;
+import com.tom_roush.pdfbox.pdmodel.PDDocument;
+import com.tom_roush.pdfbox.pdmodel.encryption.AccessPermission;
+import com.tom_roush.pdfbox.pdmodel.encryption.StandardProtectionPolicy;
+
 /**
  * Generates and compresses PDF documents using native Android APIs
  * ({@link android.graphics.pdf.PdfDocument} and {@link android.graphics.pdf.PdfRenderer}).
@@ -584,5 +589,30 @@ public final class PdfGenerator {
         float top = margin + (availableHeight - targetHeight) / 2f;
 
         return new RectF(left, top, left + targetWidth, top + targetHeight);
+    }
+
+    /**
+     * Encrypts a PDF file using standard 128-bit AES encryption with the specified password.
+     * The protected PDF will require the password to open in any standard PDF reader.
+     *
+     * @param context   Application context.
+     * @param sourcePdf The original unencrypted PDF file.
+     * @param destPdf   The destination file for the encrypted PDF.
+     * @param password  User password required to open the PDF.
+     * @throws IOException If file reading, encryption, or writing fails.
+     */
+    public static void encryptPdf(Context context, File sourcePdf, File destPdf, String password) throws IOException {
+        if (password == null || password.trim().isEmpty()) {
+            throw new IllegalArgumentException("Encryption password cannot be empty");
+        }
+        PDFBoxResourceLoader.init(context.getApplicationContext());
+        try (PDDocument document = PDDocument.load(sourcePdf)) {
+            AccessPermission ap = new AccessPermission();
+            StandardProtectionPolicy spp = new StandardProtectionPolicy(password, password, ap);
+            spp.setEncryptionKeyLength(128);
+            spp.setPermissions(ap);
+            document.protect(spp);
+            document.save(destPdf);
+        }
     }
 }

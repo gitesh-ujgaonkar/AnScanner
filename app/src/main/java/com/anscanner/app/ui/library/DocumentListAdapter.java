@@ -257,9 +257,11 @@ public class DocumentListAdapter extends RecyclerView.Adapter<RecyclerView.ViewH
                     mainHandler.post(() -> {
                         if (thumbnailPath.equals(binding.ivDocThumb.getTag())) {
                             if (thumbnail != null) {
+                                binding.ivDocThumb.setScaleType(android.widget.ImageView.ScaleType.CENTER_CROP);
                                 binding.ivDocThumb.setImageBitmap(thumbnail);
                             } else {
-                                binding.ivDocThumb.setImageResource(R.drawable.bg_card);
+                                binding.ivDocThumb.setScaleType(android.widget.ImageView.ScaleType.CENTER_INSIDE);
+                                binding.ivDocThumb.setImageResource(R.drawable.ic_pdf_placeholder);
                             }
                         } else {
                             if (thumbnail != null && !thumbnail.isRecycled()) {
@@ -270,7 +272,8 @@ public class DocumentListAdapter extends RecyclerView.Adapter<RecyclerView.ViewH
                 });
             } else {
                 binding.ivDocThumb.setTag(null);
-                binding.ivDocThumb.setImageResource(R.drawable.bg_card);
+                binding.ivDocThumb.setScaleType(android.widget.ImageView.ScaleType.CENTER_INSIDE);
+                binding.ivDocThumb.setImageResource(R.drawable.ic_pdf_placeholder);
             }
         }
     }

@@ -102,15 +102,17 @@
         android:background="@color/divider"
         app:layout_constraintTop_toBottomOf="@id/topBar" />
 
-    <!-- ── PDF Pages Scroll List, PhotoView, Drawing & Lens Container ───── -->
+    <!-- ── PDF Pages Scroll List, TouchImageView, Drawing & Lens Container ───── -->
     <FrameLayout
         android:id="@+id/flPdfContainer"
-        android:layout_width="match_parent"
+        android:layout_width="0dp"
         android:layout_height="0dp"
-        app:layout_constraintBottom_toTopOf="@+id/layoutAnnotationBar"
-        app:layout_constraintTop_toBottomOf="@id/topBarDivider">
+        app:layout_constraintTop_toBottomOf="@id/topBarDivider"
+        app:layout_constraintBottom_toTopOf="@+id/adView"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
 
-        <com.github.chrisbanes.photoview.PhotoView
+        <com.anscanner.app.ui.custom.TouchImageView
             android:id="@+id/photoView"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
@@ -139,23 +141,27 @@
 
     </FrameLayout>
 
-    <!-- ── Annotation Controls Bar (Visible during annotation mode) ─────── -->
+    <!-- ── Annotation Controls Bar (Floating above AdMob banner) ─────── -->
     <LinearLayout
         android:id="@+id/layoutAnnotationBar"
-        android:layout_width="match_parent"
-        android:layout_height="64dp"
-        android:background="@color/surface_card"
+        android:layout_width="0dp"
+        android:layout_height="60dp"
+        android:layout_marginHorizontal="12dp"
+        android:layout_marginBottom="10dp"
+        android:background="@drawable/bg_annotation_bar"
         android:elevation="8dp"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:paddingHorizontal="12dp"
+        android:paddingHorizontal="10dp"
         android:visibility="gone"
-        app:layout_constraintBottom_toBottomOf="parent">
+        app:layout_constraintBottom_toTopOf="@+id/adView"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
 
         <ImageButton
             android:id="@+id/btnCloseAnnotation"
-            android:layout_width="44dp"
-            android:layout_height="44dp"
+            android:layout_width="38dp"
+            android:layout_height="38dp"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="@string/action_close"
             android:scaleType="centerInside"
@@ -164,8 +170,8 @@
 
         <ImageButton
             android:id="@+id/btnUndoDrawing"
-            android:layout_width="44dp"
-            android:layout_height="44dp"
+            android:layout_width="38dp"
+            android:layout_height="38dp"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="@string/annotate_undo"
             android:scaleType="centerInside"
@@ -174,8 +180,8 @@
 
         <ImageButton
             android:id="@+id/btnClearDrawing"
-            android:layout_width="44dp"
-            android:layout_height="44dp"
+            android:layout_width="38dp"
+            android:layout_height="38dp"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="@string/annotate_clear"
             android:scaleType="centerInside"
@@ -192,30 +198,30 @@
 
             <View
                 android:id="@+id/colorMint"
-                android:layout_width="28dp"
-                android:layout_height="28dp"
-                android:layout_marginHorizontal="6dp"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:layout_marginHorizontal="4dp"
                 android:background="@drawable/bg_circle_mint" />
 
             <View
                 android:id="@+id/colorRed"
-                android:layout_width="28dp"
-                android:layout_height="28dp"
-                android:layout_marginHorizontal="6dp"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:layout_marginHorizontal="4dp"
                 android:background="@drawable/bg_circle_red" />
 
             <View
                 android:id="@+id/colorBlack"
-                android:layout_width="28dp"
-                android:layout_height="28dp"
-                android:layout_marginHorizontal="6dp"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:layout_marginHorizontal="4dp"
                 android:background="@drawable/bg_circle_black" />
 
             <View
                 android:id="@+id/colorWhite"
-                android:layout_width="28dp"
-                android:layout_height="28dp"
-                android:layout_marginHorizontal="6dp"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:layout_marginHorizontal="4dp"
                 android:background="@drawable/bg_circle_white" />
 
         </LinearLayout>
@@ -224,17 +230,30 @@
             android:id="@+id/btnSaveAnnotations"
             style="@style/Widget.Material3.Button"
             android:layout_width="wrap_content"
-            android:layout_height="40dp"
+            android:layout_height="38dp"
             android:backgroundTint="@color/accent_mint"
+            android:paddingHorizontal="12dp"
             android:text="@string/annotate_save"
             android:textAllCaps="false"
-            android:textColor="@color/background_primary"
-            android:textSize="13sp"
-            app:cornerRadius="20dp"
+            android:textColor="@color/text_on_accent"
+            android:textSize="12sp"
+            app:cornerRadius="19dp"
             app:icon="@drawable/ic_check"
-            app:iconTint="@color/background_primary" />
+            app:iconPadding="4dp"
+            app:iconTint="@color/text_on_accent" />
 
     </LinearLayout>
+
+    <!-- ── Policy-Compliant Bottom AdMob Banner (Floating outside scrollable pages) ── -->
+    <com.google.android.gms.ads.AdView
+        android:id="@+id/adView"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        app:adSize="BANNER"
+        app:adUnitId="ca-app-pub-3940256099942544/6300978111"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
 
     <!-- ── Loading Indicator ──────────────────────────────────────────── -->
     <ProgressBar

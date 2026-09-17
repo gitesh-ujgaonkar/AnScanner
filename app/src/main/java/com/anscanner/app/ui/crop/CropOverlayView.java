@@ -9,6 +9,7 @@ import android.graphics.Point;
 import android.graphics.PointF;
 import android.graphics.RectF;
 import android.util.AttributeSet;
+import android.view.GestureDetector;
 import android.view.MotionEvent;
 import android.view.View;
 import android.widget.ImageView;
@@ -35,7 +36,15 @@ public class CropOverlayView extends View {
         void onCornerDragEnded();
     }
 
+    public interface OnPageSwipeListener {
+        void onSwipeNext();
+        void onSwipePrevious();
+    }
+
     private OnCornerDragListener cornerDragListener;
+    private OnPageSwipeListener pageSwipeListener;
+    private GestureDetector gestureDetector;
+    private boolean isCornerMoved = false;
     private int draggingCornerIndex = -1;
     private final float touchRadius;
     private final float handleRadius;
@@ -50,6 +59,8 @@ public class CropOverlayView extends View {
 
     public CropOverlayView(Context context, @Nullable AttributeSet attrs, int defStyleAttr) {
         super(context, attrs, defStyleAttr);
+
+        gestureDetector = new GestureDetector(context, new SwipeGestureListener());
         
         polygonPaint = new Paint();
         polygonPaint.setColor(ContextCompat.getColor(context, R.color.crop_overlay));
@@ -93,6 +104,22 @@ public class CropOverlayView extends View {
 
     public void setOnCornerDragListener(OnCornerDragListener listener) {
         this.cornerDragListener = listener;
+    }
+
+    public void setOnPageSwipeListener(OnPageSwipeListener listener) {
+        this.pageSwipeListener = listener;
+    }
+
+    public boolean isCornerMoved() {
+        return isCornerMoved;
+    }
+
+    public void resetCornerMoved() {
+        this.isCornerMoved = false;
+    }
+
+    public Point[] getCorners() {
+        return getCornerPoints();
     }
 
     public Matrix getImageViewToOverlayMatrix() {
@@ -221,10 +248,15 @@ public class CropOverlayView extends View {
                     }
                     return true;
                 }
+                if (gestureDetector != null && pageSwipeListener != null) {
+                    gestureDetector.onTouchEvent(event);
+                    return true;
+                }
                 return false;
 
             case MotionEvent.ACTION_MOVE:
                 if (draggingCornerIndex != -1) {
+                    isCornerMoved = true;
                     // Get image bounds in view coordinates to clamp using accurate matrix
                     RectF bounds = new RectF(0, 0, (float) imageView.getDrawable().getIntrinsicWidth(), (float) imageView.getDrawable().getIntrinsicHeight());
                     getImageViewToOverlayMatrix().mapRect(bounds);
@@ -239,11 +271,14 @@ public class CropOverlayView extends View {
                         cornerDragListener.onCornerDragging(draggingCornerIndex, clampedX, clampedY);
                     }
                     return true;
+                } else if (gestureDetector != null && pageSwipeListener != null) {
+                    gestureDetector.onTouchEvent(event);
                 }
                 break;
 
             case MotionEvent.ACTION_UP:
                 if (draggingCornerIndex != -1) {
+                    isCornerMoved = true;
                     RectF bounds = new RectF(0, 0, (float) imageView.getDrawable().getIntrinsicWidth(), (float) imageView.getDrawable().getIntrinsicHeight());
                     getImageViewToOverlayMatrix().mapRect(bounds);
                     
@@ -264,6 +299,8 @@ public class CropOverlayView extends View {
                     }
                     draggingCornerIndex = -1;
                     return true;
+                } else if (gestureDetector != null && pageSwipeListener != null) {
+                    gestureDetector.onTouchEvent(event);
                 }
                 break;
 
@@ -278,5 +315,40 @@ public class CropOverlayView extends View {
         }
 
         return super.onTouchEvent(event);
+    }
+
+    private class SwipeGestureListener extends GestureDetector.SimpleOnGestureListener {
+        private static final int SWIPE_MIN_DISTANCE = 80;
+        private static final int SWIPE_THRESHOLD_VELOCITY = 150;
+
+        @Override
+        public boolean onDown(MotionEvent e) {
+            return true;
+        }
+
+        @Override
+        public boolean onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY) {
+            if (e1 == null || e2 == null) return false;
+            float diffX = e2.getX() - e1.getX();
+            float diffY = e2.getY() - e1.getY();
+            if (Math.abs(diffX) > Math.abs(diffY)) {
+                if (Math.abs(diffX) > SWIPE_MIN_DISTANCE && Math.abs(velocityX) > SWIPE_THRESHOLD_VELOCITY) {
+                    if (diffX < 0) {
+                        // Swiped right to left -> Next page
+                        if (pageSwipeListener != null) {
+                            pageSwipeListener.onSwipeNext();
+                            return true;
+                        }
+                    } else {
+                        // Swiped left to right -> Previous page
+                        if (pageSwipeListener != null) {
+                            pageSwipeListener.onSwipePrevious();
+                            return true;
+                        }
+                    }
+                }
+            }
+            return false;
+        }
     }
 }

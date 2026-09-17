@@ -30,11 +30,29 @@ import com.anscanner.app.R;
  */
 public class DocumentOverlayView extends View {
 
+    public static final int MODE_DOCUMENT = 0;
+    public static final int MODE_BATCH = 1;
+    public static final int MODE_ID_CARD = 2;
+
+    public static final int ID_STEP_FRONT = 1;
+    public static final int ID_STEP_BACK = 2;
+
+    private int scanMode = MODE_DOCUMENT;
+    private int idCardStep = ID_STEP_FRONT;
+
     private final Paint scrimPaint;
     private final Paint fillPaint;
     private final Paint borderPaint;
     private final Paint cornerPaint;
     private final Path cutoutPath;
+
+    // ID Card guide elements
+    private final Paint idGuideBorderPaint;
+    private final Paint idGuideBracketPaint;
+    private final Paint idBadgeBgPaint;
+    private final Paint idBadgeTextPaint;
+    private final Path idCardPath;
+    private final android.graphics.RectF idCardRect = new android.graphics.RectF();
 
     // Current smoothed corner positions (in screen coordinates)
     private PointF[] currentCorners = null;
@@ -52,6 +70,7 @@ public class DocumentOverlayView extends View {
     // Corner handle circle radius in dp
     private static final float CORNER_RADIUS_DP = 6f;
     private final float cornerRadiusPx;
+    private final float density;
 
     public DocumentOverlayView(Context context) {
         this(context, null);
@@ -63,7 +82,7 @@ public class DocumentOverlayView extends View {
 
     public DocumentOverlayView(Context context, @Nullable AttributeSet attrs, int defStyleAttr) {
         super(context, attrs, defStyleAttr);
-        float density = context.getResources().getDisplayMetrics().density;
+        density = context.getResources().getDisplayMetrics().density;
         cornerRadiusPx = CORNER_RADIUS_DP * density;
 
         // Semi-transparent scrim covering the non-document area
@@ -91,6 +110,31 @@ public class DocumentOverlayView extends View {
         cornerPaint.setStyle(Paint.Style.FILL);
 
         cutoutPath = new Path();
+
+        // ID Card mode styling
+        idGuideBorderPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        idGuideBorderPaint.setColor(ContextCompat.getColor(context, R.color.accent_mint));
+        idGuideBorderPaint.setStyle(Paint.Style.STROKE);
+        idGuideBorderPaint.setStrokeWidth(2f * density);
+
+        idGuideBracketPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        idGuideBracketPaint.setColor(ContextCompat.getColor(context, R.color.accent_mint));
+        idGuideBracketPaint.setStyle(Paint.Style.STROKE);
+        idGuideBracketPaint.setStrokeWidth(4.5f * density);
+        idGuideBracketPaint.setStrokeCap(Paint.Cap.ROUND);
+        idGuideBracketPaint.setStrokeJoin(Paint.Join.ROUND);
+
+        idBadgeBgPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        idBadgeBgPaint.setColor(0xCC1A202C); // Semi-transparent dark slate
+        idBadgeBgPaint.setStyle(Paint.Style.FILL);
+
+        idBadgeTextPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        idBadgeTextPaint.setColor(Color.WHITE);
+        idBadgeTextPaint.setTextSize(13f * density);
+        idBadgeTextPaint.setTextAlign(Paint.Align.CENTER);
+        idBadgeTextPaint.setFakeBoldText(true);
+
+        idCardPath = new Path();
     }
 
     /**
@@ -199,9 +243,53 @@ public class DocumentOverlayView extends View {
         return pts;
     }
 
+    public void setScanMode(int mode) {
+        this.scanMode = mode;
+        postInvalidate();
+    }
+
+    public int getScanMode() {
+        return scanMode;
+    }
+
+    public void setIdCardStep(int step) {
+        this.idCardStep = step;
+        postInvalidate();
+    }
+
+    public int getIdCardStep() {
+        return idCardStep;
+    }
+
+    /**
+     * Returns the ID Card frame mapped to captured image coordinates.
+     */
+    public android.graphics.Rect getIdCardCropRect(int capturedWidth, int capturedHeight) {
+        int viewW = getWidth();
+        int viewH = getHeight();
+        if (viewW == 0 || viewH == 0 || idCardRect.isEmpty()) {
+            return new android.graphics.Rect(0, 0, capturedWidth, capturedHeight);
+        }
+
+        float scaleX = (float) capturedWidth / viewW;
+        float scaleY = (float) capturedHeight / viewH;
+
+        int left = Math.max(0, Math.round(idCardRect.left * scaleX));
+        int top = Math.max(0, Math.round(idCardRect.top * scaleY));
+        int right = Math.min(capturedWidth, Math.round(idCardRect.right * scaleX));
+        int bottom = Math.min(capturedHeight, Math.round(idCardRect.bottom * scaleY));
+
+        return new android.graphics.Rect(left, top, right, bottom);
+    }
+
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
+
+        if (scanMode == MODE_ID_CARD) {
+            drawIdCardGuide(canvas);
+            return;
+        }
 
         if (currentCorners != null && targetCorners != null) {
             // Smooth interpolation toward target
@@ -252,5 +340,70 @@ public class DocumentOverlayView extends View {
             // No document detected — draw a light scrim
             canvas.drawRect(0, 0, getWidth(), getHeight(), scrimPaint);
         }
+    }
+
+    private void drawIdCardGuide(Canvas canvas) {
+        int w = getWidth();
+        int h = getHeight();
+        if (w == 0 || h == 0) return;
+
+        // Standard ID card aspect ratio: 85.6mm / 53.98mm ≈ 1.585
+        float cardW = w * 0.86f;
+        float cardH = cardW / 1.585f;
+        if (cardH > h * 0.65f) {
+            cardH = h * 0.65f;
+            cardW = cardH * 1.585f;
+        }
+
+        float left = (w - cardW) / 2f;
+        float top = (h - cardH) / 2f - (20f * density);
+        float right = left + cardW;
+        float bottom = top + cardH;
+        idCardRect.set(left, top, right, bottom);
+
+        float cardRadius = 14f * density;
+        idCardPath.reset();
+        idCardPath.addRoundRect(idCardRect, cardRadius, cardRadius, Path.Direction.CW);
+
+        // 1. Draw dark scrim outside the card window
+        canvas.save();
+        canvas.clipPath(idCardPath, Region.Op.DIFFERENCE);
+        canvas.drawRect(0, 0, w, h, scrimPaint);
+        canvas.restore();
+
+        // 2. Draw card outline
+        canvas.drawPath(idCardPath, idGuideBorderPaint);
+
+        // 3. Draw 4 corner guide brackets
+        float bracketLen = 24f * density;
+        // Top-Left
+        canvas.drawLine(left, top + bracketLen, left, top + cardRadius, idGuideBracketPaint);
+        canvas.drawLine(left + cardRadius, top, left + bracketLen, top, idGuideBracketPaint);
+        // Top-Right
+        canvas.drawLine(right - bracketLen, top, right - cardRadius, top, idGuideBracketPaint);
+        canvas.drawLine(right, top + cardRadius, right, top + bracketLen, idGuideBracketPaint);
+        // Bottom-Right
+        canvas.drawLine(right, bottom - bracketLen, right, bottom - cardRadius, idGuideBracketPaint);
+        canvas.drawLine(right - cardRadius, bottom, right - bracketLen, bottom, idGuideBracketPaint);
+        // Bottom-Left
+        canvas.drawLine(left + bracketLen, bottom, left + cardRadius, bottom, idGuideBracketPaint);
+        canvas.drawLine(left, bottom - cardRadius, left, bottom - bracketLen, idGuideBracketPaint);
+
+        // 4. Draw Step Badge inside/above card
+        String label = (idCardStep == ID_STEP_FRONT) ? "ALIGN FRONT OF ID" : "ALIGN BACK OF ID";
+        float badgePaddingH = 14f * density;
+        float badgePaddingV = 6f * density;
+        float textW = idBadgeTextPaint.measureText(label);
+        float badgeW = textW + (badgePaddingH * 2);
+        float badgeH = (14f * density) + (badgePaddingV * 2);
+        float badgeLeft = (w - badgeW) / 2f;
+        float badgeTop = top + (16f * density);
+        android.graphics.RectF badgeRect = new android.graphics.RectF(
+                badgeLeft, badgeTop, badgeLeft + badgeW, badgeTop + badgeH);
+        canvas.drawRoundRect(badgeRect, 8f * density, 8f * density, idBadgeBgPaint);
+
+        Paint.FontMetrics fm = idBadgeTextPaint.getFontMetrics();
+        float textBaseline = badgeTop + (badgeH / 2f) - ((fm.ascent + fm.descent) / 2f);
+        canvas.drawText(label, w / 2f, textBaseline, idBadgeTextPaint);
     }
 }

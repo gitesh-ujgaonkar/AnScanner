@@ -51,7 +51,8 @@
     <!-- ── Screen 4: Save Scan Bottom Sheet ───────────────────────────── -->
     <string name="save_title">Save Scan</string>
     <string name="save_file_name_label">File name</string>
-    <string name="save_file_name_default">Doc_%1$s</string>
+    <string name="save_file_name_default">Scan_%1$s</string>
+    <string name="save_file_name_hint">Document name</string>
     <string name="save_format_label">Format</string>
     <string name="save_format_pdf">PDF</string>
     <string name="save_format_jpg">JPG</string>
@@ -89,6 +90,13 @@
 
     <!-- ── Screen 6: Settings ─────────────────────────────────────────── -->
     <string name="settings_title">Settings</string>
+    <string name="settings_appearance_title">Appearance</string>
+    <string name="settings_theme">App Theme</string>
+    <string name="settings_theme_dialog_title">Choose Theme</string>
+    <string name="theme_dark">Dark</string>
+    <string name="theme_dark_default">Dark (Default)</string>
+    <string name="theme_light">Light</string>
+    <string name="theme_system">System Default (Device)</string>
     <string name="settings_storage_title">Storage</string>
     <string name="settings_cache_size">Cache Size: %1$s</string>
     <string name="settings_clear_cache">Clear Cache</string>
@@ -113,6 +121,7 @@
     <string name="action_close">Close</string>
     <string name="action_back">Back</string>
     <string name="action_retry">Retry</string>
+    <string name="cd_undo">Undo</string>
     <string name="loading">Loading…</string>
     <string name="error_generic">Something went wrong</string>
     <string name="error_storage">Storage error. Please try again.</string>
@@ -190,7 +199,7 @@
     <string name="onboarding_next">Next</string>
     <string name="onboarding_get_started">Get Started</string>
     <string name="onboarding_slide1_title">Scan Documents</string>
-    <string name="onboarding_slide1_desc">Capture multi-page paper documents, receipts, and notes with real-time automatic edge detection and OpenCV clarity enhancement.</string>
+    <string name="onboarding_slide1_desc">Capture multi-page paper documents, receipts, and notes with Google ML Kit automatic edge detection and smart enhancement.</string>
     <string name="onboarding_slide2_title">Drag to Reorder</string>
     <string name="onboarding_slide2_desc">Effortlessly rearrange, rotate, or apply custom filters to your scanned pages before exporting to PDF.</string>
     <string name="onboarding_slide3_title">Extract Text</string>
@@ -200,6 +209,13 @@
     <string name="tab_scanned_in_app">Scanned in App</string>
     <string name="tab_all_device_pdfs">All Device PDFs</string>
     <string name="library_empty_device_pdfs">No PDF documents found on this device.</string>
+    <string name="permission_storage_rationale_title">Storage Permission Required</string>
+    <string name="permission_storage_rationale_message">AnScanner requires access to your device storage to discover, display, and manage your local PDF documents.</string>
+    <string name="permission_storage_title">Permission Required</string>
+    <string name="permission_storage_desc">Please grant storage permission to view PDF documents stored on this device.</string>
+    <string name="permission_grant">Grant Permission</string>
+    <string name="permission_open_settings">Open Settings</string>
+    <string name="action_browse_pdf">Browse Device PDF</string>
 
     <!-- ── File Properties Dialog ───────────────────────────────────── -->
     <string name="action_ok">OK</string>
@@ -230,4 +246,40 @@
     <string name="ocr_dialog_copy">Copy All</string>
     <string name="ocr_dialog_share">Share</string>
     <string name="ocr_no_text">No text could be extracted from this document.</string>
+    <string name="settings_terms">Terms &amp; Conditions</string>
+    <string name="action_view_on_web">View on Web</string>
+    <string name="action_undo">Undo</string>
+    <string name="action_redo">Redo</string>
+
+    <!-- ── Camera Modes & Batch Mode ──────────────────────────────────── -->
+    <string name="mode_document">Document</string>
+    <string name="mode_batch">Batch</string>
+    <string name="mode_id_card">ID Card</string>
+    <string name="batch_pages_counter">%1$d pages</string>
+    <string name="batch_action_review">Review (%1$d) →</string>
+    <string name="batch_mode_hint">Continuous scan: Tap shutter to capture pages</string>
+
+    <!-- ── Smart ID Card Mode ─────────────────────────────────────────── -->
+    <string name="id_card_step1_title">Step 1 of 2: Front Side</string>
+    <string name="id_card_step2_title">Step 2 of 2: Back Side</string>
+    <string name="id_card_step1_hint">Align FRONT side of ID within frame</string>
+    <string name="id_card_step2_hint">Flip card: Align BACK side within frame</string>
+    <string name="id_card_front_captured">Front captured! Now align back side</string>
+    <string name="id_card_retake_front">Retake Front</string>
+    <string name="id_card_compositing">Compositing ID Card…</string>
+    <string name="id_card_front_label">FRONT SIDE</string>
+    <string name="id_card_back_label">BACK SIDE</string>
+
+    <!-- ── PDF Password Encryption & Security ─────────────────────────── -->
+    <string name="save_password_protect_title">Password Protect PDF</string>
+    <string name="save_password_protect_desc">Require password to open this document</string>
+    <string name="save_password_hint">PDF Password</string>
+    <string name="save_password_confirm_hint">Confirm Password</string>
+    <string name="save_password_error_empty">Please enter a password</string>
+    <string name="save_password_error_mismatch">Passwords do not match</string>
+    <string name="pdf_password_protected_dialog_title">Password Protected Document</string>
+    <string name="pdf_password_dialog_prompt">This document is protected. Enter password to view.</string>
+    <string name="action_unlock">Unlock</string>
+    <string name="pdf_wrong_password">Incorrect password. Please try again.</string>
+    <string name="encrypting_pdf">Encrypting PDF…</string>
 </resources>

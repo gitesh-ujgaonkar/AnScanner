@@ -91,6 +91,13 @@
         <item name="android:fontFamily">sans-serif-medium</item>
     </style>
 
+    <!-- Caption / helper text -->
+    <style name="TextAppearance.AnScanner.Caption" parent="TextAppearance.Material3.BodySmall">
+        <item name="android:textColor">@color/text_secondary</item>
+        <item name="android:textSize">12sp</item>
+        <item name="android:fontFamily">sans-serif</item>
+    </style>
+
     <!-- ══════════════════════════════════════════════════════════════════
          BUTTON STYLES
          ══════════════════════════════════════════════════════════════════ -->
@@ -155,6 +162,8 @@
         <item name="cardBackgroundColor">@color/surface_card</item>
         <item name="cardCornerRadius">@dimen/radius_lg</item>
         <item name="cardElevation">0dp</item>
+        <item name="strokeWidth">1dp</item>
+        <item name="strokeColor">@color/divider</item>
     </style>
 
     <!-- Card for library document items -->
@@ -185,9 +194,22 @@
         <item name="boxStrokeColor">@color/divider</item>
         <item name="boxStrokeWidth">1dp</item>
         <item name="boxBackgroundColor">@color/surface_elevated</item>
-        <item name="hintTextColor">@color/text_muted</item>
-        <item name="android:textColorHint">@color/text_muted</item>
+        <item name="hintTextColor">@color/accent_mint</item>
+        <item name="android:textColorHint">@color/text_secondary</item>
         <item name="boxStrokeWidthFocused">2dp</item>
+        <item name="materialThemeOverlay">@style/ThemeOverlay.AnScanner.TextInput</item>
+    </style>
+
+    <style name="Widget.AnScanner.TextInputEditText" parent="Widget.Material3.TextInputEditText.OutlinedBox">
+        <item name="android:textColor">?attr/colorOnSurface</item>
+        <item name="android:textColorHint">@color/text_secondary</item>
+        <item name="android:textSize">15sp</item>
+    </style>
+
+    <style name="ThemeOverlay.AnScanner.TextInput" parent="">
+        <item name="editTextStyle">@style/Widget.AnScanner.TextInputEditText</item>
+        <item name="android:textColorPrimary">?attr/colorOnSurface</item>
+        <item name="android:textColor">?attr/colorOnSurface</item>
     </style>
 
     <!-- ══════════════════════════════════════════════════════════════════
@@ -311,7 +333,7 @@
 
     <style name="Widget.AnScanner.SearchView" parent="Widget.Material3.SearchBar">
         <item name="backgroundTint">@color/surface_card</item>
-        <item name="android:textColorHint">@color/text_muted</item>
+        <item name="android:textColorHint">@color/text_secondary</item>
     </style>
 
     <!-- ══════════════════════════════════════════════════════════════════
@@ -321,6 +343,17 @@
     <style name="Widget.AnScanner.Divider" parent="Widget.Material3.MaterialDivider">
         <item name="dividerColor">@color/divider</item>
         <item name="dividerThickness">1dp</item>
+    </style>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         WINDOW ANIMATIONS
+         ══════════════════════════════════════════════════════════════════ -->
+
+    <style name="Animation.AnScanner.Activity" parent="@android:style/Animation.Activity">
+        <item name="android:activityOpenEnterAnimation">@anim/slide_in_right</item>
+        <item name="android:activityOpenExitAnimation">@anim/slide_out_left</item>
+        <item name="android:activityCloseEnterAnimation">@anim/slide_in_left</item>
+        <item name="android:activityCloseExitAnimation">@anim/slide_out_right</item>
     </style>
 
 </resources>

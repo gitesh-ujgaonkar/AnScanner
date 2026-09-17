@@ -66,6 +66,7 @@
             style="@style/Widget.AnScanner.TextInputLayout"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:hint="@string/save_file_name_hint"
             app:boxCornerRadiusTopStart="@dimen/text_input_corner_radius"
             app:boxCornerRadiusTopEnd="@dimen/text_input_corner_radius"
             app:boxCornerRadiusBottomStart="@dimen/text_input_corner_radius"
@@ -75,7 +76,8 @@
                 android:id="@+id/etFileName"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:hint="@string/save_file_name_default"
+                android:textColor="?attr/colorOnSurface"
+                android:textColorHint="@color/text_secondary"
                 android:inputType="text" />
         </com.google.android.material.textfield.TextInputLayout>
     </LinearLayout>
@@ -195,6 +197,96 @@
                 android:textSize="12sp"
                 android:textColor="@color/text_primary" />
         </RadioGroup>
+    </LinearLayout>
+
+    <!-- PDF Password Protection -->
+    <LinearLayout
+        android:id="@+id/layoutPdfSecurity"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingHorizontal="24dp"
+        android:layout_marginBottom="16dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/save_password_protect_title"
+                    android:textAppearance="@style/TextAppearance.AnScanner.Label"
+                    android:textColor="@color/text_primary" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/save_password_protect_desc"
+                    android:textAppearance="@style/TextAppearance.AnScanner.Caption"
+                    android:textColor="@color/text_secondary" />
+            </LinearLayout>
+
+            <com.google.android.material.materialswitch.MaterialSwitch
+                android:id="@+id/switchPasswordProtect"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                app:thumbTint="@color/accent_mint"
+                app:trackTint="@color/surface_card" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/layoutPasswordInputs"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginTop="12dp"
+            android:visibility="gone">
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/tilPassword"
+                style="@style/Widget.AnScanner.TextInputLayout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                app:passwordToggleEnabled="true"
+                android:hint="@string/save_password_hint"
+                android:layout_marginBottom="8dp">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/etPassword"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textColor="?attr/colorOnSurface"
+                    android:textColorHint="@color/text_secondary"
+                    android:inputType="textPassword" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/tilConfirmPassword"
+                style="@style/Widget.AnScanner.TextInputLayout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                app:passwordToggleEnabled="true"
+                android:hint="@string/save_password_confirm_hint">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/etConfirmPassword"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textColor="?attr/colorOnSurface"
+                    android:textColorHint="@color/text_secondary"
+                    android:inputType="textPassword" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+        </LinearLayout>
     </LinearLayout>
     
     <TextView

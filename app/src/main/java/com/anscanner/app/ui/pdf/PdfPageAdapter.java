@@ -128,12 +128,16 @@ public class PdfPageAdapter extends RecyclerView.Adapter<PdfPageAdapter.ViewHold
         ViewHolder(ItemPdfPageBinding binding) {
             super(binding.getRoot());
             this.binding = binding;
+            this.binding.ivPdfPage.setMinimumScale(1.0f);
+            this.binding.ivPdfPage.setMediumScale(2.5f);
+            this.binding.ivPdfPage.setMaximumScale(5.0f);
         }
 
         void bind(int position) {
             this.boundPosition = position;
             recycleCurrentBitmap();
 
+            binding.ivPdfPage.setScale(1.0f, false);
             binding.ivPdfPage.setImageBitmap(null);
             binding.pbPageLoading.setVisibility(View.VISIBLE);
             binding.tvPageNumber.setText(String.valueOf(position + 1));
@@ -146,8 +150,8 @@ public class PdfPageAdapter extends RecyclerView.Adapter<PdfPageAdapter.ViewHold
                         PdfRenderer.Page page = pdfRenderer.openPage(position);
 
                         int displayWidth = binding.getRoot().getContext().getResources().getDisplayMetrics().widthPixels;
-                        // Subtract margins (~32dp)
-                        int targetWidth = Math.max(displayWidth - 64, 400);
+                        // Render at 1.5x width (~1200-1800px) so pinch-to-zoom is crisp and legible up to 5x
+                        int targetWidth = Math.min(Math.max((int) ((displayWidth - 64) * 1.5f), 600), 2000);
                         int targetHeight = (int) ((float) targetWidth / page.getWidth() * page.getHeight());
 
                         rendered = Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888);
@@ -162,6 +166,7 @@ public class PdfPageAdapter extends RecyclerView.Adapter<PdfPageAdapter.ViewHold
                         if (boundPosition == position) {
                             recycleCurrentBitmap();
                             currentBitmap = finalBitmap;
+                            binding.ivPdfPage.setScale(1.0f, false);
                             binding.ivPdfPage.setImageBitmap(finalBitmap);
                             binding.pbPageLoading.setVisibility(View.GONE);
                         } else {
@@ -188,6 +193,7 @@ public class PdfPageAdapter extends RecyclerView.Adapter<PdfPageAdapter.ViewHold
 
         void recycle() {
             boundPosition = -1;
+            binding.ivPdfPage.setScale(1.0f, false);
             binding.ivPdfPage.setImageBitmap(null);
             binding.pbPageLoading.setVisibility(View.GONE);
             recycleCurrentBitmap();

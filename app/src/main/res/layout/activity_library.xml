@@ -51,7 +51,7 @@
                 android:inputType="text"
                 android:maxLines="1"
                 android:textColor="@color/text_primary"
-                android:textColorHint="@color/text_muted"
+                android:textColorHint="@color/text_secondary"
                 android:textAppearance="@style/TextAppearance.AnScanner.Body" />
         </LinearLayout>
     </LinearLayout>

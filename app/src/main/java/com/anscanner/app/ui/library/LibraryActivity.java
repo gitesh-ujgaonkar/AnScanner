@@ -1,9 +1,11 @@
 package com.anscanner.app.ui.library;
 
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.text.Editable;
 import android.text.TextWatcher;
+import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
@@ -11,6 +13,7 @@ import com.anscanner.app.R;
 import com.anscanner.app.databinding.ActivityLibraryBinding;
 import com.anscanner.app.service.CrashManager;
 import com.anscanner.app.ui.camera.CameraActivity;
+import com.anscanner.app.ui.onboarding.OnboardingActivity;
 import com.anscanner.app.ui.settings.SettingsActivity;
 import com.google.android.gms.ads.AdRequest;
 import com.google.android.gms.ads.MobileAds;
@@ -25,6 +28,13 @@ public class LibraryActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        // Check if this is the first app launch; show onboarding if so
+        SharedPreferences prefs = getSharedPreferences(OnboardingActivity.PREF_NAME, MODE_PRIVATE);
+        if (prefs.getBoolean(OnboardingActivity.KEY_IS_FIRST_LAUNCH, true)) {
+            startActivity(new Intent(this, OnboardingActivity.class));
+        }
+
         binding = ActivityLibraryBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
 
@@ -67,12 +77,16 @@ public class LibraryActivity extends AppCompatActivity {
                 tab.setText(R.string.tab_all_device_pdfs);
             }
         }).attach();
+
+        // Smooth subtle page cross-fade and scale transition for tab changes
+        binding.viewPager.setPageTransformer((page, position) -> {
+            float absPos = Math.abs(position);
+            page.setAlpha(1.0f - 0.2f * absPos);
+        });
     }
 
     private void setupBottomNav() {
-        binding.fabCamera.setOnClickListener(v -> {
-            startActivity(new Intent(this, CameraActivity.class));
-        });
+        binding.fabCamera.setOnClickListener(v -> startActivity(new Intent(this, CameraActivity.class)));
 
         binding.navSettings.setOnClickListener(v -> {
             startActivity(new Intent(this, SettingsActivity.class));

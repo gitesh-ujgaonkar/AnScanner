@@ -35,15 +35,24 @@ import java.util.concurrent.Executors;
 public class SaveScanBottomSheet extends BottomSheetDialogFragment {
 
     private static final String ARG_PAGE_PATHS = "arg_page_paths";
+    private static final String ARG_PDF_PATH = "arg_pdf_path";
     private BottomSheetSaveScanBinding binding;
     private ArrayList<String> pagePaths;
+    private String preGeneratedPdfPath;
     private ExecutorService executor = Executors.newSingleThreadExecutor();
     private Handler mainHandler = new Handler(Looper.getMainLooper());
 
     public static SaveScanBottomSheet newInstance(ArrayList<String> pagePaths) {
+        return newInstance(pagePaths, null);
+    }
+
+    public static SaveScanBottomSheet newInstance(ArrayList<String> pagePaths, String pdfPath) {
         SaveScanBottomSheet fragment = new SaveScanBottomSheet();
         Bundle args = new Bundle();
         args.putStringArrayList(ARG_PAGE_PATHS, pagePaths);
+        if (pdfPath != null) {
+            args.putString(ARG_PDF_PATH, pdfPath);
+        }
         fragment.setArguments(args);
         return fragment;
     }
@@ -66,6 +75,7 @@ public class SaveScanBottomSheet extends BottomSheetDialogFragment {
         
         if (getArguments() != null) {
             pagePaths = getArguments().getStringArrayList(ARG_PAGE_PATHS);
+            preGeneratedPdfPath = getArguments().getString(ARG_PDF_PATH);
         }
         if (pagePaths == null) {
             pagePaths = new ArrayList<>();
@@ -73,12 +83,25 @@ public class SaveScanBottomSheet extends BottomSheetDialogFragment {
         
         binding.tvPageCount.setText(getString(R.string.review_page_number, pagePaths.size()));
         
-        binding.etFileName.setText("");
-        String defaultHint = "AnScanned_" + new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
-        binding.etFileName.setHint(defaultHint);
+        String defaultName = "Scan_" + new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
+        binding.tilFileName.setHint(getString(R.string.save_file_name_hint));
+        binding.etFileName.setText(defaultName);
+        binding.etFileName.setSelection(defaultName.length());
         
         binding.toggleFormat.addOnButtonCheckedListener((group, checkedId, isChecked) -> {
-            if (isChecked) updateSizeEstimate();
+            if (isChecked) {
+                boolean isPdf = checkedId == R.id.btnPdf;
+                binding.layoutPdfSecurity.setVisibility(isPdf ? View.VISIBLE : View.GONE);
+                updateSizeEstimate();
+            }
+        });
+
+        binding.switchPasswordProtect.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            binding.layoutPasswordInputs.setVisibility(isChecked ? View.VISIBLE : View.GONE);
+            if (!isChecked) {
+                binding.tilPassword.setError(null);
+                binding.tilConfirmPassword.setError(null);
+            }
         });
 
         binding.sbQuality.setOnSeekBarChangeListener(new android.widget.SeekBar.OnSeekBarChangeListener() {
@@ -132,16 +155,36 @@ public class SaveScanBottomSheet extends BottomSheetDialogFragment {
             return;
         }
 
+        final boolean isPdf = binding.toggleFormat.getCheckedButtonId() == R.id.btnPdf;
+        final boolean isPasswordProtected = isPdf && binding.switchPasswordProtect.isChecked();
+        final String password;
+        if (isPasswordProtected) {
+            String pass = binding.etPassword.getText() != null ? binding.etPassword.getText().toString().trim() : "";
+            String confirm = binding.etConfirmPassword.getText() != null ? binding.etConfirmPassword.getText().toString().trim() : "";
+            if (pass.isEmpty()) {
+                binding.tilPassword.setError(getString(R.string.save_password_error_empty));
+                return;
+            }
+            if (!pass.equals(confirm)) {
+                binding.tilConfirmPassword.setError(getString(R.string.save_password_error_mismatch));
+                return;
+            }
+            binding.tilPassword.setError(null);
+            binding.tilConfirmPassword.setError(null);
+            password = pass;
+        } else {
+            password = null;
+        }
+
         binding.btnSaveShare.setEnabled(false);
-        binding.btnSaveShare.setText("Generating...");
+        binding.btnSaveShare.setText(isPasswordProtected ? getString(R.string.encrypting_pdf) : "Generating...");
 
         final Context appContext = requireContext().getApplicationContext();
         String nameInput = binding.etFileName.getText() != null ? binding.etFileName.getText().toString().trim() : "";
         if (nameInput.isEmpty()) {
-            nameInput = "AnScanned_" + new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
+            nameInput = "Scan_" + new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
         }
         final String fileName = nameInput;
-        final boolean isPdf = binding.toggleFormat.getCheckedButtonId() == R.id.btnPdf;
         final int quality = getSelectedQuality();
         final String qualityLabel = quality == 100 ? "High (100%)" : (quality == 60 ? "Medium (60%)" : "Low (30%)");
         final List<String> currentPages = new ArrayList<>(pagePaths);
@@ -155,9 +198,19 @@ public class SaveScanBottomSheet extends BottomSheetDialogFragment {
                 if (isPdf) {
                     File tempPdf = new File(appContext.getCacheDir(), "temp_doc_" + docTimestamp + ".pdf");
                     PdfGenerator.createPdfFromPages(currentPages, tempPdf, quality);
-                    savedUri = StorageHelper.savePdfToPublicStorage(appContext, tempPdf, fileName);
-                    fileSize = tempPdf.length();
-                    tempPdf.delete();
+
+                    if (isPasswordProtected && password != null) {
+                        File encryptedPdf = new File(appContext.getCacheDir(), "temp_enc_" + docTimestamp + ".pdf");
+                        PdfGenerator.encryptPdf(appContext, tempPdf, encryptedPdf, password);
+                        tempPdf.delete();
+                        savedUri = StorageHelper.savePdfToPublicStorage(appContext, encryptedPdf, fileName);
+                        fileSize = encryptedPdf.length();
+                        encryptedPdf.delete();
+                    } else {
+                        savedUri = StorageHelper.savePdfToPublicStorage(appContext, tempPdf, fileName);
+                        fileSize = tempPdf.length();
+                        tempPdf.delete();
+                    }
                 } else {
                     savedUri = StorageHelper.saveJpgToPublicStorage(appContext, currentPages.get(0), fileName, quality);
                     fileSize = new File(currentPages.get(0)).length();
@@ -189,8 +242,10 @@ public class SaveScanBottomSheet extends BottomSheetDialogFragment {
                         Intent shareIntent = StorageHelper.createShareIntent(finalUri, isPdf ? "application/pdf" : "image/jpeg", fileName);
                         startActivity(Intent.createChooser(shareIntent, "Share via"));
 
-                        // Track successful save for Google Play In-App Review (prompts at count == 3)
-                        ReviewHelper.onDocumentSaved(getActivity());
+                        // Trigger Google Play In-App Review prompt (prompts on 1st scan, then every 3rd scan: 4, 7, 10...)
+                        if (getActivity() != null) {
+                            com.anscanner.app.service.InAppReviewHelper.onScanCompleted(getActivity());
+                        }
 
                         Intent intent = new Intent(appContext, com.anscanner.app.ui.library.LibraryActivity.class);
                         intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);

@@ -5,12 +5,10 @@ import android.util.Log;
 
 import com.anscanner.app.service.CrashManager;
 
-import org.opencv.android.OpenCVLoader;
-
 /**
  * AnScanner Application class.
- * Initializes CrashManager for global uncaught exception catching,
- * OpenCV native libraries, and application-level configuration on startup.
+ * Initializes CrashManager for global uncaught exception catching
+ * and application-level configuration on startup.
  */
 public class AnScannerApp extends Application {
 
@@ -23,12 +21,15 @@ public class AnScannerApp extends Application {
         super.onCreate();
         instance = this;
 
+        // ── Apply Persisted Theme (Defaults to Dark Mode) ───────────────────
+        com.anscanner.app.util.ThemeHelper.applyTheme(this);
+
         // ── Global Crash Handler ───────────────────────────────────────────
         Thread.setDefaultUncaughtExceptionHandler(new CrashManager(this));
         Log.i(TAG, "CrashManager registered as default uncaught exception handler");
 
-        // ── Initialize OpenCV ──────────────────────────────────────────────
-        if (OpenCVLoader.initLocal()) {
+        // ── Initialize OpenCV ───────────────────────────────────────────
+        if (org.opencv.android.OpenCVLoader.initLocal()) {
             Log.i(TAG, "OpenCV loaded successfully via initLocal()");
         } else {
             Log.e(TAG, "OpenCV initialization failed! Image processing will not work.");

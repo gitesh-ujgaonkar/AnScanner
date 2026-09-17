@@ -3,8 +3,9 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/background_secondary">
+    android:background="@color/background_primary">
 
+    <!-- ── 1. Top Clean Header (Adobe Acrobat Style) ────────────────────── -->
     <LinearLayout
         android:id="@+id/topBar"
         android:layout_width="match_parent"
@@ -25,15 +26,59 @@
             android:src="@drawable/ic_close"
             app:tint="@android:color/white" />
 
-        <TextView
-            android:id="@+id/tvTitle"
+        <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:gravity="center"
-            android:text="Page 1 of 1"
-            android:textAppearance="@style/TextAppearance.AnScanner.Title"
-            android:textColor="@android:color/white" />
+            android:orientation="horizontal">
+
+            <ImageButton
+                android:id="@+id/btnPrevPage"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_marginEnd="4dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/action_back"
+                android:src="@drawable/ic_chevron_left"
+                android:visibility="gone"
+                app:tint="@android:color/white" />
+
+            <TextView
+                android:id="@+id/tvTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_title_pill"
+                android:gravity="center"
+                android:paddingHorizontal="16dp"
+                android:paddingVertical="6dp"
+                android:text="Page 1 of 1"
+                android:textAppearance="@style/TextAppearance.AnScanner.Title"
+                android:textColor="@android:color/white"
+                android:textSize="14sp" />
+
+            <ImageButton
+                android:id="@+id/btnNextPage"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_marginStart="4dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/camera_see_all"
+                android:src="@drawable/ic_chevron_right"
+                android:visibility="gone"
+                app:tint="@android:color/white" />
+        </LinearLayout>
+
+        <ImageButton
+            android:id="@+id/btnUndo"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/cd_undo"
+            android:enabled="false"
+            android:alpha="0.3"
+            android:src="@drawable/ic_undo"
+            app:tint="@android:color/white" />
 
         <ImageButton
             android:id="@+id/btnExtractText"
@@ -46,11 +91,13 @@
 
     </LinearLayout>
 
+    <!-- ── 2. Canvas Viewport (Center) ─────────────────────────────────── -->
     <FrameLayout
         android:id="@+id/frameCenter"
         android:layout_width="0dp"
         android:layout_height="0dp"
-        android:padding="@dimen/spacing_lg"
+        android:background="@color/background_primary"
+        android:padding="8dp"
         app:layout_constraintBottom_toTopOf="@id/bottomPanel"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
@@ -82,14 +129,14 @@
             android:layout_height="@dimen/loupe_size"
             android:layout_gravity="top|start"
             android:visibility="gone"
+            app:cardBackgroundColor="@color/background_primary"
             app:cardCornerRadius="@dimen/loupe_corner_radius"
             app:cardElevation="10dp"
             app:cardPreventCornerOverlap="false"
             app:contentPadding="0dp"
-            app:useCompatPadding="false"
             app:strokeColor="@color/accent_mint"
             app:strokeWidth="2dp"
-            app:cardBackgroundColor="@color/background_primary">
+            app:useCompatPadding="false">
 
             <FrameLayout
                 android:layout_width="match_parent"
@@ -113,206 +160,303 @@
         </com.google.android.material.card.MaterialCardView>
     </FrameLayout>
 
+    <!-- ── 3. Bottom Panel (Floating Toolbar + Filters + CTA) ──────────── -->
     <LinearLayout
         android:id="@+id/bottomPanel"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
+        android:paddingBottom="4dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent">
 
-        <HorizontalScrollView
+        <!-- Elevated Floating Action Toolbar -->
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginHorizontal="@dimen/spacing_lg"
+            android:layout_marginTop="@dimen/spacing_xs"
+            android:layout_marginBottom="@dimen/spacing_sm"
+            app:cardBackgroundColor="@color/surface_card"
+            app:cardCornerRadius="@dimen/radius_lg"
+            app:cardElevation="4dp"
+            app:contentPadding="0dp"
+            app:strokeColor="@color/border_subtle"
+            app:strokeWidth="1dp"
+            app:useCompatPadding="false">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:paddingHorizontal="@dimen/spacing_xs"
+                android:paddingVertical="@dimen/spacing_sm">
+
+                <LinearLayout
+                    android:id="@+id/btnCrop"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:background="?attr/selectableItemBackground"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center"
+                    android:orientation="vertical"
+                    android:paddingVertical="@dimen/spacing_xs">
+
+                    <ImageView
+                        android:layout_width="@dimen/icon_md"
+                        android:layout_height="@dimen/icon_md"
+                        android:src="@drawable/ic_crop"
+                        app:tint="@android:color/white" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="@string/crop_action_crop"
+                        android:textAppearance="@style/TextAppearance.AnScanner.Label"
+                        android:textColor="@android:color/white"
+                        android:textSize="12sp" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/btnFilter"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:background="?attr/selectableItemBackground"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center"
+                    android:orientation="vertical"
+                    android:paddingVertical="@dimen/spacing_xs">
+
+                    <ImageView
+                        android:layout_width="@dimen/icon_md"
+                        android:layout_height="@dimen/icon_md"
+                        android:src="@drawable/ic_filter"
+                        app:tint="@android:color/white" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="@string/crop_action_filter"
+                        android:textAppearance="@style/TextAppearance.AnScanner.Label"
+                        android:textColor="@android:color/white"
+                        android:textSize="12sp" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/btnRotate"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:background="?attr/selectableItemBackground"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center"
+                    android:orientation="vertical"
+                    android:paddingVertical="@dimen/spacing_xs">
+
+                    <ImageView
+                        android:layout_width="@dimen/icon_md"
+                        android:layout_height="@dimen/icon_md"
+                        android:src="@drawable/ic_rotate"
+                        app:tint="@android:color/white" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="@string/crop_action_rotate"
+                        android:textAppearance="@style/TextAppearance.AnScanner.Label"
+                        android:textColor="@android:color/white"
+                        android:textSize="12sp" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/btnDelete"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:background="?attr/selectableItemBackground"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center"
+                    android:orientation="vertical"
+                    android:paddingVertical="@dimen/spacing_xs">
+
+                    <ImageView
+                        android:layout_width="@dimen/icon_md"
+                        android:layout_height="@dimen/icon_md"
+                        android:src="@drawable/ic_delete"
+                        app:tint="@android:color/white" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="@string/crop_action_delete"
+                        android:textAppearance="@style/TextAppearance.AnScanner.Label"
+                        android:textColor="@android:color/white"
+                        android:textSize="12sp" />
+                </LinearLayout>
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Dedicated Filter Bar (right above primary CTA) -->
+        <LinearLayout
             android:id="@+id/filterContainer"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:paddingHorizontal="@dimen/spacing_md"
-            android:paddingVertical="@dimen/spacing_sm"
-            android:scrollbars="none"
+            android:orientation="vertical"
+            android:paddingBottom="@dimen/spacing_xs"
             android:visibility="gone">
 
+            <!-- Filter Header with Apply to All Toggle -->
             <LinearLayout
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal">
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnFilterOriginal"
-                    style="@style/Widget.Material3.Button.TonalButton"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginEnd="@dimen/spacing_sm"
-                    android:text="Original" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnFilterMagic"
-                    style="@style/Widget.Material3.Button.TonalButton"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginEnd="@dimen/spacing_sm"
-                    android:text="Magic Color" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnFilterBW"
-                    style="@style/Widget.Material3.Button.TonalButton"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginEnd="@dimen/spacing_sm"
-                    android:text="B&amp;W Clean" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnFilterGrayscale"
-                    style="@style/Widget.Material3.Button.TonalButton"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginEnd="@dimen/spacing_sm"
-                    android:text="Grayscale" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnFilterSharpen"
-                    style="@style/Widget.Material3.Button.TonalButton"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginEnd="@dimen/spacing_sm"
-                    android:text="Sharpen" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnFilterScanEnhance"
-                    style="@style/Widget.Material3.Button.TonalButton"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Scan Enhance" />
-            </LinearLayout>
-        </HorizontalScrollView>
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:paddingTop="@dimen/spacing_md">
-
-            <LinearLayout
-                android:id="@+id/btnCrop"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:background="?attr/selectableItemBackground"
-                android:clickable="true"
-                android:focusable="true"
-                android:gravity="center"
-                android:orientation="vertical"
-                android:padding="@dimen/spacing_sm">
-
-                <ImageView
-                    android:layout_width="24dp"
-                    android:layout_height="24dp"
-                    android:src="@drawable/ic_crop"
-                    app:tint="@android:color/white" />
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingHorizontal="@dimen/spacing_lg">
 
                 <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="FILTERS"
+                    android:textAppearance="@style/TextAppearance.AnScanner.SectionHeader"
+                    android:textColor="@color/text_muted"
+                    android:textSize="11sp" />
+
+                <com.google.android.material.checkbox.MaterialCheckBox
+                    android:id="@+id/cbApplyToAll"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:text="Crop"
-                    android:textAppearance="@style/TextAppearance.AnScanner.Label"
-                    android:textColor="@android:color/white"
-                    android:textSize="12sp" />
+                    android:minHeight="0dp"
+                    android:minWidth="0dp"
+                    android:text="Apply to all pages"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="12sp"
+                    app:buttonTint="@color/accent_mint" />
             </LinearLayout>
 
-            <LinearLayout
-                android:id="@+id/btnFilter"
-                android:layout_width="0dp"
+            <HorizontalScrollView
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:background="?attr/selectableItemBackground"
-                android:clickable="true"
-                android:focusable="true"
-                android:gravity="center"
-                android:orientation="vertical"
-                android:padding="@dimen/spacing_sm">
+                android:clipToPadding="false"
+                android:paddingHorizontal="@dimen/spacing_lg"
+                android:paddingVertical="@dimen/spacing_xs"
+                android:scrollbars="none">
 
-                <ImageView
-                    android:layout_width="24dp"
-                    android:layout_height="24dp"
-                    android:src="@drawable/ic_filter"
-                    app:tint="@android:color/white" />
-
-                <TextView
+                <LinearLayout
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:text="Filter"
-                    android:textAppearance="@style/TextAppearance.AnScanner.Label"
-                    android:textColor="@android:color/white"
-                    android:textSize="12sp" />
-            </LinearLayout>
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
 
-            <LinearLayout
-                android:id="@+id/btnRotate"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:background="?attr/selectableItemBackground"
-                android:clickable="true"
-                android:focusable="true"
-                android:gravity="center"
-                android:orientation="vertical"
-                android:padding="@dimen/spacing_sm">
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnFilterOriginal"
+                        style="@style/Widget.Material3.Button.TonalButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="38dp"
+                        android:layout_marginEnd="@dimen/spacing_sm"
+                        android:insetTop="0dp"
+                        android:insetBottom="0dp"
+                        android:text="Original"
+                        android:textColor="@color/text_primary"
+                        android:textSize="13sp"
+                        app:backgroundTint="@color/surface_elevated"
+                        app:cornerRadius="19dp" />
 
-                <ImageView
-                    android:layout_width="24dp"
-                    android:layout_height="24dp"
-                    android:src="@drawable/ic_rotate"
-                    app:tint="@android:color/white" />
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnFilterMagic"
+                        style="@style/Widget.Material3.Button.TonalButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="38dp"
+                        android:layout_marginEnd="@dimen/spacing_sm"
+                        android:insetTop="0dp"
+                        android:insetBottom="0dp"
+                        android:text="Magic Color"
+                        android:textColor="@color/text_primary"
+                        android:textSize="13sp"
+                        app:backgroundTint="@color/surface_elevated"
+                        app:cornerRadius="19dp" />
 
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:text="Rotate"
-                    android:textAppearance="@style/TextAppearance.AnScanner.Label"
-                    android:textColor="@android:color/white"
-                    android:textSize="12sp" />
-            </LinearLayout>
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnFilterBW"
+                        style="@style/Widget.Material3.Button.TonalButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="38dp"
+                        android:layout_marginEnd="@dimen/spacing_sm"
+                        android:insetTop="0dp"
+                        android:insetBottom="0dp"
+                        android:text="B&amp;W Clean"
+                        android:textColor="@color/text_primary"
+                        android:textSize="13sp"
+                        app:backgroundTint="@color/surface_elevated"
+                        app:cornerRadius="19dp" />
 
-            <LinearLayout
-                android:id="@+id/btnDelete"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:background="?attr/selectableItemBackground"
-                android:clickable="true"
-                android:focusable="true"
-                android:gravity="center"
-                android:orientation="vertical"
-                android:padding="@dimen/spacing_sm">
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnFilterGrayscale"
+                        style="@style/Widget.Material3.Button.TonalButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="38dp"
+                        android:layout_marginEnd="@dimen/spacing_sm"
+                        android:insetTop="0dp"
+                        android:insetBottom="0dp"
+                        android:text="Grayscale"
+                        android:textColor="@color/text_primary"
+                        android:textSize="13sp"
+                        app:backgroundTint="@color/surface_elevated"
+                        app:cornerRadius="19dp" />
 
-                <ImageView
-                    android:layout_width="24dp"
-                    android:layout_height="24dp"
-                    android:src="@drawable/ic_delete"
-                    app:tint="@android:color/white" />
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnFilterSharpen"
+                        style="@style/Widget.Material3.Button.TonalButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="38dp"
+                        android:layout_marginEnd="@dimen/spacing_sm"
+                        android:insetTop="0dp"
+                        android:insetBottom="0dp"
+                        android:text="Sharpen"
+                        android:textColor="@color/text_primary"
+                        android:textSize="13sp"
+                        app:backgroundTint="@color/surface_elevated"
+                        app:cornerRadius="19dp" />
 
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:text="Delete"
-                    android:textAppearance="@style/TextAppearance.AnScanner.Label"
-                    android:textColor="@android:color/white"
-                    android:textSize="12sp" />
-            </LinearLayout>
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnFilterScanEnhance"
+                        style="@style/Widget.Material3.Button.TonalButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="38dp"
+                        android:insetTop="0dp"
+                        android:insetBottom="0dp"
+                        android:text="Scan Enhance"
+                        android:textColor="@color/text_primary"
+                        android:textSize="13sp"
+                        app:backgroundTint="@color/surface_elevated"
+                        app:cornerRadius="19dp" />
+                </LinearLayout>
+            </HorizontalScrollView>
         </LinearLayout>
 
+        <!-- ── 4. Primary CTA Footer ───────────────────────────────────── -->
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnSaveDocument"
             style="@style/Widget.AnScanner.Button.Primary"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
+            android:layout_height="@dimen/button_height_primary"
             android:layout_marginHorizontal="@dimen/spacing_lg"
+            android:layout_marginTop="@dimen/spacing_xs"
             android:layout_marginBottom="@dimen/spacing_lg"
-            android:layout_marginTop="@dimen/spacing_md"
-            android:text="@string/crop_save_document" />
+            android:text="@string/crop_save_document"
+            android:textSize="15sp"
+            app:cornerRadius="@dimen/button_corner_radius" />
 
     </LinearLayout>
 

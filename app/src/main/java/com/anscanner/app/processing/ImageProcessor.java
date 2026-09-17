@@ -1,7 +1,16 @@
 package com.anscanner.app.processing;
 
 import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.DashPathEffect;
+import android.graphics.Paint;
+import android.graphics.Path;
+import android.graphics.Rect;
+import android.graphics.RectF;
 import android.util.Log;
+
+import androidx.annotation.Nullable;
 
 import org.opencv.android.Utils;
 import org.opencv.core.Core;
@@ -66,6 +75,13 @@ public final class ImageProcessor {
     // ════════════════════════════════════════════════════════════════════
     // Perspective Warp (Crop & Correct)
     // ════════════════════════════════════════════════════════════════════
+
+    /**
+     * Alias for {@link #perspectiveWarp(Bitmap, Point[])}.
+     */
+    public static Bitmap warpPerspective(Bitmap src, Point[] corners) {
+        return perspectiveWarp(src, corners);
+    }
 
     /**
      * Applies a 4-point perspective warp to extract and straighten the
@@ -399,5 +415,148 @@ public final class ImageProcessor {
         double dx = a.x - b.x;
         double dy = a.y - b.y;
         return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    // ════════════════════════════════════════════════════════════════════
+    // Smart ID Card Crop & Composite Generator
+    // ════════════════════════════════════════════════════════════════════
+
+    /**
+     * Crops a bitmap to the ID card aspect ratio (85.6mm x 54.0mm ≈ 1.585) without running
+     * any Canny edge detection or contour search.
+     *
+     * @param src Source bitmap (not mutated, caller must recycle).
+     * @param cropRect Optional target rect in bitmap coordinates. If null or invalid, uses centered crop.
+     * @return Cropped card bitmap.
+     */
+    public static Bitmap cropIdCardFrame(Bitmap src, @Nullable Rect cropRect) {
+        if (src == null || src.isRecycled()) return null;
+
+        int bW = src.getWidth();
+        int bH = src.getHeight();
+        int left, top, w, h;
+
+        if (cropRect != null && !cropRect.isEmpty()
+                && cropRect.left >= 0 && cropRect.top >= 0
+                && cropRect.right <= bW && cropRect.bottom <= bH
+                && cropRect.width() > 0 && cropRect.height() > 0) {
+            left = cropRect.left;
+            top = cropRect.top;
+            w = cropRect.width();
+            h = cropRect.height();
+        } else {
+            // Default to centered standard ID card aspect ratio (1.585) without edge detection
+            w = (int) (bW * 0.86f);
+            h = (int) (w / 1.585f);
+            if (h > bH * 0.65f) {
+                h = (int) (bH * 0.65f);
+                w = (int) (h * 1.585f);
+            }
+            left = Math.max(0, (bW - w) / 2);
+            top = Math.max(0, (bH - h) / 2);
+            w = Math.min(w, bW - left);
+            h = Math.min(h, bH - top);
+        }
+
+        return Bitmap.createBitmap(src, left, top, w, h);
+    }
+
+    /**
+     * Composites Front and Back ID card captures vertically onto a single standard A4 canvas,
+     * styled like a professional office photocopy.
+     *
+     * <p>Both input bitmaps are strictly recycled in a finally block.</p>
+     *
+     * @param front Bitmap containing front side of ID.
+     * @param back  Bitmap containing back side of ID.
+     * @return High-resolution A4 composite bitmap.
+     */
+    public static Bitmap compositeIdCard(Bitmap front, Bitmap back) {
+        // High-resolution A4 canvas: 1654 x 2338 pixels (~200 DPI)
+        final int a4Width = 1654;
+        final int a4Height = 2338;
+
+        Bitmap canvasBitmap = Bitmap.createBitmap(a4Width, a4Height, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(canvasBitmap);
+        canvas.drawColor(Color.WHITE);
+
+        try {
+            Paint bitmapPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+
+            // Card dimension on A4: ~58% width, standard 1.585 aspect ratio
+            float cardWidth = a4Width * 0.58f;
+            float cardHeight = cardWidth / 1.585f;
+            float cardLeft = (a4Width - cardWidth) / 2f;
+            float cornerRadius = 24f;
+
+            // Paint styles
+            Paint borderPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+            borderPaint.setColor(Color.parseColor("#CBD5E1")); // Light gray card border
+            borderPaint.setStyle(Paint.Style.STROKE);
+            borderPaint.setStrokeWidth(3f);
+
+            Paint headerPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+            headerPaint.setColor(Color.parseColor("#334155")); // Dark slate
+            headerPaint.setTextSize(26f);
+            headerPaint.setFakeBoldText(true);
+            headerPaint.setTextAlign(Paint.Align.LEFT);
+
+            Paint dividerPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+            dividerPaint.setColor(Color.parseColor("#E2E8F0"));
+            dividerPaint.setStyle(Paint.Style.STROKE);
+            dividerPaint.setStrokeWidth(2f);
+            dividerPaint.setPathEffect(new DashPathEffect(new float[]{16f, 16f}, 0));
+
+            // 1. Front Card
+            float frontTop = a4Height * 0.14f;
+            RectF frontRect = new RectF(cardLeft, frontTop, cardLeft + cardWidth, frontTop + cardHeight);
+
+            // "FRONT" header
+            canvas.drawText("FRONT", cardLeft, frontTop - 20f, headerPaint);
+
+            // Draw front card with rounded corners
+            Path frontPath = new Path();
+            frontPath.addRoundRect(frontRect, cornerRadius, cornerRadius, Path.Direction.CW);
+            canvas.save();
+            canvas.clipPath(frontPath);
+            if (front != null && !front.isRecycled()) {
+                canvas.drawBitmap(front, null, frontRect, bitmapPaint);
+            }
+            canvas.restore();
+            canvas.drawPath(frontPath, borderPaint);
+
+            // 2. Middle divider line
+            float midY = a4Height * 0.49f;
+            canvas.drawLine(a4Width * 0.12f, midY, a4Width * 0.88f, midY, dividerPaint);
+
+            // 3. Back Card
+            float backTop = a4Height * 0.54f;
+            RectF backRect = new RectF(cardLeft, backTop, cardLeft + cardWidth, backTop + cardHeight);
+
+            // "BACK" header
+            canvas.drawText("BACK", cardLeft, backTop - 20f, headerPaint);
+
+            // Draw back card with rounded corners
+            Path backPath = new Path();
+            backPath.addRoundRect(backRect, cornerRadius, cornerRadius, Path.Direction.CW);
+            canvas.save();
+            canvas.clipPath(backPath);
+            if (back != null && !back.isRecycled()) {
+                canvas.drawBitmap(back, null, backRect, bitmapPaint);
+            }
+            canvas.restore();
+            canvas.drawPath(backPath, borderPaint);
+
+            return canvasBitmap;
+
+        } finally {
+            // Strictly recycle both input bitmaps
+            if (front != null && !front.isRecycled()) {
+                front.recycle();
+            }
+            if (back != null && !back.isRecycled()) {
+                back.recycle();
+            }
+        }
     }
 }

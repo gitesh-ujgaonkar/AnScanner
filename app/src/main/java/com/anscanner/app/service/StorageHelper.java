@@ -286,4 +286,13 @@ public final class StorageHelper {
         } catch (Exception ignored) {}
         return uri.getLastPathSegment();
     }
+
+    /**
+     * Resolves the display filename from a content or file URI using Context.
+     */
+    public static String queryFileName(Context context, Uri uri) {
+        if (context == null || uri == null) return "Document.pdf";
+        String name = getFileName(context.getContentResolver(), uri);
+        return name != null && !name.trim().isEmpty() ? name : "Document.pdf";
+    }
 }

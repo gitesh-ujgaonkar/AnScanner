@@ -47,9 +47,10 @@ android {
         targetCompatibility JavaVersion.VERSION_17
     }
 
-    // ViewBinding — generates type-safe binding classes for all XML layouts
+    // ViewBinding & BuildConfig
     buildFeatures {
         viewBinding true
+        buildConfig true
     }
 
     // Enforce 16 KB page-alignment for native libraries (.so)
@@ -121,6 +122,9 @@ dependencies {
 
     // ── Guava (required by CameraX ListenableFuture) ────────────────────
     implementation 'com.google.guava:guava:32.1.3-android'
+
+    // ── Apache PDFBox for Android (PDF Password Encryption & Security) ─
+    implementation 'com.tom-roush:pdfbox-android:2.0.27.0'
 
     // ── Testing ─────────────────────────────────────────────────────────
     testImplementation 'junit:junit:4.13.2'

@@ -7,6 +7,7 @@
     <uses-permission
         android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
 
     <!-- Required hardware feature -->
     <uses-feature
@@ -32,7 +33,7 @@
             android:exported="false"
             android:screenOrientation="portrait" />
 
-        <!-- ── Screen 1: Camera (Launcher / Home) ────────────────────── -->
+        <!-- ── Screen 1: Camera (Main Launcher) ────────────────────────── -->
         <activity
             android:name=".ui.camera.CameraActivity"
             android:exported="true"
@@ -44,6 +45,12 @@
             </intent-filter>
         </activity>
 
+        <!-- ── Scanned Documents Library ───────────────────────────────── -->
+        <activity
+            android:name=".ui.library.LibraryActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
+
         <!-- ── Screen 2: Crop Preview & Manual Edge Cropping ─────────── -->
         <activity
             android:name=".ui.crop.CropPreviewActivity"
@@ -54,12 +61,6 @@
         <!-- ── Screen 3: Review Scan (Multi-Page Grid) ───────────────── -->
         <activity
             android:name=".ui.review.ReviewScanActivity"
-            android:exported="false"
-            android:screenOrientation="portrait" />
-
-        <!-- ── Screen 5: Scanned Documents Library ───────────────────── -->
-        <activity
-            android:name=".ui.library.LibraryActivity"
             android:exported="false"
             android:screenOrientation="portrait" />
 

@@ -83,6 +83,20 @@ public class CameraActivity extends AppCompatActivity {
     private RecentScansAdapter recentAdapter;
     private boolean isAddingPage = false;
 
+    // Scan Modes
+    public static final int SCAN_MODE_DOCUMENT = 0;
+    public static final int SCAN_MODE_BATCH = 1;
+    public static final int SCAN_MODE_ID_CARD = 2;
+    private int currentScanMode = SCAN_MODE_DOCUMENT;
+
+    // Batch Mode state
+    private final ArrayList<String> batchPagePaths = new ArrayList<>();
+    private BatchThumbAdapter batchAdapter;
+
+    // Smart ID Card Mode state
+    private int idCardStep = DocumentOverlayView.ID_STEP_FRONT;
+    private String idFrontTempPath = null;
+
     /**
      * Guard to prevent multiple analysis frames from piling up.
      * Only one frame is processed at a time; others are dropped.
@@ -190,6 +204,7 @@ public class CameraActivity extends AppCompatActivity {
         binding.tvSeeAll.setOnClickListener(v ->
                 startActivity(new Intent(this, LibraryActivity.class)));
 
+        // Recent Scans adapter
         recentAdapter = new RecentScansAdapter(entity -> {
             if ("PDF".equalsIgnoreCase(entity.format)) {
                 Intent intent = new Intent(this, com.anscanner.app.ui.pdf.PdfViewerActivity.class);
@@ -201,6 +216,111 @@ public class CameraActivity extends AppCompatActivity {
             }
         });
         binding.rvRecentScans.setAdapter(recentAdapter);
+
+        // Batch Mode thumbnail adapter
+        batchAdapter = new BatchThumbAdapter(position -> {
+            if (!batchPagePaths.isEmpty()) {
+                openReviewWithBatchPages();
+            }
+        });
+        binding.rvBatchThumbs.setAdapter(batchAdapter);
+        binding.btnBatchDone.setOnClickListener(v -> openReviewWithBatchPages());
+
+        // ID Card mode controls
+        binding.btnIdCardRetakeFront.setOnClickListener(v -> resetIdCardToStep1());
+
+        // Mode selector listener
+        binding.toggleMode.addOnButtonCheckedListener((group, checkedId, isChecked) -> {
+            if (!isChecked) return;
+            if (checkedId == R.id.btnModeDocument) {
+                switchScanMode(SCAN_MODE_DOCUMENT);
+            } else if (checkedId == R.id.btnModeBatch) {
+                switchScanMode(SCAN_MODE_BATCH);
+            } else if (checkedId == R.id.btnModeIdCard) {
+                switchScanMode(SCAN_MODE_ID_CARD);
+            }
+        });
+    }
+
+    private void switchScanMode(int newMode) {
+        currentScanMode = newMode;
+        binding.overlayView.setScanMode(newMode);
+
+        if (newMode == SCAN_MODE_DOCUMENT) {
+            binding.layoutRecentScans.setVisibility(View.VISIBLE);
+            binding.layoutBatchStrip.setVisibility(View.GONE);
+            binding.layoutIdCardStep.setVisibility(View.GONE);
+            binding.tvFramingHint.setText(R.string.camera_framing_hint);
+        } else if (newMode == SCAN_MODE_BATCH) {
+            binding.layoutRecentScans.setVisibility(View.GONE);
+            binding.layoutBatchStrip.setVisibility(View.VISIBLE);
+            binding.layoutIdCardStep.setVisibility(View.GONE);
+            binding.tvFramingHint.setText(R.string.batch_mode_hint);
+            updateBatchUI();
+        } else if (newMode == SCAN_MODE_ID_CARD) {
+            lastDetectedCorners = null;
+            binding.overlayView.setDetectedCorners(null);
+            binding.layoutRecentScans.setVisibility(View.GONE);
+            binding.layoutBatchStrip.setVisibility(View.GONE);
+            binding.layoutIdCardStep.setVisibility(View.VISIBLE);
+            resetIdCardToStep1();
+        }
+    }
+
+    private void updateBatchUI() {
+        int count = batchPagePaths.size();
+        binding.tvBatchCounter.setText(getString(R.string.batch_pages_counter, count));
+        binding.btnBatchDone.setText(getString(R.string.batch_action_review, count));
+        binding.btnBatchDone.setEnabled(count > 0);
+        binding.btnBatchDone.setAlpha(count > 0 ? 1.0f : 0.5f);
+    }
+
+    private void openReviewWithBatchPages() {
+        if (batchPagePaths.isEmpty()) {
+            Toast.makeText(this, "Capture at least one page first", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        if (isAddingPage) {
+            Intent resultIntent = new Intent();
+            resultIntent.putStringArrayListExtra(ReviewScanActivity.EXTRA_PAGE_PATHS, new ArrayList<>(batchPagePaths));
+            setResult(RESULT_OK, resultIntent);
+            finish();
+        } else {
+            Intent reviewIntent = new Intent(this, ReviewScanActivity.class);
+            reviewIntent.putStringArrayListExtra(ReviewScanActivity.EXTRA_PAGE_PATHS, new ArrayList<>(batchPagePaths));
+            startActivity(reviewIntent);
+        }
+    }
+
+    private void routeIdComposite(String compositePath) {
+        if (isAddingPage) {
+            Intent resultIntent = new Intent();
+            resultIntent.putExtra(EXTRA_CROPPED_PATH, compositePath);
+            ArrayList<String> pages = new ArrayList<>();
+            pages.add(compositePath);
+            resultIntent.putStringArrayListExtra(ReviewScanActivity.EXTRA_PAGE_PATHS, pages);
+            setResult(RESULT_OK, resultIntent);
+            finish();
+        } else {
+            // Direct to ReviewScanActivity with the clean A4 ID composite
+            Intent reviewIntent = new Intent(CameraActivity.this, ReviewScanActivity.class);
+            ArrayList<String> pages = new ArrayList<>();
+            pages.add(compositePath);
+            reviewIntent.putStringArrayListExtra(ReviewScanActivity.EXTRA_PAGE_PATHS, pages);
+            reviewIntent.putStringArrayListExtra(ReviewScanActivity.EXTRA_ORIGINAL_PAGE_PATHS, pages);
+            startActivity(reviewIntent);
+        }
+    }
+
+    private void resetIdCardToStep1() {
+        idCardStep = DocumentOverlayView.ID_STEP_FRONT;
+        idFrontTempPath = null;
+        binding.overlayView.setIdCardStep(idCardStep);
+        binding.tvIdCardStepTitle.setText(R.string.id_card_step1_title);
+        binding.tvIdCardStepDesc.setText(R.string.id_card_step1_hint);
+        binding.tvFramingHint.setText(R.string.id_card_step1_hint);
+        binding.btnIdCardRetakeFront.setVisibility(View.GONE);
     }
 
     @Override
@@ -291,15 +411,28 @@ public class CameraActivity extends AppCompatActivity {
             return;
         }
 
+        // Bypass edge detection completely when in ID Card mode
+        if (currentScanMode == SCAN_MODE_ID_CARD) {
+            imageProxy.close();
+            isAnalyzing.set(false);
+            return;
+        }
+
         try {
-            int width = imageProxy.getWidth();
-            int height = imageProxy.getHeight();
+            int rotation = imageProxy.getImageInfo().getRotationDegrees();
+            Bitmap rawBitmap = imageProxy.toBitmap();
+            Bitmap frameBitmap = rawBitmap;
+            if (rawBitmap != null && rotation != 0) {
+                frameBitmap = ImageProcessor.rotateBitmap(rawBitmap, rotation);
+                rawBitmap.recycle();
+            }
 
-            // Set analysis dimensions on the overlay for coordinate mapping
-            binding.overlayView.setAnalysisDimensions(width, height);
+            if (frameBitmap != null) {
+                // Set upright analysis dimensions on the overlay for coordinate mapping
+                binding.overlayView.setAnalysisDimensions(frameBitmap.getWidth(), frameBitmap.getHeight());
+            }
 
-            // Run TFLite AI corner detection on the frame bitmap
-            Bitmap frameBitmap = imageProxy.toBitmap();
+            // Run corner detection on the upright frame bitmap
             Point[] corners = null;
             if (frameBitmap != null) {
                 try {
@@ -337,7 +470,8 @@ public class CameraActivity extends AppCompatActivity {
     private void takePhoto() {
         if (imageCapture == null) return;
 
-        // Snapshot the currently detected corners before capture
+        // Snapshot current mode and detected corners before capture
+        final int mode = currentScanMode;
         final Point[] captureCorners = lastDetectedCorners;
 
         imageCapture.takePicture(ContextCompat.getMainExecutor(this),
@@ -354,18 +488,91 @@ public class CameraActivity extends AppCompatActivity {
                                     bitmap = rotated;
                                 }
 
-                                // Map analysis-space corners to captured-image-space corners
-                                Point[] mappedCorners = null;
-                                if (captureCorners != null) {
-                                    mappedCorners = binding.overlayView.getCornersForCapture(
+                                if (mode == SCAN_MODE_BATCH) {
+                                    // Batch Mode: Save and append, keep camera active
+                                    String path = CacheManager.saveTempBitmap(
+                                            CameraActivity.this, bitmap, "batch_" + System.currentTimeMillis() + "_" + UUID.randomUUID().toString());
+                                    bitmap.recycle();
+
+                                    runOnUiThread(() -> {
+                                        if (path != null) {
+                                            batchPagePaths.add(path);
+                                            batchAdapter.addPage(path);
+                                            binding.rvBatchThumbs.smoothScrollToPosition(batchPagePaths.size() - 1);
+                                            updateBatchUI();
+
+                                            // Quick shutter flash effect
+                                            binding.previewView.animate().alpha(0.35f).setDuration(40)
+                                                    .withEndAction(() -> binding.previewView.animate().alpha(1.0f).setDuration(80).start())
+                                                    .start();
+                                            Toast.makeText(CameraActivity.this,
+                                                    getString(R.string.batch_pages_counter, batchPagePaths.size()) + " captured",
+                                                    Toast.LENGTH_SHORT).show();
+                                        }
+                                    });
+
+                                } else if (mode == SCAN_MODE_ID_CARD) {
+                                    // ID Card Mode: Crop directly to ID card guide frame (no Canny edge detection)
+                                    android.graphics.Rect cropRect = binding.overlayView.getIdCardCropRect(
                                             bitmap.getWidth(), bitmap.getHeight());
+                                    Bitmap cardBitmap = ImageProcessor.cropIdCardFrame(bitmap, cropRect);
+                                    bitmap.recycle();
+
+                                    if (idCardStep == DocumentOverlayView.ID_STEP_FRONT) {
+                                        // Step 1: Front captured
+                                        String frontPath = CacheManager.saveTempBitmap(
+                                                CameraActivity.this, cardBitmap, "id_front_" + System.currentTimeMillis());
+                                        cardBitmap.recycle();
+                                        idFrontTempPath = frontPath;
+
+                                        runOnUiThread(() -> {
+                                            idCardStep = DocumentOverlayView.ID_STEP_BACK;
+                                            binding.overlayView.setIdCardStep(idCardStep);
+                                            binding.tvIdCardStepTitle.setText(R.string.id_card_step2_title);
+                                            binding.tvIdCardStepDesc.setText(R.string.id_card_step2_hint);
+                                            binding.tvFramingHint.setText(R.string.id_card_step2_hint);
+                                            binding.btnIdCardRetakeFront.setVisibility(View.VISIBLE);
+                                            Toast.makeText(CameraActivity.this, R.string.id_card_front_captured, Toast.LENGTH_SHORT).show();
+                                        });
+
+                                    } else {
+                                        // Step 2: Back captured -> composite both sides onto A4
+                                        String backPath = CacheManager.saveTempBitmap(
+                                                CameraActivity.this, cardBitmap, "id_back_" + System.currentTimeMillis());
+                                        cardBitmap.recycle();
+
+                                        runOnUiThread(() ->
+                                                Toast.makeText(CameraActivity.this, R.string.id_card_compositing, Toast.LENGTH_SHORT).show());
+
+                                        Bitmap frontBmp = BitmapFactory.decodeFile(idFrontTempPath);
+                                        Bitmap backBmp = BitmapFactory.decodeFile(backPath);
+                                        Bitmap composite = ImageProcessor.compositeIdCard(frontBmp, backBmp);
+
+                                        String compositePath = CacheManager.saveTempBitmap(
+                                                CameraActivity.this, composite, "id_composite_" + System.currentTimeMillis());
+                                        composite.recycle();
+
+                                        runOnUiThread(() -> {
+                                            resetIdCardToStep1();
+                                            routeIdComposite(compositePath);
+                                        });
+                                    }
+
+                                } else {
+                                    // Default Document Mode (Single Page)
+                                    Point[] mappedCorners = null;
+                                    if (captureCorners != null) {
+                                        mappedCorners = binding.overlayView.getCornersForCapture(
+                                                bitmap.getWidth(), bitmap.getHeight());
+                                    }
+
+                                    String path = CacheManager.saveTempBitmap(
+                                            CameraActivity.this, bitmap, UUID.randomUUID().toString());
+                                    bitmap.recycle();
+
+                                    launchCropPreview(path, mappedCorners);
                                 }
 
-                                String path = CacheManager.saveTempBitmap(
-                                        CameraActivity.this, bitmap, UUID.randomUUID().toString());
-                                bitmap.recycle();
-
-                                launchCropPreview(path, mappedCorners);
                             } finally {
                                 imageProxy.close();
                             }

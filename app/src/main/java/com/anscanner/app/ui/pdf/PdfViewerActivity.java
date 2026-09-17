@@ -37,6 +37,7 @@ import com.anscanner.app.databinding.ActivityPdfViewerBinding;
 import com.anscanner.app.service.CacheManager;
 import com.anscanner.app.service.OcrHelper;
 import com.anscanner.app.ui.crop.CropPreviewActivity;
+import com.google.android.gms.ads.AdRequest;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.mlkit.vision.text.Text;
 
@@ -61,7 +62,6 @@ import java.util.UUID;
  *   <li>On-image Google Lens OCR overlay.</li>
  *   <li>Flattened vector signature/drawing annotation engine with in-place document overwrite.</li>
  *   <li>Native system printing via {@link PrintManager} or {@link PrintHelper}.</li>
- *   <li>In-viewer page editing via routing back into {@link CropPreviewActivity}.</li>
  * </ul>
  * </p>
  */
@@ -98,6 +98,7 @@ public class PdfViewerActivity extends AppCompatActivity {
 
         setupToolbar();
         setupAnnotationControls();
+        setupAds();
         loadPdfDocument();
     }
 
@@ -273,10 +274,107 @@ public class PdfViewerActivity extends AppCompatActivity {
 
             binding.pbLoading.setVisibility(View.GONE);
 
+        } catch (SecurityException se) {
+            Log.w(TAG, "PDF is password protected", se);
+            binding.pbLoading.setVisibility(View.GONE);
+            promptPdfPassword();
         } catch (Exception e) {
-            Log.e(TAG, "Error opening PDF", e);
-            showError();
+            if (e.getMessage() != null && e.getMessage().toLowerCase().contains("password")) {
+                binding.pbLoading.setVisibility(View.GONE);
+                promptPdfPassword();
+            } else {
+                Log.e(TAG, "Error opening PDF", e);
+                showError();
+            }
         }
+    }
+
+    private void promptPdfPassword() {
+        if (isFinishing() || isDestroyed()) return;
+
+        android.widget.FrameLayout container = new android.widget.FrameLayout(this);
+        int padding = (int) (20 * getResources().getDisplayMetrics().density);
+        container.setPadding(padding, padding / 2, padding, 0);
+
+        com.google.android.material.textfield.TextInputLayout til = new com.google.android.material.textfield.TextInputLayout(this);
+        til.setHint(getString(R.string.save_password_hint));
+        til.setEndIconMode(com.google.android.material.textfield.TextInputLayout.END_ICON_PASSWORD_TOGGLE);
+        til.setBoxBackgroundMode(com.google.android.material.textfield.TextInputLayout.BOX_BACKGROUND_OUTLINE);
+        til.setBoxStrokeColor(ContextCompat.getColor(this, R.color.accent_mint));
+        til.setDefaultHintTextColor(android.content.res.ColorStateList.valueOf(ContextCompat.getColor(this, R.color.text_secondary)));
+
+        com.google.android.material.textfield.TextInputEditText et = new com.google.android.material.textfield.TextInputEditText(this);
+        et.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        et.setTextColor(ContextCompat.getColor(this, R.color.text_primary));
+        et.setHintTextColor(ContextCompat.getColor(this, R.color.text_secondary));
+        til.addView(et);
+        container.addView(til);
+
+        new MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.pdf_password_protected_dialog_title)
+                .setMessage(R.string.pdf_password_dialog_prompt)
+                .setView(container)
+                .setCancelable(false)
+                .setPositiveButton(R.string.action_unlock, (dialog, which) -> {
+                    String password = et.getText() != null ? et.getText().toString().trim() : "";
+                    unlockAndOpenPdf(password);
+                })
+                .setNegativeButton(R.string.action_cancel, (dialog, which) -> finish())
+                .show();
+    }
+
+    private void unlockAndOpenPdf(String password) {
+        binding.pbLoading.setVisibility(View.VISIBLE);
+        new Thread(() -> {
+            File tempLocked = null;
+            try {
+                // Copy source PDF to temp cache file for PDFBox processing
+                tempLocked = new File(getCacheDir(), "temp_locked_" + System.currentTimeMillis() + ".pdf");
+                if (resolvedUri != null) {
+                    try (InputStream in = getContentResolver().openInputStream(resolvedUri);
+                         FileOutputStream out = new FileOutputStream(tempLocked)) {
+                        byte[] buf = new byte[8192];
+                        int len;
+                        while ((len = in.read(buf)) > 0) {
+                            out.write(buf, 0, len);
+                        }
+                    }
+                } else if (resolvedFile != null) {
+                    try (InputStream in = new FileInputStream(resolvedFile);
+                         FileOutputStream out = new FileOutputStream(tempLocked)) {
+                        byte[] buf = new byte[8192];
+                        int len;
+                        while ((len = in.read(buf)) > 0) {
+                            out.write(buf, 0, len);
+                        }
+                    }
+                }
+
+                com.tom_roush.pdfbox.android.PDFBoxResourceLoader.init(getApplicationContext());
+                try (com.tom_roush.pdfbox.pdmodel.PDDocument doc = com.tom_roush.pdfbox.pdmodel.PDDocument.load(tempLocked, password)) {
+                    doc.setAllSecurityToBeRemoved(true);
+                    File unlockedFile = new File(getCacheDir(), "unlocked_" + System.currentTimeMillis() + ".pdf");
+                    doc.save(unlockedFile);
+
+                    runOnUiThread(() -> {
+                        resolvedFile = unlockedFile;
+                        resolvedUri = Uri.fromFile(unlockedFile);
+                        loadPdfDocument();
+                    });
+                }
+            } catch (Exception e) {
+                Log.w(TAG, "Failed to decrypt PDF with password", e);
+                runOnUiThread(() -> {
+                    binding.pbLoading.setVisibility(View.GONE);
+                    Toast.makeText(this, R.string.pdf_wrong_password, Toast.LENGTH_SHORT).show();
+                    promptPdfPassword();
+                });
+            } finally {
+                if (tempLocked != null && tempLocked.exists()) {
+                    tempLocked.delete();
+                }
+            }
+        }).start();
     }
 
     private void loadImageDocument() {
@@ -309,6 +407,7 @@ public class PdfViewerActivity extends AppCompatActivity {
                     pageCount = 1;
 
                     binding.rvPdfPages.setVisibility(View.GONE);
+                    binding.photoView.setScale(1.0f, false);
                     binding.photoView.setImageBitmap(currentImageBitmap);
                     binding.photoView.setVisibility(View.VISIBLE);
                     binding.tvPageIndicator.setText("1 of 1");
@@ -745,8 +844,35 @@ public class PdfViewerActivity extends AppCompatActivity {
         return result != null ? result : "Document.pdf";
     }
 
+    private void setupAds() {
+        if (binding != null && binding.adView != null) {
+            AdRequest adRequest = new AdRequest.Builder().build();
+            binding.adView.loadAd(adRequest);
+        }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (binding != null && binding.adView != null) {
+            binding.adView.resume();
+        }
+    }
+
+    @Override
+    protected void onPause() {
+        if (binding != null && binding.adView != null) {
+            binding.adView.pause();
+        }
+        super.onPause();
+    }
+
     @Override
     protected void onDestroy() {
+        if (binding != null && binding.adView != null) {
+            binding.adView.destroy();
+        }
+
         super.onDestroy();
         cleanupPdfResources();
 
@@ -759,5 +885,7 @@ public class PdfViewerActivity extends AppCompatActivity {
             currentAnnotatedPageBitmap.recycle();
             currentAnnotatedPageBitmap = null;
         }
+
+        binding = null;
     }
 }
