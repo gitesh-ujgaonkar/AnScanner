@@ -41,41 +41,6 @@ public class CropPreviewActivity extends UnifiedEditorActivity {
     }
 
     public static ArrayList<String> extractAllPagesFromPdf(Context context, Uri pdfUri) {
-        ArrayList<String> paths = new ArrayList<>();
-        ParcelFileDescriptor pfd = null;
-        try {
-            if ("file".equalsIgnoreCase(pdfUri.getScheme()) && pdfUri.getPath() != null) {
-                pfd = ParcelFileDescriptor.open(new File(pdfUri.getPath()), ParcelFileDescriptor.MODE_READ_ONLY);
-            } else {
-                pfd = context.getContentResolver().openFileDescriptor(pdfUri, "r");
-            }
-            if (pfd != null) {
-                PdfRenderer renderer = new PdfRenderer(pfd);
-                int count = renderer.getPageCount();
-                for (int i = 0; i < count; i++) {
-                    PdfRenderer.Page page = renderer.openPage(i);
-                    int w = Math.min(1600, Math.max(page.getWidth() * 2, 720));
-                    int h = Math.round((float) w * page.getHeight() / Math.max(1, page.getWidth()));
-                    Bitmap bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
-                    page.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_PRINT);
-                    page.close();
-                    String path = CacheManager.saveTempBitmap(context, bmp, "page_" + i + "_" + UUID.randomUUID().toString());
-                    bmp.recycle();
-                    if (path != null) {
-                        paths.add(path);
-                    }
-                }
-                renderer.close();
-            }
-        } catch (Exception e) {
-            Log.e(TAG, "Error extracting all pages from PDF: " + pdfUri, e);
-        } finally {
-            if (pfd != null) {
-                try {
-                    pfd.close();
-                } catch (Exception ignored) {}
-            }
-        }
-        return paths;
+        return com.anscanner.app.util.PdfRendererHelper.extractAllPagesToTempFiles(context, pdfUri);
     }
 }

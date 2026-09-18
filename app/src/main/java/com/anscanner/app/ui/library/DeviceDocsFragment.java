@@ -650,8 +650,8 @@ public class DeviceDocsFragment extends Fragment implements DocumentListAdapter.
                     page = renderer.openPage(0);
                     int width = 160;
                     int height = Math.max(1, (int) (((float) page.getHeight() / page.getWidth()) * width));
-                    Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
-                    page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
+                    Bitmap bitmap = com.anscanner.app.util.PdfRendererHelper.renderPageWithWhiteBackground(
+                            page, width, height, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
 
                     try (FileOutputStream fos = new FileOutputStream(thumbFile)) {
                         bitmap.compress(Bitmap.CompressFormat.JPEG, 75, fos);

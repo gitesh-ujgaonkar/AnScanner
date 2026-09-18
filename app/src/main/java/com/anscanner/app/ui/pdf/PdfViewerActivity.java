@@ -18,18 +18,24 @@ import android.os.ParcelFileDescriptor;
 import android.print.PrintAttributes;
 import android.print.PrintManager;
 import android.provider.OpenableColumns;
+import android.content.SharedPreferences;
 import android.util.Log;
+import android.view.Menu;
+import android.view.MenuItem;
 import android.view.View;
+import android.view.WindowManager;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.activity.OnBackPressedCallback;
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
 import androidx.print.PrintHelper;
 import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.PagerSnapHelper;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.anscanner.app.R;
@@ -38,7 +44,9 @@ import com.anscanner.app.service.CacheManager;
 import com.anscanner.app.service.OcrHelper;
 import com.anscanner.app.ui.crop.CropPreviewActivity;
 import com.anscanner.app.ui.crop.EditPdfActivity;
+import com.anscanner.app.ui.custom.OcrTextOverlayView;
 import com.anscanner.app.ui.editor.UnifiedEditorActivity;
+import com.anscanner.app.util.PdfRendererHelper;
 import com.google.android.gms.ads.AdRequest;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.mlkit.vision.text.Text;
@@ -59,16 +67,16 @@ import java.util.UUID;
  * <p>Supports:
  * <ul>
  *   <li>System-wide "Open With" handling via {@link Intent#ACTION_VIEW} for PDFs and Images.</li>
+ *   <li>Kindle-style reading mode with themes (Light/Sepia/Dark/Night) and page margins.</li>
+ *   <li>Interactive in-place OCR text overlay with direct word selection & copy bar.</li>
  *   <li>Native {@link com.github.chrisbanes.photoview.PhotoView} pinch-to-zoom for JPG scans.</li>
  *   <li>High-performance continuous vertical page scrolling for multi-page PDFs with {@link PdfRenderer}.</li>
- *   <li>Multi-page ML Kit OCR text extraction loop with ProgressDialog and full text export.</li>
- *   <li>On-image Google Lens OCR overlay.</li>
  *   <li>Flattened vector signature/drawing annotation engine with in-place document overwrite.</li>
  *   <li>Native system printing via {@link PrintManager} or {@link PrintHelper}.</li>
  * </ul>
  * </p>
  */
-public class PdfViewerActivity extends AppCompatActivity {
+public class PdfViewerActivity extends AppCompatActivity implements ReadingModeBottomSheet.OnReadingSettingsChangedListener {
 
     private static final String TAG = "PdfViewerActivity";
 
@@ -81,6 +89,7 @@ public class PdfViewerActivity extends AppCompatActivity {
     private PdfRenderer pdfRenderer;
     private PdfPageAdapter pageAdapter;
     private LinearLayoutManager layoutManager;
+    private PagerSnapHelper pagerSnapHelper;
 
     private Uri resolvedUri;
     private File resolvedFile;
@@ -93,6 +102,10 @@ public class PdfViewerActivity extends AppCompatActivity {
     private int currentAnnotatedPageIndex = 0;
     private boolean isAnnotationMode = false;
 
+    // In-place interactive OCR state
+    private int currentOcrPageIndex = 0;
+    private Bitmap currentOcrBitmap;
+
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -100,6 +113,7 @@ public class PdfViewerActivity extends AppCompatActivity {
         setContentView(binding.getRoot());
 
         setupToolbar();
+        setupOcrControls();
         setupAnnotationControls();
         setupAds();
         loadPdfDocument();
@@ -108,6 +122,7 @@ public class PdfViewerActivity extends AppCompatActivity {
     private void setupToolbar() {
         binding.btnBack.setOnClickListener(v -> finish());
         binding.btnPrint.setOnClickListener(v -> printDocument());
+        binding.btnReadingMode.setOnClickListener(v -> enableKindleReadingMode());
         binding.btnExtractText.setOnClickListener(v -> onExtractTextClicked());
         binding.btnAnnotate.setOnClickListener(v -> toggleAnnotationMode());
         binding.btnEdit.setOnClickListener(v -> editCurrentPage());
@@ -115,7 +130,9 @@ public class PdfViewerActivity extends AppCompatActivity {
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override
             public void handleOnBackPressed() {
-                if (isAnnotationMode) {
+                if (isOcrActive()) {
+                    dismissOcrOverlay();
+                } else if (isAnnotationMode) {
                     exitAnnotationMode();
                 } else if (binding.lensOverlay.getVisibility() == View.VISIBLE) {
                     dismissLensOverlay();
@@ -256,6 +273,8 @@ public class PdfViewerActivity extends AppCompatActivity {
 
             pageAdapter = new PdfPageAdapter(pdfRenderer);
             binding.rvPdfPages.setAdapter(pageAdapter);
+            pageAdapter.setOnPageClickListener(position -> toggleImmersiveReadingMode());
+            loadInitialReadingPreferences();
 
             updatePageIndicator(1);
 
@@ -265,6 +284,9 @@ public class PdfViewerActivity extends AppCompatActivity {
                     super.onScrolled(recyclerView, dx, dy);
                     if (dy != 0 || dx != 0) {
                         dismissLensOverlay();
+                        if (isOcrActive()) {
+                            dismissOcrOverlay();
+                        }
                     }
                     if (layoutManager != null) {
                         int firstVisible = layoutManager.findFirstVisibleItemPosition();
@@ -528,96 +550,352 @@ public class PdfViewerActivity extends AppCompatActivity {
         }
     }
 
-    // ── OCR Text Extraction (Multi-Page & Lens) ──────────────────────────
+    // ── Interactive In-Place OCR Text Overlay (No Popups/Dialogs) ────────
 
-    private void onExtractTextClicked() {
-        if (binding.lensOverlay.getVisibility() == View.VISIBLE) {
-            dismissLensOverlay();
-            return;
+    private void setupOcrControls() {
+        binding.btnCloseOcr.setOnClickListener(v -> dismissOcrOverlay());
+
+        binding.btnCopySelected.setOnClickListener(v -> {
+            String selected = binding.ocrOverlay.getSelectedText();
+            if (selected != null && !selected.trim().isEmpty()) {
+                copyTextToClipboard(selected.trim());
+                Toast.makeText(this, R.string.ocr_copied, Toast.LENGTH_SHORT).show();
+            } else {
+                Toast.makeText(this, R.string.ocr_nothing_selected, Toast.LENGTH_SHORT).show();
+            }
+        });
+
+        binding.btnCopyAllText.setOnClickListener(v -> {
+            String allText = binding.ocrOverlay.getAllText();
+            if (!allText.isEmpty()) {
+                copyTextToClipboard(allText);
+                Toast.makeText(this, R.string.ocr_copied, Toast.LENGTH_SHORT).show();
+            } else {
+                Toast.makeText(this, R.string.ocr_empty, Toast.LENGTH_SHORT).show();
+            }
+        });
+
+        binding.ocrOverlay.setOnTextSelectedListener(new OcrTextOverlayView.OnTextSelectedListener() {
+            @Override
+            public void onBlockSelected(@NonNull Text.TextBlock block, @NonNull String text) {
+                binding.btnCopySelected.setEnabled(true);
+                binding.btnCopySelected.setAlpha(1.0f);
+            }
+
+            @Override
+            public void onSelectionCleared() {
+                // Keep buttons accessible
+            }
+        });
+    }
+
+    private boolean isOcrActive() {
+        return binding.ocrOverlay.getVisibility() == View.VISIBLE || binding.layoutOcrBar.getVisibility() == View.VISIBLE;
+    }
+
+    private void dismissOcrOverlay() {
+        binding.ocrOverlay.clear();
+        binding.ocrOverlay.setVisibility(View.GONE);
+        binding.layoutOcrBar.setVisibility(View.GONE);
+
+        if (currentOcrBitmap != null) {
+            if (!currentOcrBitmap.isRecycled() && currentOcrBitmap != currentImageBitmap) {
+                currentOcrBitmap.recycle();
+            }
+            currentOcrBitmap = null;
         }
 
         if (pdfRenderer != null) {
-            // Multi-Page PDF OCR extraction using OcrHelper
-            OcrHelper.extractTextFromPdf(this, pdfRenderer, new OcrHelper.MultiPageOcrCallback() {
-                @Override
-                public void onSuccess(String fullText) {
-                    if (isFinishing() || isDestroyed()) return;
-                    if (fullText == null || fullText.trim().isEmpty()) {
-                        Toast.makeText(PdfViewerActivity.this, R.string.ocr_no_text, Toast.LENGTH_SHORT).show();
-                        return;
-                    }
-                    showExtractedTextResult(fullText);
-                }
-
-                @Override
-                public void onError(Exception e) {
-                    if (isFinishing() || isDestroyed()) return;
-                    Log.e(TAG, "Multi-page OCR extraction failed", e);
-                    Toast.makeText(PdfViewerActivity.this, R.string.ocr_error, Toast.LENGTH_SHORT).show();
-                }
-            });
-
-        } else if (currentImageBitmap != null) {
-            // Interactive Lens OCR overlay for single image
-            binding.pbLoading.setVisibility(View.VISIBLE);
-            OcrHelper.extractText(currentImageBitmap, this, new OcrHelper.OcrCallback() {
-                @Override
-                public void onSuccess(Text visionText) {
-                    binding.pbLoading.setVisibility(View.GONE);
-                    if (isFinishing() || isDestroyed()) return;
-
-                    if (visionText == null || visionText.getTextBlocks().isEmpty()) {
-                        Toast.makeText(PdfViewerActivity.this, R.string.ocr_empty, Toast.LENGTH_SHORT).show();
-                        return;
-                    }
-
-                    RectF displayRect = binding.photoView.getDisplayRect();
-                    binding.lensOverlay.setTargetRect(displayRect);
-                    binding.lensOverlay.setVisionText(visionText, currentImageBitmap.getWidth(), currentImageBitmap.getHeight());
-                    binding.lensOverlay.setVisibility(View.VISIBLE);
-                    Toast.makeText(PdfViewerActivity.this, R.string.ocr_lens_hint, Toast.LENGTH_SHORT).show();
-                }
-
-                @Override
-                public void onError(Exception e) {
-                    binding.pbLoading.setVisibility(View.GONE);
-                    if (isFinishing() || isDestroyed()) return;
-                    Toast.makeText(PdfViewerActivity.this, R.string.ocr_error, Toast.LENGTH_SHORT).show();
-                }
-            });
+            binding.photoView.setImageBitmap(null);
+            binding.photoView.setVisibility(View.GONE);
+            binding.rvPdfPages.setVisibility(View.VISIBLE);
+            if (layoutManager != null && currentOcrPageIndex >= 0 && currentOcrPageIndex < pageCount) {
+                layoutManager.scrollToPositionWithOffset(currentOcrPageIndex, 0);
+                updatePageIndicator(currentOcrPageIndex + 1);
+            }
         }
     }
 
-    private void showExtractedTextResult(String text) {
-        ScrollView scrollView = new ScrollView(this);
-        TextView tv = new TextView(this);
-        tv.setText(text);
-        tv.setTextIsSelectable(true);
-        tv.setTextColor(ContextCompat.getColor(this, R.color.text_primary));
-        tv.setTextSize(14f);
-        int pad = (int) (16 * getResources().getDisplayMetrics().density);
-        tv.setPadding(pad, pad, pad, pad);
-        scrollView.addView(tv);
+    private void onExtractTextClicked() {
+        if (isOcrActive()) {
+            dismissOcrOverlay();
+            return;
+        }
+        if (isAnnotationMode) {
+            exitAnnotationMode();
+        }
 
-        new MaterialAlertDialogBuilder(this)
-                .setTitle(R.string.ocr_dialog_title)
-                .setView(scrollView)
-                .setPositiveButton(R.string.ocr_dialog_copy, (dialog, which) -> {
-                    ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
-                    if (cm != null) {
-                        cm.setPrimaryClip(ClipData.newPlainText("Extracted Text", text));
-                        Toast.makeText(this, R.string.ocr_copied, Toast.LENGTH_SHORT).show();
-                    }
-                })
-                .setNeutralButton(R.string.ocr_dialog_share, (dialog, which) -> {
-                    Intent shareIntent = new Intent(Intent.ACTION_SEND);
-                    shareIntent.setType("text/plain");
-                    shareIntent.putExtra(Intent.EXTRA_TEXT, text);
-                    startActivity(Intent.createChooser(shareIntent, "Share Extracted Text"));
-                })
-                .setNegativeButton(R.string.action_close, null)
-                .show();
+        if (pdfRenderer != null) {
+            int currentPos = 0;
+            if (layoutManager != null) {
+                currentPos = layoutManager.findFirstVisibleItemPosition();
+                if (currentPos < 0) currentPos = 0;
+            }
+            currentOcrPageIndex = currentPos;
+            extractTextFromPdfPage(currentPos);
+        } else if (currentImageBitmap != null) {
+            extractTextFromImage(currentImageBitmap);
+        }
     }
+
+    private void extractTextFromPdfPage(int pageIndex) {
+        binding.pbLoading.setVisibility(View.VISIBLE);
+
+        new Thread(() -> {
+            Bitmap pageBitmap = null;
+            try {
+                synchronized (pdfRenderer) {
+                    if (pageIndex < 0 || pageIndex >= pdfRenderer.getPageCount()) {
+                        runOnUiThread(() -> {
+                            binding.pbLoading.setVisibility(View.GONE);
+                            Toast.makeText(PdfViewerActivity.this, R.string.ocr_error, Toast.LENGTH_SHORT).show();
+                        });
+                        return;
+                    }
+
+                    PdfRenderer.Page page = pdfRenderer.openPage(pageIndex);
+                    try {
+                        int w = Math.min(1600, Math.max(page.getWidth() * 2, 720));
+                        int h = Math.round((float) w * page.getHeight() / Math.max(1, page.getWidth()));
+                        pageBitmap = PdfRendererHelper.renderPageWithWhiteBackground(page, w, h, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
+                    } finally {
+                        page.close();
+                    }
+                }
+
+                final Bitmap finalBitmap = pageBitmap;
+                runOnUiThread(() -> {
+                    if (isFinishing() || isDestroyed()) {
+                        if (finalBitmap != null) finalBitmap.recycle();
+                        return;
+                    }
+                    processOcrBitmap(finalBitmap);
+                });
+
+            } catch (Exception e) {
+                Log.e(TAG, "Error rendering page for OCR", e);
+                runOnUiThread(() -> {
+                    binding.pbLoading.setVisibility(View.GONE);
+                    Toast.makeText(PdfViewerActivity.this, R.string.ocr_error, Toast.LENGTH_SHORT).show();
+                });
+            }
+        }).start();
+    }
+
+    private void extractTextFromImage(Bitmap imageBitmap) {
+        binding.pbLoading.setVisibility(View.VISIBLE);
+        processOcrBitmap(imageBitmap);
+    }
+
+    private void processOcrBitmap(Bitmap bitmap) {
+        if (bitmap == null) {
+            binding.pbLoading.setVisibility(View.GONE);
+            Toast.makeText(this, R.string.ocr_error, Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        currentOcrBitmap = bitmap;
+
+        OcrHelper.extractText(bitmap, this, new OcrHelper.OcrCallback() {
+            @Override
+            public void onSuccess(Text visionText) {
+                binding.pbLoading.setVisibility(View.GONE);
+                if (isFinishing() || isDestroyed()) return;
+
+                if (visionText == null || visionText.getTextBlocks().isEmpty()) {
+                    Toast.makeText(PdfViewerActivity.this, R.string.ocr_empty, Toast.LENGTH_SHORT).show();
+                    dismissOcrOverlay();
+                    return;
+                }
+
+                // Render interactive overlay directly on top of the page bitmap
+                if (pdfRenderer != null) {
+                    binding.rvPdfPages.setVisibility(View.GONE);
+                    binding.photoView.setVisibility(View.VISIBLE);
+                    binding.photoView.setScale(1.0f, false);
+                    binding.photoView.setImageBitmap(bitmap);
+                }
+
+                binding.photoView.post(() -> {
+                    if (isFinishing() || isDestroyed()) return;
+                    RectF displayRect = binding.photoView.getDisplayRect();
+                    binding.ocrOverlay.setTargetRect(displayRect);
+                    binding.ocrOverlay.setVisionText(visionText, bitmap.getWidth(), bitmap.getHeight());
+                    binding.ocrOverlay.setVisibility(View.VISIBLE);
+                    binding.layoutOcrBar.setVisibility(View.VISIBLE);
+                    Toast.makeText(PdfViewerActivity.this, R.string.ocr_lens_hint, Toast.LENGTH_SHORT).show();
+                });
+            }
+
+            @Override
+            public void onError(Exception e) {
+                binding.pbLoading.setVisibility(View.GONE);
+                if (isFinishing() || isDestroyed()) return;
+                Log.e(TAG, "OCR recognition error", e);
+                Toast.makeText(PdfViewerActivity.this, R.string.ocr_error, Toast.LENGTH_SHORT).show();
+                dismissOcrOverlay();
+            }
+        });
+    }
+
+    private void copyTextToClipboard(String text) {
+        ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+        if (cm != null) {
+            cm.setPrimaryClip(ClipData.newPlainText("Extracted Text", text));
+        }
+    }
+
+    // ── Kindle-Style Reading Mode ────────────────────────────────────────
+
+    public void enableKindleReadingMode() {
+        ReadingModeBottomSheet sheet = ReadingModeBottomSheet.newInstance();
+        sheet.setOnReadingSettingsChangedListener(this);
+        sheet.show(getSupportFragmentManager(), ReadingModeBottomSheet.TAG);
+    }
+
+    @Override
+    public void onThemeChanged(@NonNull PdfPageAdapter.ReadingTheme theme) {
+        if (pageAdapter != null) {
+            pageAdapter.setReadingTheme(theme);
+        }
+        applyContainerTheme(theme);
+    }
+
+    @Override
+    public void onMarginChanged(@NonNull PdfPageAdapter.ReadingMargin margin) {
+        if (pageAdapter != null) {
+            pageAdapter.setReadingMargin(margin);
+        }
+    }
+
+    @Override
+    public void onPageSnapChanged(boolean snapEnabled) {
+        applyPageSnap(snapEnabled);
+    }
+
+    @Override
+    public void onKeepAwakeChanged(boolean keepAwakeEnabled) {
+        applyKeepAwake(keepAwakeEnabled);
+    }
+
+    private void applyContainerTheme(PdfPageAdapter.ReadingTheme theme) {
+        int bgColor;
+        switch (theme) {
+            case SEPIA:
+                bgColor = Color.parseColor("#FFFBF0D9");
+                break;
+            case DARK:
+                bgColor = Color.parseColor("#FF1E1E1E");
+                break;
+            case NIGHT:
+                bgColor = Color.BLACK;
+                break;
+            case LIGHT:
+            default:
+                bgColor = ContextCompat.getColor(this, R.color.background_primary);
+                break;
+        }
+        binding.flPdfContainer.setBackgroundColor(bgColor);
+        binding.rvPdfPages.setBackgroundColor(bgColor);
+    }
+
+    private void applyPageSnap(boolean snapEnabled) {
+        if (snapEnabled) {
+            if (pagerSnapHelper == null) {
+                pagerSnapHelper = new PagerSnapHelper();
+            }
+            try {
+                pagerSnapHelper.attachToRecyclerView(binding.rvPdfPages);
+            } catch (IllegalStateException ignored) {
+                // Already attached
+            }
+        } else {
+            if (pagerSnapHelper != null) {
+                try {
+                    pagerSnapHelper.attachToRecyclerView(null);
+                } catch (Exception ignored) {}
+            }
+        }
+    }
+
+    private void applyKeepAwake(boolean keepAwakeEnabled) {
+        if (keepAwakeEnabled) {
+            getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        } else {
+            getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        }
+    }
+
+    private void loadInitialReadingPreferences() {
+        SharedPreferences prefs = getSharedPreferences("anscanner_reading_settings", MODE_PRIVATE);
+        String themeStr = prefs.getString(ReadingModeBottomSheet.PREF_THEME, PdfPageAdapter.ReadingTheme.LIGHT.name());
+        PdfPageAdapter.ReadingTheme theme;
+        try {
+            theme = PdfPageAdapter.ReadingTheme.valueOf(themeStr);
+        } catch (Exception e) {
+            theme = PdfPageAdapter.ReadingTheme.LIGHT;
+        }
+        applyContainerTheme(theme);
+        if (pageAdapter != null) {
+            pageAdapter.setReadingTheme(theme);
+        }
+
+        String marginStr = prefs.getString(ReadingModeBottomSheet.PREF_MARGIN, PdfPageAdapter.ReadingMargin.NORMAL.name());
+        PdfPageAdapter.ReadingMargin margin;
+        try {
+            margin = PdfPageAdapter.ReadingMargin.valueOf(marginStr);
+        } catch (Exception e) {
+            margin = PdfPageAdapter.ReadingMargin.NORMAL;
+        }
+        if (pageAdapter != null) {
+            pageAdapter.setReadingMargin(margin);
+        }
+
+        boolean snap = prefs.getBoolean(ReadingModeBottomSheet.PREF_PAGE_SNAP, false);
+        applyPageSnap(snap);
+
+        boolean keepAwake = prefs.getBoolean(ReadingModeBottomSheet.PREF_KEEP_AWAKE, false);
+        applyKeepAwake(keepAwake);
+    }
+
+    private void toggleImmersiveReadingMode() {
+        if (isAnnotationMode || isOcrActive()) return;
+        boolean isVisible = binding.topBar.getVisibility() == View.VISIBLE;
+        binding.topBar.setVisibility(isVisible ? View.GONE : View.VISIBLE);
+        binding.topBarDivider.setVisibility(isVisible ? View.GONE : View.VISIBLE);
+        if (binding.adView != null) {
+            binding.adView.setVisibility(isVisible ? View.GONE : View.VISIBLE);
+        }
+    }
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        getMenuInflater().inflate(R.menu.menu_pdf_viewer, menu);
+        return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(@NonNull MenuItem item) {
+        int id = item.getItemId();
+        if (id == R.id.action_reading_mode) {
+            enableKindleReadingMode();
+            return true;
+        } else if (id == R.id.action_ocr) {
+            onExtractTextClicked();
+            return true;
+        } else if (id == R.id.action_annotate) {
+            toggleAnnotationMode();
+            return true;
+        } else if (id == R.id.action_edit) {
+            editCurrentPage();
+            return true;
+        } else if (id == R.id.action_print) {
+            printDocument();
+            return true;
+        }
+        return super.onOptionsItemSelected(item);
+    }
+
 
     // ── Flattened Annotation Engine (Sign/Draw) ──────────────────────────
 
@@ -728,9 +1006,9 @@ public class PdfViewerActivity extends AppCompatActivity {
                         PdfDocument.Page newPage = newPdf.startPage(pageInfo);
                         Canvas canvas = newPage.getCanvas();
 
-                        // Render original page to temporary bitmap
-                        Bitmap pageBitmap = Bitmap.createBitmap(pWidth, pHeight, Bitmap.Config.ARGB_8888);
-                        origPage.render(pageBitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
+                        // Render original page to temporary bitmap with opaque white background
+                        Bitmap pageBitmap = com.anscanner.app.util.PdfRendererHelper.renderPageWithWhiteBackground(
+                                origPage, pWidth, pHeight, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
                         canvas.drawBitmap(pageBitmap, 0, 0, null);
                         pageBitmap.recycle();
                         origPage.close();
@@ -910,6 +1188,12 @@ public class PdfViewerActivity extends AppCompatActivity {
             currentAnnotatedPageBitmap = null;
         }
 
+        if (currentOcrBitmap != null && !currentOcrBitmap.isRecycled() && currentOcrBitmap != currentImageBitmap) {
+            currentOcrBitmap.recycle();
+            currentOcrBitmap = null;
+        }
+
         binding = null;
+
     }
 }

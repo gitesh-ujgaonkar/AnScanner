@@ -2,6 +2,8 @@ package com.anscanner.app.ui.pdf;
 
 import android.graphics.Bitmap;
 import android.graphics.Color;
+import android.graphics.ColorMatrix;
+import android.graphics.ColorMatrixColorFilter;
 import android.graphics.pdf.PdfRenderer;
 import android.os.Handler;
 import android.os.Looper;
@@ -11,9 +13,13 @@ import android.view.View;
 import android.view.ViewGroup;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.anscanner.app.R;
 import com.anscanner.app.databinding.ItemPdfPageBinding;
+import com.anscanner.app.util.PdfRendererHelper;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -21,27 +27,87 @@ import java.util.concurrent.Executors;
 /**
  * RecyclerView adapter for rendering PDF pages using Android's native {@link PdfRenderer}.
  *
- * <p><strong>Memory & Concurrency Contract:</strong></p>
+ * <p>Supports:
  * <ul>
- *   <li>All {@link PdfRenderer} access is synchronized on the renderer instance.</li>
- *   <li>Page decoding happens on a background executor.</li>
- *   <li>Bitmaps are recycled immediately when a view is recycled in {@link #onViewRecycled(ViewHolder)}.</li>
+ *   <li>Guaranteed opaque white background fill before rendering via {@link PdfRendererHelper}.</li>
+ *   <li>Kindle-style reading themes (Light, Sepia warm paper, Charcoal Dark, and OLED Inverted Night).</li>
+ *   <li>Dynamic page margin adjustment (Compact, Normal, Wide).</li>
+ *   <li>Single-tap callbacks for immersive fullscreen reading toggle.</li>
+ *   <li>Pinch-to-zoom support up to 5x with automatic bitmap lifecycle management.</li>
  * </ul>
+ * </p>
  */
 public class PdfPageAdapter extends RecyclerView.Adapter<PdfPageAdapter.ViewHolder> {
 
     private static final String TAG = "PdfPageAdapter";
+
+    public enum ReadingTheme {
+        LIGHT,
+        SEPIA,
+        DARK,
+        NIGHT
+    }
+
+    public enum ReadingMargin {
+        COMPACT(4),
+        NORMAL(16),
+        WIDE(32);
+
+        public final int marginDp;
+        ReadingMargin(int dp) { this.marginDp = dp; }
+    }
+
+    public interface OnPageClickListener {
+        void onPageClick(int position);
+    }
+
+    public interface OnPageRenderedListener {
+        void onPageRendered(Bitmap bitmap);
+        void onRenderFailed(Exception e);
+    }
 
     private final PdfRenderer pdfRenderer;
     private final int pageCount;
     private final ExecutorService renderExecutor = Executors.newSingleThreadExecutor();
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
+    private ReadingTheme currentTheme = ReadingTheme.LIGHT;
+    private ReadingMargin currentMargin = ReadingMargin.NORMAL;
+    private OnPageClickListener pageClickListener;
+
     public PdfPageAdapter(@NonNull PdfRenderer pdfRenderer) {
         this.pdfRenderer = pdfRenderer;
         synchronized (this.pdfRenderer) {
             this.pageCount = this.pdfRenderer.getPageCount();
         }
+    }
+
+    public void setReadingTheme(@NonNull ReadingTheme theme) {
+        if (this.currentTheme != theme) {
+            this.currentTheme = theme;
+            notifyDataSetChanged();
+        }
+    }
+
+    @NonNull
+    public ReadingTheme getReadingTheme() {
+        return currentTheme;
+    }
+
+    public void setReadingMargin(@NonNull ReadingMargin margin) {
+        if (this.currentMargin != margin) {
+            this.currentMargin = margin;
+            notifyDataSetChanged();
+        }
+    }
+
+    @NonNull
+    public ReadingMargin getReadingMargin() {
+        return currentMargin;
+    }
+
+    public void setOnPageClickListener(@Nullable OnPageClickListener listener) {
+        this.pageClickListener = listener;
     }
 
     @NonNull
@@ -69,8 +135,7 @@ public class PdfPageAdapter extends RecyclerView.Adapter<PdfPageAdapter.ViewHold
     }
 
     /**
-     * Renders a specific page at high resolution on a background thread.
-     * Used by the "Edit" action to extract the current page into the crop pipeline.
+     * Renders a specific page at high resolution on a background thread with guaranteed opaque white background.
      */
     public void renderPageHighRes(int pageIndex, int targetWidth, OnPageRenderedListener listener) {
         if (pageIndex < 0 || pageIndex >= pageCount) {
@@ -83,17 +148,18 @@ public class PdfPageAdapter extends RecyclerView.Adapter<PdfPageAdapter.ViewHold
             try {
                 synchronized (pdfRenderer) {
                     PdfRenderer.Page page = pdfRenderer.openPage(pageIndex);
-                    int pageWidth = page.getWidth();
-                    int pageHeight = page.getHeight();
+                    try {
+                        int pageWidth = page.getWidth();
+                        int pageHeight = page.getHeight();
 
-                    int renderWidth = targetWidth > 0 ? targetWidth : pageWidth * 2;
-                    int renderHeight = (int) ((float) renderWidth / pageWidth * pageHeight);
+                        int renderWidth = targetWidth > 0 ? targetWidth : pageWidth * 2;
+                        int renderHeight = (int) ((float) renderWidth / pageWidth * pageHeight);
 
-                    pageBitmap = Bitmap.createBitmap(renderWidth, renderHeight, Bitmap.Config.ARGB_8888);
-                    pageBitmap.eraseColor(Color.WHITE);
-
-                    page.render(pageBitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
-                    page.close();
+                        pageBitmap = PdfRendererHelper.renderPageWithWhiteBackground(
+                                page, renderWidth, renderHeight, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
+                    } finally {
+                        page.close();
+                    }
                 }
 
                 final Bitmap resultBitmap = pageBitmap;
@@ -107,11 +173,6 @@ public class PdfPageAdapter extends RecyclerView.Adapter<PdfPageAdapter.ViewHold
                 mainHandler.post(() -> listener.onRenderFailed(e));
             }
         });
-    }
-
-    public interface OnPageRenderedListener {
-        void onPageRendered(Bitmap bitmap);
-        void onRenderFailed(Exception e);
     }
 
     public void cleanup() {
@@ -131,11 +192,31 @@ public class PdfPageAdapter extends RecyclerView.Adapter<PdfPageAdapter.ViewHold
             this.binding.ivPdfPage.setMinimumScale(1.0f);
             this.binding.ivPdfPage.setMediumScale(2.5f);
             this.binding.ivPdfPage.setMaximumScale(5.0f);
+
+            this.binding.ivPdfPage.setOnClickListener(v -> {
+                int pos = getAdapterPosition();
+                if (pos != RecyclerView.NO_POSITION && pageClickListener != null) {
+                    pageClickListener.onPageClick(pos);
+                }
+            });
         }
 
         void bind(int position) {
             this.boundPosition = position;
             recycleCurrentBitmap();
+
+            // 1. Dynamic margins
+            ViewGroup.MarginLayoutParams lp = (ViewGroup.MarginLayoutParams) binding.getRoot().getLayoutParams();
+            if (lp != null) {
+                float density = binding.getRoot().getResources().getDisplayMetrics().density;
+                int hMargin = (int) (currentMargin.marginDp * density);
+                int vMargin = (int) (8 * density);
+                lp.setMargins(hMargin, vMargin, hMargin, vMargin);
+                binding.getRoot().setLayoutParams(lp);
+            }
+
+            // 2. Reading theme card & filter styling
+            applyReadingThemeStyling();
 
             binding.ivPdfPage.setScale(1.0f, false);
             binding.ivPdfPage.setImageBitmap(null);
@@ -148,17 +229,16 @@ public class PdfPageAdapter extends RecyclerView.Adapter<PdfPageAdapter.ViewHold
                     synchronized (pdfRenderer) {
                         if (position >= pdfRenderer.getPageCount()) return;
                         PdfRenderer.Page page = pdfRenderer.openPage(position);
+                        try {
+                            int displayWidth = binding.getRoot().getContext().getResources().getDisplayMetrics().widthPixels;
+                            int targetWidth = Math.min(Math.max((int) ((displayWidth - 64) * 1.5f), 600), 2000);
+                            int targetHeight = (int) ((float) targetWidth / page.getWidth() * page.getHeight());
 
-                        int displayWidth = binding.getRoot().getContext().getResources().getDisplayMetrics().widthPixels;
-                        // Render at 1.5x width (~1200-1800px) so pinch-to-zoom is crisp and legible up to 5x
-                        int targetWidth = Math.min(Math.max((int) ((displayWidth - 64) * 1.5f), 600), 2000);
-                        int targetHeight = (int) ((float) targetWidth / page.getWidth() * page.getHeight());
-
-                        rendered = Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888);
-                        rendered.eraseColor(Color.WHITE);
-
-                        page.render(rendered, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
-                        page.close();
+                            rendered = PdfRendererHelper.renderPageWithWhiteBackground(
+                                    page, targetWidth, targetHeight, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
+                        } finally {
+                            page.close();
+                        }
                     }
 
                     final Bitmap finalBitmap = rendered;
@@ -170,7 +250,6 @@ public class PdfPageAdapter extends RecyclerView.Adapter<PdfPageAdapter.ViewHold
                             binding.ivPdfPage.setImageBitmap(finalBitmap);
                             binding.pbPageLoading.setVisibility(View.GONE);
                         } else {
-                            // View was recycled for another position in the meantime
                             if (finalBitmap != null && !finalBitmap.isRecycled()) {
                                 finalBitmap.recycle();
                             }
@@ -189,6 +268,56 @@ public class PdfPageAdapter extends RecyclerView.Adapter<PdfPageAdapter.ViewHold
                     });
                 }
             });
+        }
+
+        private void applyReadingThemeStyling() {
+            switch (currentTheme) {
+                case SEPIA:
+                    binding.getRoot().setCardBackgroundColor(Color.parseColor("#FFF4ECD8"));
+                    binding.getRoot().setStrokeColor(Color.parseColor("#FFE0D4B8"));
+                    // Warm sepia matrix warming whites to parchment
+                    ColorMatrix sepiaMatrix = new ColorMatrix(new float[] {
+                            0.96f, 0.00f, 0.00f, 0f, 0f,
+                            0.00f, 0.90f, 0.00f, 0f, 0f,
+                            0.00f, 0.00f, 0.78f, 0f, 0f,
+                            0.00f, 0.00f, 0.00f, 1f, 0f
+                    });
+                    binding.ivPdfPage.setColorFilter(new ColorMatrixColorFilter(sepiaMatrix));
+                    break;
+
+                case DARK:
+                    binding.getRoot().setCardBackgroundColor(Color.parseColor("#FF2A2A2A"));
+                    binding.getRoot().setStrokeColor(Color.parseColor("#FF3A3A3A"));
+                    // Charcoal dimming matrix
+                    ColorMatrix darkMatrix = new ColorMatrix(new float[] {
+                            0.82f, 0.00f, 0.00f, 0f, 0f,
+                            0.00f, 0.82f, 0.00f, 0f, 0f,
+                            0.00f, 0.00f, 0.82f, 0f, 0f,
+                            0.00f, 0.00f, 0.00f, 1f, 0f
+                    });
+                    binding.ivPdfPage.setColorFilter(new ColorMatrixColorFilter(darkMatrix));
+                    break;
+
+                case NIGHT:
+                    binding.getRoot().setCardBackgroundColor(Color.BLACK);
+                    binding.getRoot().setStrokeColor(Color.parseColor("#FF222222"));
+                    // Pure OLED black inversion matrix (white->black, black->white)
+                    ColorMatrix invertMatrix = new ColorMatrix(new float[] {
+                            -1.0f,  0.0f,  0.0f, 0.0f, 255f,
+                             0.0f, -1.0f,  0.0f, 0.0f, 255f,
+                             0.0f,  0.0f, -1.0f, 0.0f, 255f,
+                             0.0f,  0.0f,  0.0f, 1.0f,   0f
+                    });
+                    binding.ivPdfPage.setColorFilter(new ColorMatrixColorFilter(invertMatrix));
+                    break;
+
+                case LIGHT:
+                default:
+                    binding.getRoot().setCardBackgroundColor(Color.WHITE);
+                    binding.getRoot().setStrokeColor(ContextCompat.getColor(binding.getRoot().getContext(), R.color.divider));
+                    binding.ivPdfPage.setColorFilter(null);
+                    break;
+            }
         }
 
         void recycle() {

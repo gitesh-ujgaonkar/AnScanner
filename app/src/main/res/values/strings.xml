@@ -194,6 +194,27 @@
     <string name="ocr_error">Failed to extract text from page</string>
     <string name="ocr_copied_snippet">Copied: %1$s</string>
     <string name="ocr_lens_hint">Tap on highlighted text to copy</string>
+    <string name="ocr_copy_selected">Copy Selected</string>
+    <string name="ocr_copy_all">Copy All Page Text</string>
+    <string name="ocr_close_layer">Close OCR</string>
+    <string name="ocr_nothing_selected">Tap a highlighted text block to select</string>
+
+    <!-- ── Kindle-Style Reading Mode ──────────────────────────────────── -->
+    <string name="reading_mode_title">Reading Mode</string>
+    <string name="cd_reading_mode">Toggle reading mode</string>
+    <string name="reading_settings">Reading Settings</string>
+    <string name="reading_theme">Theme</string>
+    <string name="reading_theme_light">Light</string>
+    <string name="reading_theme_sepia">Sepia</string>
+    <string name="reading_theme_dark">Dark</string>
+    <string name="reading_theme_night">Night</string>
+    <string name="reading_margins">Margins</string>
+    <string name="reading_margin_compact">Compact</string>
+    <string name="reading_margin_normal">Normal</string>
+    <string name="reading_margin_wide">Wide</string>
+    <string name="reading_page_snap">Page-by-Page Snap</string>
+    <string name="reading_keep_awake">Keep Screen Awake</string>
+
 
     <!-- ── Onboarding Flow ──────────────────────────────────────────────── -->
     <string name="onboarding_skip">Skip</string>

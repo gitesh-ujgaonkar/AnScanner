@@ -141,8 +141,8 @@ public final class OcrHelper {
                         int targetHeight = (int) ((float) page.getHeight() / page.getWidth() * targetWidth);
                         if (targetHeight <= 0) targetHeight = 1400;
 
-                        pageBitmap = Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888);
-                        page.render(pageBitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
+                        pageBitmap = com.anscanner.app.util.PdfRendererHelper.renderPageWithWhiteBackground(
+                                page, targetWidth, targetHeight, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
                     } finally {
                         if (page != null) {
                             page.close();

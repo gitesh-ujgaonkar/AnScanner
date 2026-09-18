@@ -64,6 +64,17 @@
             app:tint="@color/text_primary" />
 
         <ImageButton
+            android:id="@+id/btnReadingMode"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/cd_reading_mode"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_reading_mode"
+            android:visibility="visible"
+            app:tint="@color/text_primary" />
+
+        <ImageButton
             android:id="@+id/btnExtractText"
             android:layout_width="48dp"
             android:layout_height="48dp"
@@ -139,7 +150,14 @@
             android:layout_height="match_parent"
             android:visibility="gone" />
 
+        <com.anscanner.app.ui.custom.OcrTextOverlayView
+            android:id="@+id/ocrOverlay"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="gone" />
+
     </FrameLayout>
+
 
     <!-- ── Annotation Controls Bar (Floating above AdMob banner) ─────── -->
     <LinearLayout
@@ -243,6 +261,70 @@
             app:iconTint="@color/text_on_accent" />
 
     </LinearLayout>
+
+    <!-- ── OCR Quick-Action Bar (Floating above AdMob banner) ─────── -->
+    <LinearLayout
+        android:id="@+id/layoutOcrBar"
+        android:layout_width="0dp"
+        android:layout_height="56dp"
+        android:layout_marginHorizontal="12dp"
+        android:layout_marginBottom="10dp"
+        android:background="@drawable/bg_annotation_bar"
+        android:elevation="8dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingHorizontal="10dp"
+        android:visibility="gone"
+        app:layout_constraintBottom_toTopOf="@+id/adView"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <ImageButton
+            android:id="@+id/btnCloseOcr"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/ocr_close_layer"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_close"
+            app:tint="@color/text_secondary" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnCopySelected"
+            style="@style/Widget.Material3.Button.TonalButton"
+            android:layout_width="0dp"
+            android:layout_height="40dp"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:layout_marginEnd="6dp"
+            android:text="@string/ocr_copy_selected"
+            android:textColor="@color/text_primary"
+            android:textSize="12sp"
+            android:textAllCaps="false"
+            app:cornerRadius="20dp"
+            app:icon="@drawable/ic_ocr_text"
+            app:iconSize="16dp"
+            app:iconTint="@color/accent_mint"
+            android:paddingHorizontal="8dp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnCopyAllText"
+            style="@style/Widget.Material3.Button"
+            android:layout_width="wrap_content"
+            android:layout_height="40dp"
+            android:backgroundTint="@color/accent_mint"
+            android:text="@string/ocr_copy_all"
+            android:textColor="@color/text_on_accent"
+            android:textSize="12sp"
+            android:textAllCaps="false"
+            app:cornerRadius="20dp"
+            app:icon="@drawable/ic_check"
+            app:iconSize="16dp"
+            app:iconTint="@color/text_on_accent"
+            android:paddingHorizontal="12dp" />
+
+    </LinearLayout>
+
 
     <!-- ── Policy-Compliant Bottom AdMob Banner (Floating outside scrollable pages) ── -->
     <com.google.android.gms.ads.AdView
