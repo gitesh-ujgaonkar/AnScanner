@@ -1,8 +1,10 @@
 package com.anscanner.app.ui.library;
 
+import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.ParcelFileDescriptor;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -10,6 +12,7 @@ import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
 
@@ -59,6 +62,12 @@ public class ScannedDocsFragment extends Fragment implements DocumentListAdapter
         binding.rvDocuments.setLayoutManager(new LinearLayoutManager(requireContext()));
         binding.rvDocuments.setAdapter(adapter);
 
+        binding.swipeRefreshLayout.setColorSchemeColors(
+                ContextCompat.getColor(requireContext(), R.color.accent_mint));
+        binding.swipeRefreshLayout.setProgressBackgroundColorSchemeColor(
+                ContextCompat.getColor(requireContext(), R.color.surface_card));
+        binding.swipeRefreshLayout.setOnRefreshListener(() -> loadDocuments(currentSearchQuery));
+
         loadDocuments(currentSearchQuery);
     }
 
@@ -81,15 +90,65 @@ public class ScannedDocsFragment extends Fragment implements DocumentListAdapter
         }
     }
 
+    private boolean doesDocumentExist(Context context, DocumentEntity doc) {
+        if (doc == null || doc.fileUri == null || doc.fileUri.trim().isEmpty()) {
+            return false;
+        }
+        String uriString = doc.fileUri.trim();
+        if (uriString.startsWith("/") || uriString.startsWith("file://")) {
+            String path = uriString.startsWith("file://") ? uriString.substring(7) : uriString;
+            File f = new File(path);
+            return f.exists() && f.length() > 0;
+        } else if (uriString.startsWith("content://")) {
+            try {
+                Uri uri = Uri.parse(uriString);
+                try (ParcelFileDescriptor pfd = context.getContentResolver().openFileDescriptor(uri, "r")) {
+                    return pfd != null && pfd.getStatSize() > 0;
+                }
+            } catch (Exception e) {
+                return false;
+            }
+        } else {
+            File f = new File(uriString);
+            return f.exists() && f.length() > 0;
+        }
+    }
+
+    private List<DocumentEntity> filterAndCleanDocs(Context context, List<DocumentEntity> rawDocs) {
+        if (rawDocs == null || rawDocs.isEmpty()) return new ArrayList<>();
+        List<DocumentEntity> valid = new ArrayList<>();
+        for (DocumentEntity doc : rawDocs) {
+            if (doesDocumentExist(context, doc)) {
+                valid.add(doc);
+            } else {
+                // File deleted externally; clean up stale record and thumbnail
+                try {
+                    documentDao.deleteDocument(doc);
+                    if (doc.thumbnailPath != null) {
+                        File thumb = new File(doc.thumbnailPath);
+                        if (thumb.exists()) {
+                            thumb.delete();
+                        }
+                    }
+                } catch (Exception ignored) {}
+            }
+        }
+        return valid;
+    }
+
     private void loadDocuments(String query) {
         if (executor == null || executor.isShutdown()) return;
 
         executor.execute(() -> {
+            if (!isAdded()) return;
+            Context context = getContext();
+            if (context == null) return;
+            Context appContext = context.getApplicationContext();
+
             List<Object> items = new ArrayList<>();
-            List<DocumentEntity> allDocs;
 
             if (query != null && !query.trim().isEmpty()) {
-                allDocs = documentDao.searchByTitle("%" + query.trim() + "%");
+                List<DocumentEntity> allDocs = filterAndCleanDocs(appContext, documentDao.searchByTitle("%" + query.trim() + "%"));
                 if (!allDocs.isEmpty()) {
                     items.add("SEARCH RESULTS");
                     items.addAll(allDocs);
@@ -105,19 +164,19 @@ public class ScannedDocsFragment extends Fragment implements DocumentListAdapter
                 cal.add(Calendar.DAY_OF_YEAR, -7);
                 long weekAgo = cal.getTimeInMillis();
 
-                List<DocumentEntity> todayDocs = documentDao.getDocumentsCreatedToday(todayStart);
+                List<DocumentEntity> todayDocs = filterAndCleanDocs(appContext, documentDao.getDocumentsCreatedToday(todayStart));
                 if (!todayDocs.isEmpty()) {
                     items.add(getString(R.string.library_date_today));
                     items.addAll(todayDocs);
                 }
 
-                List<DocumentEntity> prevWeekDocs = documentDao.getDocumentsPreviousWeek(weekAgo, todayStart);
+                List<DocumentEntity> prevWeekDocs = filterAndCleanDocs(appContext, documentDao.getDocumentsPreviousWeek(weekAgo, todayStart));
                 if (!prevWeekDocs.isEmpty()) {
                     items.add(getString(R.string.library_date_previous_7));
                     items.addAll(prevWeekDocs);
                 }
 
-                List<DocumentEntity> olderDocs = documentDao.getDocumentsOlder(weekAgo);
+                List<DocumentEntity> olderDocs = filterAndCleanDocs(appContext, documentDao.getDocumentsOlder(weekAgo));
                 if (!olderDocs.isEmpty()) {
                     items.add(getString(R.string.library_date_older));
                     items.addAll(olderDocs);
@@ -128,6 +187,9 @@ public class ScannedDocsFragment extends Fragment implements DocumentListAdapter
 
             requireActivity().runOnUiThread(() -> {
                 if (binding == null) return;
+                if (binding.swipeRefreshLayout.isRefreshing()) {
+                    binding.swipeRefreshLayout.setRefreshing(false);
+                }
                 adapter.updateItems(items);
                 if (items.isEmpty()) {
                     binding.tvEmptyTitle.setText(R.string.library_empty_title);

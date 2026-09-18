@@ -78,6 +78,38 @@
             android:textColor="@color/text_secondary" />
     </LinearLayout>
 
+    <!-- Optimized Notice (Visible if PDF is already highly optimized) -->
+    <LinearLayout
+        android:id="@+id/layoutOptimizedNotice"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginHorizontal="24dp"
+        android:layout_marginBottom="16dp"
+        android:padding="12dp"
+        android:background="@drawable/bg_card"
+        android:backgroundTint="@color/background_secondary"
+        android:visibility="gone">
+
+        <ImageView
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:src="@drawable/ic_info"
+            android:contentDescription="@null"
+            app:tint="@color/warning_amber"
+            android:layout_marginEnd="10dp" />
+
+        <TextView
+            android:id="@+id/tvOptimizedNotice"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/compress_already_optimized_notice"
+            android:textAppearance="@style/TextAppearance.AnScanner.Caption"
+            android:textColor="@color/text_secondary" />
+    </LinearLayout>
+
     <!-- Target Size Section -->
     <LinearLayout
         android:layout_width="match_parent"
@@ -167,6 +199,46 @@
             android:layout_marginStart="6dp"
             android:text="High (85%)"
             android:textSize="12sp" />
+    </LinearLayout>
+
+    <!-- File Name Input Section -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingHorizontal="24dp"
+        android:layout_marginBottom="16dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/compress_file_name_label"
+            android:textAppearance="@style/TextAppearance.AnScanner.Label"
+            android:textColor="@color/text_secondary"
+            android:layout_marginBottom="8dp" />
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/tilFileName"
+            style="@style/Widget.AnScanner.TextInputLayout"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:hintEnabled="false"
+            app:boxCornerRadiusTopStart="@dimen/text_input_corner_radius"
+            app:boxCornerRadiusTopEnd="@dimen/text_input_corner_radius"
+            app:boxCornerRadiusBottomStart="@dimen/text_input_corner_radius"
+            app:boxCornerRadiusBottomEnd="@dimen/text_input_corner_radius">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/etFileName"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="?attr/colorOnSurface"
+                android:textColorHint="@color/text_secondary"
+                android:maxLines="1"
+                android:singleLine="true"
+                android:imeOptions="actionDone"
+                android:inputType="text" />
+        </com.google.android.material.textfield.TextInputLayout>
     </LinearLayout>
 
     <!-- Progress Indicator (During active compression) -->

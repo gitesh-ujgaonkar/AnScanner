@@ -37,11 +37,14 @@ import com.anscanner.app.databinding.ActivityPdfViewerBinding;
 import com.anscanner.app.service.CacheManager;
 import com.anscanner.app.service.OcrHelper;
 import com.anscanner.app.ui.crop.CropPreviewActivity;
+import com.anscanner.app.ui.crop.EditPdfActivity;
+import com.anscanner.app.ui.editor.UnifiedEditorActivity;
 import com.google.android.gms.ads.AdRequest;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.mlkit.vision.text.Text;
 
 import java.io.File;
+import java.util.ArrayList;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -476,42 +479,48 @@ public class PdfViewerActivity extends AppCompatActivity {
     // ── Editing Integration ──────────────────────────────────────────────
 
     private void editCurrentPage() {
-        if (pdfRenderer != null && pageAdapter != null && layoutManager != null) {
-            int currentVisiblePage = layoutManager.findFirstVisibleItemPosition();
-            if (currentVisiblePage < 0) currentVisiblePage = 0;
-
-            final int pageToEdit = currentVisiblePage;
+        if (pdfRenderer != null) {
+            int currentVisiblePage = 0;
+            if (layoutManager != null) {
+                currentVisiblePage = layoutManager.findFirstVisibleItemPosition();
+                if (currentVisiblePage < 0) currentVisiblePage = 0;
+            }
+            final int initialIndex = currentVisiblePage;
             binding.pbLoading.setVisibility(View.VISIBLE);
 
-            pageAdapter.renderPageHighRes(pageToEdit, 1600, new PdfPageAdapter.OnPageRenderedListener() {
-                @Override
-                public void onPageRendered(Bitmap bitmap) {
-                    binding.pbLoading.setVisibility(View.GONE);
-                    String tempPath = CacheManager.saveTempBitmap(
-                            PdfViewerActivity.this, bitmap, UUID.randomUUID().toString());
-                    bitmap.recycle();
+            new Thread(() -> {
+                ArrayList<String> allPages = null;
+                if (resolvedUri != null) {
+                    allPages = CropPreviewActivity.extractAllPagesFromPdf(PdfViewerActivity.this, resolvedUri);
+                } else if (resolvedFile != null) {
+                    allPages = CropPreviewActivity.extractAllPagesFromPdf(PdfViewerActivity.this, Uri.fromFile(resolvedFile));
+                }
 
-                    if (tempPath != null) {
-                        Intent cropIntent = new Intent(PdfViewerActivity.this, CropPreviewActivity.class);
-                        cropIntent.putExtra(CropPreviewActivity.EXTRA_IMAGE_PATH, tempPath);
+                final ArrayList<String> finalPages = allPages;
+                runOnUiThread(() -> {
+                    binding.pbLoading.setVisibility(View.GONE);
+                    if (finalPages != null && !finalPages.isEmpty()) {
+                        Intent cropIntent = new Intent(PdfViewerActivity.this, UnifiedEditorActivity.class);
+                        cropIntent.putStringArrayListExtra(UnifiedEditorActivity.EXTRA_PAGE_PATHS, finalPages);
+                        cropIntent.putStringArrayListExtra(UnifiedEditorActivity.EXTRA_ORIGINAL_PAGE_PATHS, new ArrayList<>(finalPages));
+                        cropIntent.putExtra(UnifiedEditorActivity.EXTRA_PAGE_INDEX, initialIndex);
+                        cropIntent.putExtra(UnifiedEditorActivity.EXTRA_MODE, UnifiedEditorActivity.MODE_PDF_EDIT);
+                        if (resolvedUri != null) {
+                            cropIntent.putExtra(UnifiedEditorActivity.EXTRA_PDF_URI, resolvedUri);
+                        }
                         startActivity(cropIntent);
                     } else {
                         Toast.makeText(PdfViewerActivity.this, R.string.error_generic, Toast.LENGTH_SHORT).show();
                     }
-                }
-
-                @Override
-                public void onRenderFailed(Exception e) {
-                    binding.pbLoading.setVisibility(View.GONE);
-                    Toast.makeText(PdfViewerActivity.this, R.string.error_generic, Toast.LENGTH_SHORT).show();
-                }
-            });
+                });
+            }).start();
         } else if (currentImageBitmap != null) {
             String tempPath = CacheManager.saveTempBitmap(
                     this, currentImageBitmap, UUID.randomUUID().toString());
             if (tempPath != null) {
-                Intent cropIntent = new Intent(this, CropPreviewActivity.class);
-                cropIntent.putExtra(CropPreviewActivity.EXTRA_IMAGE_PATH, tempPath);
+                Intent cropIntent = new Intent(this, UnifiedEditorActivity.class);
+                cropIntent.putExtra(UnifiedEditorActivity.EXTRA_IMAGE_PATH, tempPath);
+                cropIntent.putExtra(UnifiedEditorActivity.EXTRA_MODE, UnifiedEditorActivity.MODE_PDF_EDIT);
                 startActivity(cropIntent);
             } else {
                 Toast.makeText(this, R.string.error_generic, Toast.LENGTH_SHORT).show();
@@ -613,39 +622,54 @@ public class PdfViewerActivity extends AppCompatActivity {
     // ── Flattened Annotation Engine (Sign/Draw) ──────────────────────────
 
     private void toggleAnnotationMode() {
-        if (isAnnotationMode) {
-            exitAnnotationMode();
-            return;
-        }
-
-        if (pdfRenderer != null && pageAdapter != null && layoutManager != null) {
-            int visiblePage = layoutManager.findFirstVisibleItemPosition();
-            if (visiblePage < 0 || visiblePage >= pageCount) visiblePage = 0;
-            currentAnnotatedPageIndex = visiblePage;
-
+        if (pdfRenderer != null) {
+            int currentVisiblePage = 0;
+            if (layoutManager != null) {
+                currentVisiblePage = layoutManager.findFirstVisibleItemPosition();
+                if (currentVisiblePage < 0) currentVisiblePage = 0;
+            }
+            final int initialIndex = currentVisiblePage;
             binding.pbLoading.setVisibility(View.VISIBLE);
-            pageAdapter.renderPageHighRes(visiblePage, 1600, new PdfPageAdapter.OnPageRenderedListener() {
-                @Override
-                public void onPageRendered(Bitmap bitmap) {
-                    binding.pbLoading.setVisibility(View.GONE);
-                    if (currentAnnotatedPageBitmap != null && !currentAnnotatedPageBitmap.isRecycled()) {
-                        currentAnnotatedPageBitmap.recycle();
-                    }
-                    currentAnnotatedPageBitmap = bitmap;
-                    binding.photoView.setImageBitmap(bitmap);
-                    binding.photoView.setVisibility(View.VISIBLE);
-                    binding.rvPdfPages.setVisibility(View.GONE);
-                    startDrawingSession();
+
+            new Thread(() -> {
+                ArrayList<String> allPages = null;
+                if (resolvedUri != null) {
+                    allPages = CropPreviewActivity.extractAllPagesFromPdf(PdfViewerActivity.this, resolvedUri);
+                } else if (resolvedFile != null) {
+                    allPages = CropPreviewActivity.extractAllPagesFromPdf(PdfViewerActivity.this, Uri.fromFile(resolvedFile));
                 }
 
-                @Override
-                public void onRenderFailed(Exception e) {
+                final ArrayList<String> finalPages = allPages;
+                runOnUiThread(() -> {
                     binding.pbLoading.setVisibility(View.GONE);
-                    Toast.makeText(PdfViewerActivity.this, R.string.error_generic, Toast.LENGTH_SHORT).show();
-                }
-            });
+                    if (finalPages != null && !finalPages.isEmpty()) {
+                        Intent editorIntent = new Intent(PdfViewerActivity.this, UnifiedEditorActivity.class);
+                        editorIntent.putStringArrayListExtra(UnifiedEditorActivity.EXTRA_PAGE_PATHS, finalPages);
+                        editorIntent.putStringArrayListExtra(UnifiedEditorActivity.EXTRA_ORIGINAL_PAGE_PATHS, new ArrayList<>(finalPages));
+                        editorIntent.putExtra(UnifiedEditorActivity.EXTRA_PAGE_INDEX, initialIndex);
+                        editorIntent.putExtra(UnifiedEditorActivity.EXTRA_MODE, UnifiedEditorActivity.MODE_PDF_EDIT);
+                        editorIntent.putExtra(UnifiedEditorActivity.EXTRA_START_ANNOTATE, true);
+                        if (resolvedUri != null) {
+                            editorIntent.putExtra(UnifiedEditorActivity.EXTRA_PDF_URI, resolvedUri);
+                        }
+                        startActivity(editorIntent);
+                    } else {
+                        Toast.makeText(PdfViewerActivity.this, R.string.error_generic, Toast.LENGTH_SHORT).show();
+                    }
+                });
+            }).start();
         } else if (currentImageBitmap != null) {
-            startDrawingSession();
+            String tempPath = CacheManager.saveTempBitmap(
+                    this, currentImageBitmap, UUID.randomUUID().toString());
+            if (tempPath != null) {
+                Intent editorIntent = new Intent(this, UnifiedEditorActivity.class);
+                editorIntent.putExtra(UnifiedEditorActivity.EXTRA_IMAGE_PATH, tempPath);
+                editorIntent.putExtra(UnifiedEditorActivity.EXTRA_MODE, UnifiedEditorActivity.MODE_PDF_EDIT);
+                editorIntent.putExtra(UnifiedEditorActivity.EXTRA_START_ANNOTATE, true);
+                startActivity(editorIntent);
+            } else {
+                Toast.makeText(this, R.string.error_generic, Toast.LENGTH_SHORT).show();
+            }
         } else {
             Toast.makeText(this, R.string.error_generic, Toast.LENGTH_SHORT).show();
         }

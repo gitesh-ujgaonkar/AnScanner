@@ -105,8 +105,11 @@ public final class PdfGenerator {
                     bitmap.compress(Bitmap.CompressFormat.JPEG, quality, outputStream);
                     byte[] compressedBytes = outputStream.toByteArray();
 
-                    // 2. Decode the compressed byte array back into a temporary Bitmap
-                    tempBitmap = BitmapFactory.decodeByteArray(compressedBytes, 0, compressedBytes.length);
+                    // 2. Decode the compressed byte array into an opaque RGB_565 Bitmap to avoid ARGB_8888 SMask overhead
+                    BitmapFactory.Options decodeOpts = new BitmapFactory.Options();
+                    decodeOpts.inPreferredConfig = Bitmap.Config.RGB_565;
+                    decodeOpts.inDither = true;
+                    tempBitmap = BitmapFactory.decodeByteArray(compressedBytes, 0, compressedBytes.length, decodeOpts);
 
                     // 3. Draw it to the PDF canvas
                     if (tempBitmap != null) {
@@ -170,87 +173,7 @@ public final class PdfGenerator {
                                    Uri sourcePdfUri,
                                    File outputFile,
                                    int quality) throws IOException {
-        ParcelFileDescriptor pfd = context.getContentResolver().openFileDescriptor(sourcePdfUri, "r");
-        if (pfd == null) {
-            throw new IOException("Unable to open file descriptor for URI: " + sourcePdfUri);
-        }
-
-        PdfRenderer renderer = null;
-        PdfDocument document = null;
-        try {
-            renderer = new PdfRenderer(pfd);
-            int pageCount = renderer.getPageCount();
-            if (pageCount == 0) {
-                throw new IOException("PDF contains 0 pages");
-            }
-
-            document = new PdfDocument();
-            Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
-
-            for (int i = 0; i < pageCount; i++) {
-                PdfRenderer.Page page = renderer.openPage(i);
-                int pageW = page.getWidth();
-                int pageH = page.getHeight();
-
-                // High-resolution rendering (crisp text and imagery)
-                int renderW = Math.max(pageW * 2, PAGE_WIDTH_A4);
-                int renderH = Math.round((float) renderW * pageH / pageW);
-
-                Bitmap pageBitmap = Bitmap.createBitmap(renderW, renderH, Bitmap.Config.ARGB_8888);
-                Canvas pageCanvas = new Canvas(pageBitmap);
-                pageCanvas.drawColor(android.graphics.Color.WHITE);
-                page.render(pageBitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
-                page.close();
-
-                Bitmap compressedBitmap = null;
-                try {
-                    // Apply JPEG compression scale
-                    ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-                    pageBitmap.compress(Bitmap.CompressFormat.JPEG, quality, outputStream);
-                    byte[] compressedBytes = outputStream.toByteArray();
-                    compressedBitmap = BitmapFactory.decodeByteArray(compressedBytes, 0, compressedBytes.length);
-
-                    PdfDocument.PageInfo pageInfo = new PdfDocument.PageInfo.Builder(pageW, pageH, i + 1).create();
-                    PdfDocument.Page docPage = document.startPage(pageInfo);
-                    Canvas docCanvas = docPage.getCanvas();
-                    RectF destRect = new RectF(0, 0, pageW, pageH);
-
-                    if (compressedBitmap != null) {
-                        docCanvas.drawBitmap(compressedBitmap, null, destRect, paint);
-                    } else {
-                        docCanvas.drawBitmap(pageBitmap, null, destRect, paint);
-                    }
-                    document.finishPage(docPage);
-
-                } finally {
-                    // Explicitly recycle both Bitmaps immediately
-                    if (compressedBitmap != null && !compressedBitmap.isRecycled()) {
-                        compressedBitmap.recycle();
-                    }
-                    if (pageBitmap != null && !pageBitmap.isRecycled()) {
-                        pageBitmap.recycle();
-                    }
-                }
-            }
-
-            try (FileOutputStream fos = new FileOutputStream(outputFile)) {
-                document.writeTo(fos);
-                fos.flush();
-            }
-
-            long fileSize = outputFile.length();
-            Log.i(TAG, "External PDF compressed: " + outputFile.getAbsolutePath() + " (" + fileSize + " bytes)");
-            return fileSize;
-
-        } finally {
-            if (document != null) {
-                document.close();
-            }
-            if (renderer != null) {
-                renderer.close();
-            }
-            pfd.close();
-        }
+        return PdfCompressor.compressPdf(context, sourcePdfUri, outputFile, quality);
     }
 
     public interface CompressionProgressListener {
@@ -274,124 +197,8 @@ public final class PdfGenerator {
                                                File outputFile,
                                                long targetSizeBytes,
                                                CompressionProgressListener listener) throws IOException {
-        ParcelFileDescriptor pfd = context.getContentResolver().openFileDescriptor(sourcePdfUri, "r");
-        if (pfd == null) {
-            throw new IOException("Unable to open file descriptor for URI: " + sourcePdfUri);
-        }
-
-        PdfRenderer renderer = null;
-        PdfDocument document = null;
-        try {
-            renderer = new PdfRenderer(pfd);
-            int pageCount = renderer.getPageCount();
-            if (pageCount == 0) {
-                throw new IOException("PDF contains 0 pages");
-            }
-
-            document = new PdfDocument();
-            Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
-
-            // Reserve ~8% overhead for PDF headers, xref tables, and trailer structures
-            long totalTargetImageBytes = Math.max(16384L, (long) (targetSizeBytes * 0.92));
-            long targetBytesPerPage = Math.max(8192L, totalTargetImageBytes / pageCount);
-
-            for (int i = 0; i < pageCount; i++) {
-                if (listener != null) {
-                    listener.onProgress(i + 1, pageCount);
-                }
-
-                PdfRenderer.Page page = renderer.openPage(i);
-                int pageW = page.getWidth();
-                int pageH = page.getHeight();
-
-                // High-resolution rendering
-                int renderW = Math.max(pageW * 2, PAGE_WIDTH_A4);
-                int renderH = Math.round((float) renderW * pageH / pageW);
-
-                Bitmap pageBitmap = Bitmap.createBitmap(renderW, renderH, Bitmap.Config.ARGB_8888);
-                Canvas pageCanvas = new Canvas(pageBitmap);
-                pageCanvas.drawColor(android.graphics.Color.WHITE);
-                page.render(pageBitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
-                page.close();
-
-                Bitmap compressedBitmap = null;
-                try {
-                    // Iterative binary search loop adjusting Bitmap.compress quality (0-100)
-                    int low = 5;
-                    int high = 100;
-                    int bestQuality = 60;
-                    long bestDiff = Long.MAX_VALUE;
-                    byte[] bestBytes = null;
-
-                    while (low <= high) {
-                        int mid = (low + high) / 2;
-                        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-                        pageBitmap.compress(Bitmap.CompressFormat.JPEG, mid, outputStream);
-                        byte[] currentBytes = outputStream.toByteArray();
-                        long currentSize = currentBytes.length;
-                        long diff = Math.abs(currentSize - targetBytesPerPage);
-
-                        if (diff < bestDiff) {
-                            bestDiff = diff;
-                            bestQuality = mid;
-                            bestBytes = currentBytes;
-                        }
-
-                        if (currentSize > targetBytesPerPage) {
-                            high = mid - 1;
-                        } else if (currentSize < targetBytesPerPage) {
-                            low = mid + 1;
-                        } else {
-                            bestQuality = mid;
-                            bestBytes = currentBytes;
-                            break;
-                        }
-                    }
-
-                    if (bestBytes != null && bestBytes.length > 0) {
-                        compressedBitmap = BitmapFactory.decodeByteArray(bestBytes, 0, bestBytes.length);
-                    }
-
-                    PdfDocument.PageInfo pageInfo = new PdfDocument.PageInfo.Builder(pageW, pageH, i + 1).create();
-                    PdfDocument.Page docPage = document.startPage(pageInfo);
-                    Canvas docCanvas = docPage.getCanvas();
-                    RectF destRect = new RectF(0, 0, pageW, pageH);
-
-                    if (compressedBitmap != null) {
-                        docCanvas.drawBitmap(compressedBitmap, null, destRect, paint);
-                    } else {
-                        docCanvas.drawBitmap(pageBitmap, null, destRect, paint);
-                    }
-                    document.finishPage(docPage);
-
-                } finally {
-                    if (compressedBitmap != null && !compressedBitmap.isRecycled()) {
-                        compressedBitmap.recycle();
-                    }
-                    if (pageBitmap != null && !pageBitmap.isRecycled()) {
-                        pageBitmap.recycle();
-                    }
-                }
-            }
-
-            try (FileOutputStream fos = new FileOutputStream(outputFile)) {
-                document.writeTo(fos);
-                fos.flush();
-            }
-
-            long fileSize = outputFile.length();
-            Log.i(TAG, "Target-size PDF compressed: " + outputFile.getAbsolutePath() + " (" + fileSize + " bytes, target=" + targetSizeBytes + ")");
-            return fileSize;
-
-        } finally {
-            if (document != null) {
-                document.close();
-            }
-            if (renderer != null) {
-                renderer.close();
-            }
-            pfd.close();
-        }
+        return PdfCompressor.compressPdfToTargetSize(context, sourcePdfUri, outputFile, targetSizeBytes,
+                listener != null ? listener::onProgress : null);
     }
 
     /**
@@ -469,7 +276,10 @@ public final class PdfGenerator {
                     }
 
                     if (bestBytes != null && bestBytes.length > 0) {
-                        tempBitmap = BitmapFactory.decodeByteArray(bestBytes, 0, bestBytes.length);
+                        BitmapFactory.Options decodeOpts = new BitmapFactory.Options();
+                        decodeOpts.inPreferredConfig = Bitmap.Config.RGB_565;
+                        decodeOpts.inDither = true;
+                        tempBitmap = BitmapFactory.decodeByteArray(bestBytes, 0, bestBytes.length, decodeOpts);
                     }
 
                     if (tempBitmap != null) {

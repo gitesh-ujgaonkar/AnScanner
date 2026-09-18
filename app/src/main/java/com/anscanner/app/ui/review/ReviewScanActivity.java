@@ -1,8 +1,11 @@
 package com.anscanner.app.ui.review;
 
 import android.content.Intent;
+import android.net.Uri;
 import android.os.Bundle;
 import android.widget.Toast;
+
+import java.io.File;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
@@ -101,9 +104,27 @@ public class ReviewScanActivity extends AppCompatActivity implements PageGridAda
         setContentView(binding.getRoot());
 
         pagePaths = getIntent().getStringArrayListExtra(EXTRA_PAGE_PATHS);
+        if (pagePaths == null || pagePaths.isEmpty()) {
+            Uri pdfUri = getIntent().getData();
+            if (pdfUri == null && getIntent().hasExtra("extra_pdf_uri")) {
+                pdfUri = getIntent().getParcelableExtra("extra_pdf_uri");
+            }
+            String imagePath = getIntent().getStringExtra(EXTRA_IMAGE_PATH);
+            if (pdfUri == null && imagePath != null && imagePath.toLowerCase().endsWith(".pdf")) {
+                pdfUri = Uri.fromFile(new File(imagePath));
+            }
+            if (pdfUri != null) {
+                pagePaths = com.anscanner.app.ui.crop.CropPreviewActivity.extractAllPagesFromPdf(this, pdfUri);
+            }
+        }
         if (pagePaths == null) {
             pagePaths = new ArrayList<>();
         }
+        String singleImage = getIntent().getStringExtra(EXTRA_IMAGE_PATH);
+        if (pagePaths.isEmpty() && singleImage != null && !singleImage.toLowerCase().endsWith(".pdf")) {
+            pagePaths.add(singleImage);
+        }
+
         originalPagePaths = getIntent().getStringArrayListExtra(EXTRA_ORIGINAL_PAGE_PATHS);
         if (originalPagePaths == null || originalPagePaths.size() != pagePaths.size()) {
             originalPagePaths = new ArrayList<>(pagePaths);

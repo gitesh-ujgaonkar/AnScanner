@@ -82,9 +82,22 @@ public class DeviceDocsFragment extends Fragment implements DocumentListAdapter.
                 }
             });
 
+    private final ActivityResultLauncher<Intent> manageStorageLauncher =
+            registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
+                if (hasStoragePermission()) {
+                    loadDevicePdfs(currentSearchQuery);
+                } else {
+                    showPermissionRequiredUi();
+                }
+            });
+
     private final ActivityResultLauncher<String[]> openDocumentLauncher =
             registerForActivityResult(new ActivityResultContracts.OpenDocument(), uri -> {
                 if (uri != null && isAdded()) {
+                    try {
+                        requireContext().getContentResolver().takePersistableUriPermission(
+                                uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                    } catch (Exception ignored) {}
                     Intent intent = new Intent(requireContext(), PdfViewerActivity.class);
                     intent.putExtra(PdfViewerActivity.EXTRA_PDF_URI, uri.toString());
                     intent.putExtra(PdfViewerActivity.EXTRA_DOCUMENT_TITLE, StorageHelper.queryFileName(requireContext(), uri));
@@ -108,6 +121,19 @@ public class DeviceDocsFragment extends Fragment implements DocumentListAdapter.
         adapter = new DocumentListAdapter(requireContext(), this);
         binding.rvDocuments.setLayoutManager(new LinearLayoutManager(requireContext()));
         binding.rvDocuments.setAdapter(adapter);
+
+        binding.swipeRefreshLayout.setColorSchemeColors(
+                ContextCompat.getColor(requireContext(), R.color.accent_mint));
+        binding.swipeRefreshLayout.setProgressBackgroundColorSchemeColor(
+                ContextCompat.getColor(requireContext(), R.color.surface_card));
+        binding.swipeRefreshLayout.setOnRefreshListener(() -> {
+            if (hasStoragePermission()) {
+                loadDevicePdfs(currentSearchQuery);
+            } else {
+                binding.swipeRefreshLayout.setRefreshing(false);
+                checkAndRequestStoragePermission();
+            }
+        });
 
         if (!hasStoragePermission()) {
             checkAndRequestStoragePermission();
@@ -143,12 +169,9 @@ public class DeviceDocsFragment extends Fragment implements DocumentListAdapter.
         Context context = getContext();
         if (context == null) return false;
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && Environment.isExternalStorageManager()) {
-            return true;
-        }
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            return ContextCompat.checkSelfPermission(context, Manifest.permission.READ_MEDIA_IMAGES) == PackageManager.PERMISSION_GRANTED;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            return Environment.isExternalStorageManager()
+                    || ContextCompat.checkSelfPermission(context, Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED;
         } else {
             return ContextCompat.checkSelfPermission(context, Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED;
         }
@@ -156,7 +179,10 @@ public class DeviceDocsFragment extends Fragment implements DocumentListAdapter.
 
     public String[] getRequiredPermissions() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            return new String[]{Manifest.permission.READ_MEDIA_IMAGES};
+            return new String[]{
+                    Manifest.permission.READ_MEDIA_IMAGES,
+                    Manifest.permission.READ_EXTERNAL_STORAGE
+            };
         } else {
             return new String[]{Manifest.permission.READ_EXTERNAL_STORAGE};
         }
@@ -168,18 +194,22 @@ public class DeviceDocsFragment extends Fragment implements DocumentListAdapter.
             return;
         }
 
-        boolean shouldShowRationale = false;
-        for (String perm : getRequiredPermissions()) {
-            if (shouldShowRequestPermissionRationale(perm)) {
-                shouldShowRationale = true;
-                break;
-            }
-        }
-
-        if (shouldShowRationale) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             showPermissionRationaleDialog();
         } else {
-            permissionLauncher.launch(getRequiredPermissions());
+            boolean shouldShowRationale = false;
+            for (String perm : getRequiredPermissions()) {
+                if (shouldShowRequestPermissionRationale(perm)) {
+                    shouldShowRationale = true;
+                    break;
+                }
+            }
+
+            if (shouldShowRationale) {
+                showPermissionRationaleDialog();
+            } else {
+                permissionLauncher.launch(getRequiredPermissions());
+            }
         }
     }
 
@@ -190,7 +220,22 @@ public class DeviceDocsFragment extends Fragment implements DocumentListAdapter.
                 .setTitle(R.string.permission_storage_rationale_title)
                 .setMessage(R.string.permission_storage_rationale_message)
                 .setPositiveButton(R.string.permission_grant, (dialog, which) -> {
-                    permissionLauncher.launch(getRequiredPermissions());
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                        try {
+                            Intent intent = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION);
+                            intent.setData(Uri.parse("package:" + requireContext().getPackageName()));
+                            manageStorageLauncher.launch(intent);
+                        } catch (Exception e) {
+                            try {
+                                Intent intent = new Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION);
+                                manageStorageLauncher.launch(intent);
+                            } catch (Exception ex) {
+                                showSettingsDialog();
+                            }
+                        }
+                    } else {
+                        permissionLauncher.launch(getRequiredPermissions());
+                    }
                 })
                 .setNegativeButton(R.string.action_cancel, (dialog, which) -> {
                     showPermissionRequiredUi();
@@ -206,12 +251,25 @@ public class DeviceDocsFragment extends Fragment implements DocumentListAdapter.
                 .setMessage(R.string.permission_storage_rationale_message)
                 .setPositiveButton(R.string.permission_open_settings, (dialog, which) -> {
                     try {
-                        Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
-                        Uri uri = Uri.fromParts("package", requireContext().getPackageName(), null);
-                        intent.setData(uri);
-                        startActivity(intent);
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                            Intent intent = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION);
+                            intent.setData(Uri.parse("package:" + requireContext().getPackageName()));
+                            manageStorageLauncher.launch(intent);
+                        } else {
+                            Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+                            Uri uri = Uri.fromParts("package", requireContext().getPackageName(), null);
+                            intent.setData(uri);
+                            startActivity(intent);
+                        }
                     } catch (Exception e) {
-                        Log.e(TAG, "Failed to launch app details settings", e);
+                        try {
+                            Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+                            Uri uri = Uri.fromParts("package", requireContext().getPackageName(), null);
+                            intent.setData(uri);
+                            startActivity(intent);
+                        } catch (Exception ex) {
+                            Log.e(TAG, "Failed to launch app details settings", ex);
+                        }
                     }
                 })
                 .setNegativeButton(R.string.action_cancel, (dialog, which) -> {
@@ -260,44 +318,52 @@ public class DeviceDocsFragment extends Fragment implements DocumentListAdapter.
             if (context == null) return;
 
             List<Uri> contentUris = new ArrayList<>();
+            // 1. Primary external files query (searches all external storage)
+            contentUris.add(MediaStore.Files.getContentUri("external"));
+
+            // 2. Query Downloads collection on Android 10+ (API 29+) to discover downloaded PDFs
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                contentUris.add(MediaStore.Downloads.EXTERNAL_CONTENT_URI);
                 try {
                     Set<String> volumeNames = MediaStore.getExternalVolumeNames(context);
                     for (String volume : volumeNames) {
-                        contentUris.add(MediaStore.Files.getContentUri(volume));
+                        if (!"external".equalsIgnoreCase(volume)) {
+                            contentUris.add(MediaStore.Files.getContentUri(volume));
+                            contentUris.add(MediaStore.Downloads.getContentUri(volume));
+                        }
                     }
                 } catch (Exception e) {
                     Log.w(TAG, "Failed to retrieve external volume names", e);
                 }
             }
-            if (contentUris.isEmpty()) {
-                contentUris.add(MediaStore.Files.getContentUri("external"));
-            }
 
             String[] projection = new String[] {
-                    MediaStore.Files.FileColumns._ID,
-                    MediaStore.Files.FileColumns.DISPLAY_NAME,
-                    MediaStore.Files.FileColumns.DATA,
-                    MediaStore.Files.FileColumns.SIZE,
-                    MediaStore.Files.FileColumns.DATE_ADDED,
-                    MediaStore.Files.FileColumns.DATE_MODIFIED
+                    MediaStore.MediaColumns._ID,
+                    MediaStore.MediaColumns.DISPLAY_NAME,
+                    MediaStore.MediaColumns.DATA,
+                    MediaStore.MediaColumns.SIZE,
+                    MediaStore.MediaColumns.DATE_ADDED,
+                    MediaStore.MediaColumns.DATE_MODIFIED,
+                    MediaStore.MediaColumns.MIME_TYPE
             };
 
-            String selection = "(" + MediaStore.Files.FileColumns.MIME_TYPE + "=? OR "
-                    + MediaStore.Files.FileColumns.DISPLAY_NAME + " LIKE '%.pdf' OR "
-                    + MediaStore.Files.FileColumns.DATA + " LIKE '%.pdf')";
+            String selection = "(" + MediaStore.MediaColumns.MIME_TYPE + " = ? OR "
+                    + MediaStore.MediaColumns.DISPLAY_NAME + " LIKE '%.pdf' OR "
+                    + MediaStore.MediaColumns.DATA + " LIKE '%.pdf')";
             String[] selectionArgs = new String[]{"application/pdf"};
-            String sortOrder = MediaStore.Files.FileColumns.DATE_ADDED + " DESC";
+            String sortOrder = MediaStore.MediaColumns.DATE_ADDED + " DESC";
+
+            Set<String> seenPaths = new HashSet<>();
 
             for (Uri baseUri : contentUris) {
                 try (Cursor cursor = context.getContentResolver().query(baseUri, projection, selection, selectionArgs, sortOrder)) {
                     if (cursor != null) {
-                        int idCol = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns._ID);
-                        int nameCol = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DISPLAY_NAME);
-                        int dataCol = cursor.getColumnIndex(MediaStore.Files.FileColumns.DATA);
-                        int sizeCol = cursor.getColumnIndex(MediaStore.Files.FileColumns.SIZE);
-                        int dateAddedCol = cursor.getColumnIndex(MediaStore.Files.FileColumns.DATE_ADDED);
-                        int dateModifiedCol = cursor.getColumnIndex(MediaStore.Files.FileColumns.DATE_MODIFIED);
+                        int idCol = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns._ID);
+                        int nameCol = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.DISPLAY_NAME);
+                        int dataCol = cursor.getColumnIndex(MediaStore.MediaColumns.DATA);
+                        int sizeCol = cursor.getColumnIndex(MediaStore.MediaColumns.SIZE);
+                        int dateAddedCol = cursor.getColumnIndex(MediaStore.MediaColumns.DATE_ADDED);
+                        int dateModifiedCol = cursor.getColumnIndex(MediaStore.MediaColumns.DATE_MODIFIED);
 
                         while (cursor.moveToNext()) {
                             long id = cursor.getLong(idCol);
@@ -312,13 +378,39 @@ public class DeviceDocsFragment extends Fragment implements DocumentListAdapter.
 
                             Uri itemContentUri = ContentUris.withAppendedId(baseUri, id);
                             String uriKey = itemContentUri.toString();
-                            if (seenUris.contains(uriKey)) {
+
+                            // Validate physical existence on storage
+                            boolean exists = false;
+                            if (data != null && !data.trim().isEmpty()) {
+                                File f = new File(data);
+                                if (f.exists() && f.length() > 0) {
+                                    exists = true;
+                                }
+                            }
+                            if (!exists) {
+                                try (ParcelFileDescriptor pfd = context.getContentResolver().openFileDescriptor(itemContentUri, "r")) {
+                                    exists = pfd != null && pfd.getStatSize() > 0;
+                                } catch (java.io.FileNotFoundException fnfe) {
+                                    exists = false; // File physically removed from storage
+                                } catch (Exception e) {
+                                    // Scoped Storage restriction; retain if MediaStore indexed with positive size
+                                    exists = size > 0;
+                                }
+                            }
+                            if (!exists) {
+                                continue; // File physically deleted; avoid ghost listing
+                            }
+
+                            // Deduplicate across volumes and downloads collections
+                            String dedupeKey = (data != null && !data.isEmpty()) ? data.toLowerCase(Locale.ROOT) : (name != null ? name.toLowerCase(Locale.ROOT) : "") + "_" + size;
+                            if (seenPaths.contains(dedupeKey) || seenUris.contains(uriKey)) {
                                 continue;
                             }
+                            seenPaths.add(dedupeKey);
                             seenUris.add(uriKey);
 
                             DocumentEntity entity = new DocumentEntity();
-                            entity.id = -id; // Negative ID denotes external non-Room document
+                            entity.id = -Math.abs(id); // Negative ID denotes external non-Room document
                             entity.title = name != null ? name : (data != null ? new File(data).getName() : "PDF Document");
                             entity.format = "PDF";
                             entity.quality = "NORMAL";
@@ -344,6 +436,16 @@ public class DeviceDocsFragment extends Fragment implements DocumentListAdapter.
                     }
                 } catch (Exception e) {
                     Log.e(TAG, "Error querying device PDFs via volume: " + baseUri, e);
+                }
+            }
+
+            // Fallback direct storage directory scanning (Download/ and Documents/)
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R || Environment.isExternalStorageManager()) {
+                try {
+                    scanDirectoryForPdfs(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), seenPaths, pdfList, query, context);
+                    scanDirectoryForPdfs(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), seenPaths, pdfList, query, context);
+                } catch (Exception e) {
+                    Log.w(TAG, "Direct storage directory scan completed with warnings", e);
                 }
             }
 
@@ -398,6 +500,9 @@ public class DeviceDocsFragment extends Fragment implements DocumentListAdapter.
 
             requireActivity().runOnUiThread(() -> {
                 if (binding == null) return;
+                if (binding.swipeRefreshLayout.isRefreshing()) {
+                    binding.swipeRefreshLayout.setRefreshing(false);
+                }
                 adapter.updateItems(items);
                 if (items.isEmpty()) {
                     binding.tvEmptyTitle.setText(R.string.tab_all_device_pdfs);
@@ -534,7 +639,11 @@ public class DeviceDocsFragment extends Fragment implements DocumentListAdapter.
         PdfRenderer renderer = null;
         PdfRenderer.Page page = null;
         try {
-            pfd = context.getContentResolver().openFileDescriptor(uri, "r");
+            if ("file".equalsIgnoreCase(uri.getScheme()) && uri.getPath() != null) {
+                pfd = ParcelFileDescriptor.open(new File(uri.getPath()), ParcelFileDescriptor.MODE_READ_ONLY);
+            } else {
+                pfd = context.getContentResolver().openFileDescriptor(uri, "r");
+            }
             if (pfd != null) {
                 renderer = new PdfRenderer(pfd);
                 if (renderer.getPageCount() > 0) {
@@ -568,6 +677,51 @@ public class DeviceDocsFragment extends Fragment implements DocumentListAdapter.
             }
         }
         return null;
+    }
+
+    private void scanDirectoryForPdfs(File dir, Set<String> seenPaths, List<DocumentEntity> pdfList, String query, Context context) {
+        if (dir == null || !dir.exists() || !dir.isDirectory()) return;
+        File[] files = dir.listFiles();
+        if (files == null) return;
+        for (File f : files) {
+            if (f != null && f.isDirectory()) {
+                File[] subFiles = f.listFiles();
+                if (subFiles != null) {
+                    for (File sub : subFiles) {
+                        addFileIfPdf(sub, seenPaths, pdfList, query, context);
+                    }
+                }
+            } else {
+                addFileIfPdf(f, seenPaths, pdfList, query, context);
+            }
+        }
+    }
+
+    private void addFileIfPdf(File f, Set<String> seenPaths, List<DocumentEntity> pdfList, String query, Context context) {
+        if (f == null || !f.exists() || !f.isFile() || f.length() <= 0) return;
+        String name = f.getName();
+        if (!name.toLowerCase(Locale.ROOT).endsWith(".pdf")) return;
+
+        String path = f.getAbsolutePath();
+        String dedupeKey = path.toLowerCase(Locale.ROOT);
+        if (seenPaths.contains(dedupeKey)) return;
+        seenPaths.add(dedupeKey);
+
+        DocumentEntity entity = new DocumentEntity();
+        entity.id = -Math.abs((long) path.hashCode());
+        entity.title = name;
+        entity.format = "PDF";
+        entity.quality = "NORMAL";
+        entity.pageCount = 0;
+        entity.fileSizeBytes = f.length();
+        entity.fileUri = Uri.fromFile(f).toString();
+        entity.createdAt = f.lastModified() > 0 ? f.lastModified() : System.currentTimeMillis();
+        entity.updatedAt = entity.createdAt;
+
+        if (query == null || query.trim().isEmpty()
+                || entity.title.toLowerCase(Locale.getDefault()).contains(query.toLowerCase(Locale.getDefault()).trim())) {
+            pdfList.add(entity);
+        }
     }
 
     @Override

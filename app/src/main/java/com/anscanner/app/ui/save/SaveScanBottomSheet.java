@@ -83,8 +83,8 @@ public class SaveScanBottomSheet extends BottomSheetDialogFragment {
         
         binding.tvPageCount.setText(getString(R.string.review_page_number, pagePaths.size()));
         
-        String defaultName = "Scan_" + new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
-        binding.tilFileName.setHint(getString(R.string.save_file_name_hint));
+        String defaultName = "AnScanner_" + new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
+        binding.tilFileName.setHintEnabled(false);
         binding.etFileName.setText(defaultName);
         binding.etFileName.setSelection(defaultName.length());
         

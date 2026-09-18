@@ -9,6 +9,7 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.ParcelFileDescriptor;
 import android.util.Log;
 import android.util.Size;
 import android.view.View;
@@ -42,6 +43,7 @@ import com.anscanner.app.service.CrashManager;
 import com.anscanner.app.service.PdfGenerator;
 import com.anscanner.app.service.StorageHelper;
 import com.anscanner.app.ui.crop.CropPreviewActivity;
+import com.anscanner.app.ui.editor.UnifiedEditorActivity;
 import com.anscanner.app.ui.library.LibraryActivity;
 import com.anscanner.app.ui.review.ReviewScanActivity;
 import com.anscanner.app.ui.save.CompressPdfBottomSheet;
@@ -287,9 +289,11 @@ public class CameraActivity extends AppCompatActivity {
             setResult(RESULT_OK, resultIntent);
             finish();
         } else {
-            Intent reviewIntent = new Intent(this, ReviewScanActivity.class);
-            reviewIntent.putStringArrayListExtra(ReviewScanActivity.EXTRA_PAGE_PATHS, new ArrayList<>(batchPagePaths));
-            startActivity(reviewIntent);
+            Intent editorIntent = new Intent(this, UnifiedEditorActivity.class);
+            editorIntent.putStringArrayListExtra(UnifiedEditorActivity.EXTRA_PAGE_PATHS, new ArrayList<>(batchPagePaths));
+            editorIntent.putStringArrayListExtra(UnifiedEditorActivity.EXTRA_ORIGINAL_PAGE_PATHS, new ArrayList<>(batchPagePaths));
+            editorIntent.putExtra(UnifiedEditorActivity.EXTRA_MODE, UnifiedEditorActivity.MODE_BATCH_SCAN);
+            startActivity(editorIntent);
         }
     }
 
@@ -646,9 +650,11 @@ public class CameraActivity extends AppCompatActivity {
                         setResult(RESULT_OK, resultIntent);
                         finish();
                     } else {
-                        Intent reviewIntent = new Intent(CameraActivity.this, ReviewScanActivity.class);
-                        reviewIntent.putStringArrayListExtra(ReviewScanActivity.EXTRA_PAGE_PATHS, savedPaths);
-                        startActivity(reviewIntent);
+                        Intent editorIntent = new Intent(CameraActivity.this, UnifiedEditorActivity.class);
+                        editorIntent.putStringArrayListExtra(UnifiedEditorActivity.EXTRA_PAGE_PATHS, savedPaths);
+                        editorIntent.putStringArrayListExtra(UnifiedEditorActivity.EXTRA_ORIGINAL_PAGE_PATHS, savedPaths);
+                        editorIntent.putExtra(UnifiedEditorActivity.EXTRA_MODE, UnifiedEditorActivity.MODE_BATCH_SCAN);
+                        startActivity(editorIntent);
                     }
                 }
             });
@@ -749,9 +755,30 @@ public class CameraActivity extends AppCompatActivity {
 
                 File tempOutputFile = new File(getCacheDir(), "compressed_" + timestamp + ".pdf");
 
+                long originalSizeBytes = 0;
+                try (ParcelFileDescriptor pfd = getContentResolver().openFileDescriptor(sourceUri, "r")) {
+                    if (pfd != null) {
+                        originalSizeBytes = pfd.getStatSize();
+                    }
+                } catch (Exception ignored) {}
+
                 // Core compression engine
                 long compressedSize = PdfGenerator.compressPdf(this, sourceUri, tempOutputFile, quality);
                 int pageCount = PdfGenerator.getPdfPageCount(this, sourceUri);
+
+                // Guardrail: Never save/replace if resulting size is >= original
+                if (originalSizeBytes > 0 && compressedSize >= originalSizeBytes) {
+                    if (tempOutputFile.exists()) {
+                        tempOutputFile.delete();
+                    }
+                    runOnUiThread(() -> {
+                        if (progressDialog.isShowing()) {
+                            progressDialog.dismiss();
+                        }
+                        Toast.makeText(this, R.string.compress_already_optimal, Toast.LENGTH_LONG).show();
+                    });
+                    return;
+                }
 
                 // Save new compressed PDF to public Scoped Storage via MediaStore
                 Uri savedUri = StorageHelper.savePdfToPublicStorage(this, tempOutputFile, compressedFileName + ".pdf");

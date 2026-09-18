@@ -90,6 +90,8 @@ public class CompressPdfBottomSheet extends BottomSheetDialogFragment {
         binding.btnCompressOpen.setOnClickListener(v -> startTargetCompression());
     }
 
+    private String defaultCompressedName = "";
+
     private void inspectSourcePdf() {
         Context context = requireContext();
         String name = StorageHelper.getFileName(context.getContentResolver(), pdfUri);
@@ -115,6 +117,18 @@ public class CompressPdfBottomSheet extends BottomSheetDialogFragment {
         String sizeFormatted = StorageHelper.formatFileSize(originalSizeBytes);
         String pageSuffix = pageCount == 1 ? "1 page" : pageCount + " pages";
         binding.tvOriginalSize.setText(getString(R.string.compress_original_size_format, sizeFormatted) + " · " + pageSuffix);
+
+        // Pre-fill editable file name field: originalFileNameWithoutExt + "_compressed"
+        String baseName = originalFileName;
+        if (baseName.toLowerCase().endsWith(".pdf")) {
+            baseName = baseName.substring(0, baseName.length() - 4);
+        }
+        defaultCompressedName = baseName + "_compressed";
+        binding.etFileName.setText(defaultCompressedName);
+
+        // Check if PDF is already highly optimized (<= pageCount * 60 KB)
+        boolean isOptimized = originalSizeBytes <= ((long) pageCount * 60 * 1024L);
+        binding.layoutOptimizedNotice.setVisibility(isOptimized ? View.VISIBLE : View.GONE);
     }
 
     private void setupSliderAndPresets() {
@@ -132,17 +146,33 @@ public class CompressPdfBottomSheet extends BottomSheetDialogFragment {
         });
 
         binding.btnPresetLow.setOnClickListener(v -> binding.sbTargetSize.setProgress(25));
-        binding.btnPresetMed.setOnClickListener(v -> binding.sbTargetSize.setProgress(55));
-        binding.btnPresetHigh.setOnClickListener(v -> binding.sbTargetSize.setProgress(85));
+        binding.btnPresetMed.setOnClickListener(v -> binding.sbTargetSize.setProgress(60));
+        binding.btnPresetHigh.setOnClickListener(v -> binding.sbTargetSize.setProgress(90));
 
-        // Initial progress: 55% (Medium)
-        binding.sbTargetSize.setProgress(55);
-        updateTargetSizeLabels(55);
+        // Initial progress: 60% (Medium)
+        binding.sbTargetSize.setProgress(60);
+        updateTargetSizeLabels(60);
+    }
+
+    private long getMinTargetSizeBytes() {
+        long min = (long) pageCount * 45 * 1024L;
+        long max = getMaxTargetSizeBytes();
+        if (min >= max) {
+            min = Math.max(10 * 1024L, (long) (originalSizeBytes * 0.40f));
+        }
+        return min;
+    }
+
+    private long getMaxTargetSizeBytes() {
+        return Math.max(15 * 1024L, (long) (originalSizeBytes * 0.90f));
     }
 
     private long calculateTargetSizeBytes(int progress) {
-        long minSize = Math.max(30 * 1024L, (long) (originalSizeBytes * 0.15));
-        long maxSize = originalSizeBytes;
+        long minSize = getMinTargetSizeBytes();
+        long maxSize = getMaxTargetSizeBytes();
+        if (minSize >= maxSize) {
+            minSize = Math.max(5 * 1024L, maxSize - 1024L);
+        }
         return minSize + (long) ((maxSize - minSize) * (progress / 100.0f));
     }
 
@@ -164,24 +194,24 @@ public class CompressPdfBottomSheet extends BottomSheetDialogFragment {
 
         final Context appContext = requireContext().getApplicationContext();
         final long targetSize = calculateTargetSizeBytes(binding.sbTargetSize.getProgress());
-        final String baseName = originalFileName.toLowerCase().endsWith(".pdf")
-                ? originalFileName.substring(0, originalFileName.length() - 4)
-                : originalFileName;
-        final String compressedFileName = baseName + "_compressed";
 
-        binding.btnCompressOpen.setEnabled(false);
-        binding.sbTargetSize.setEnabled(false);
-        binding.btnPresetLow.setEnabled(false);
-        binding.btnPresetMed.setEnabled(false);
-        binding.btnPresetHigh.setEnabled(false);
-        binding.layoutProgress.setVisibility(View.VISIBLE);
-        binding.progressBar.setMax(pageCount);
-        binding.progressBar.setProgress(0);
+        // Extract and sanitize custom file name
+        String inputName = binding.etFileName.getText() != null ? binding.etFileName.getText().toString().trim() : "";
+        if (inputName.isEmpty()) {
+            inputName = defaultCompressedName;
+        }
+        if (inputName.toLowerCase().endsWith(".pdf")) {
+            inputName = inputName.substring(0, inputName.length() - 4);
+        }
+        final String compressedFileName = inputName;
+
+        setUiLoading(true);
 
         executor.execute(() -> {
+            File tempOutputFile = null;
             try {
                 long timestamp = System.currentTimeMillis();
-                File tempOutputFile = new File(appContext.getCacheDir(), "compressed_" + timestamp + ".pdf");
+                tempOutputFile = new File(appContext.getCacheDir(), "compressed_" + timestamp + ".pdf");
 
                 long compressedSize = PdfGenerator.compressPdfToTargetSize(
                         appContext,
@@ -196,9 +226,24 @@ public class CompressPdfBottomSheet extends BottomSheetDialogFragment {
                         })
                 );
 
+                // Guardrail: Never save/replace if resulting size is >= original
+                if (compressedSize >= originalSizeBytes) {
+                    if (tempOutputFile.exists()) {
+                        tempOutputFile.delete();
+                    }
+                    mainHandler.post(() -> {
+                        if (!isAdded()) return;
+                        Toast.makeText(appContext, R.string.compress_already_optimal, Toast.LENGTH_LONG).show();
+                        setUiLoading(false);
+                    });
+                    return;
+                }
+
                 // Save to MediaStore Scoped Storage
                 Uri savedUri = StorageHelper.savePdfToPublicStorage(appContext, tempOutputFile, compressedFileName + ".pdf");
-                tempOutputFile.delete();
+                if (tempOutputFile.exists()) {
+                    tempOutputFile.delete();
+                }
 
                 if (savedUri != null) {
                     // Generate thumbnail for library
@@ -235,18 +280,32 @@ public class CompressPdfBottomSheet extends BottomSheetDialogFragment {
 
             } catch (Exception e) {
                 Log.e(TAG, "Target compression failed", e);
+                if (tempOutputFile != null && tempOutputFile.exists()) {
+                    tempOutputFile.delete();
+                }
                 mainHandler.post(() -> {
                     if (!isAdded()) return;
                     Toast.makeText(appContext, R.string.compress_error, Toast.LENGTH_LONG).show();
-                    binding.btnCompressOpen.setEnabled(true);
-                    binding.sbTargetSize.setEnabled(true);
-                    binding.btnPresetLow.setEnabled(true);
-                    binding.btnPresetMed.setEnabled(true);
-                    binding.btnPresetHigh.setEnabled(true);
-                    binding.layoutProgress.setVisibility(View.GONE);
+                    setUiLoading(false);
                 });
             }
         });
+    }
+
+    private void setUiLoading(boolean loading) {
+        if (binding == null) return;
+        binding.btnCompressOpen.setEnabled(!loading);
+        binding.sbTargetSize.setEnabled(!loading);
+        binding.btnPresetLow.setEnabled(!loading);
+        binding.btnPresetMed.setEnabled(!loading);
+        binding.btnPresetHigh.setEnabled(!loading);
+        binding.tilFileName.setEnabled(!loading);
+        binding.etFileName.setEnabled(!loading);
+        binding.layoutProgress.setVisibility(loading ? View.VISIBLE : View.GONE);
+        if (loading) {
+            binding.progressBar.setMax(pageCount);
+            binding.progressBar.setProgress(0);
+        }
     }
 
     @Override

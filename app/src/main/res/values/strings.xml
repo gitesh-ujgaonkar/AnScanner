@@ -30,6 +30,7 @@
     <string name="crop_action_rotate">Rotate</string>
     <string name="crop_action_delete">Delete</string>
     <string name="crop_save_document">Save Document →</string>
+    <string name="crop_confirm_save">Save</string>
     <string name="crop_confirm_next">Confirm \u0026 Next →</string>
     <string name="crop_filter_original">Original</string>
     <string name="crop_filter_magic_color">Magic Color</string>
@@ -51,7 +52,7 @@
     <!-- ── Screen 4: Save Scan Bottom Sheet ───────────────────────────── -->
     <string name="save_title">Save Scan</string>
     <string name="save_file_name_label">File name</string>
-    <string name="save_file_name_default">Scan_%1$s</string>
+    <string name="save_file_name_default">AnScanner_%1$s</string>
     <string name="save_file_name_hint">Document name</string>
     <string name="save_format_label">Format</string>
     <string name="save_format_pdf">PDF</string>
@@ -219,6 +220,10 @@
 
     <!-- ── File Properties Dialog ───────────────────────────────────── -->
     <string name="action_ok">OK</string>
+    <string name="action_apply">Apply</string>
+    <string name="action_done">Done</string>
+    <string name="rendering_pdf_pages">Loading pages for editing…</string>
+    <string name="edit_pdf_title">Edit Document</string>
     <string name="action_properties">Properties</string>
     <string name="properties_title">File Properties</string>
     <string name="properties_file_name">File Name</string>
@@ -229,12 +234,16 @@
     <string name="properties_format">Format</string>
 
     <!-- ── Target-Size PDF Compression ──────────────────────────────── -->
-    <string name="compress_target_size_format">Target: %1$s</string>
+    <string name="compress_target_size_format">Target: ~%1$s</string>
+    <string name="compress_target_format">Target: ~%1$s</string>
     <string name="compress_original_size_format">Original: %1$s</string>
     <string name="compress_reduction_format">%1$d%% reduction</string>
     <string name="compress_open_action">Compress &amp; Open</string>
     <string name="compress_calculating">Estimating target…</string>
     <string name="compress_success">PDF compressed successfully</string>
+    <string name="compress_already_optimal">This file is already optimally compressed and cannot be reduced further.</string>
+    <string name="compress_already_optimized_notice">This PDF is already highly optimized. Further compression may severely degrade legibility.</string>
+    <string name="compress_file_name_label">File name</string>
     <!-- ── Annotations & Multi-Page OCR ─────────────────────────────── -->
     <string name="cd_annotate">Annotate / Sign</string>
     <string name="annotate_save">Save Annotations</string>
@@ -282,4 +291,25 @@
     <string name="action_unlock">Unlock</string>
     <string name="pdf_wrong_password">Incorrect password. Please try again.</string>
     <string name="encrypting_pdf">Encrypting PDF…</string>
+
+    <!-- ── Unified Editor & Annotations ─────────────────────────────── -->
+    <string name="action_annotate">Annotate</string>
+    <string name="action_pen">Pen</string>
+    <string name="action_highlighter">Highlighter</string>
+    <string name="action_text">Text</string>
+    <string name="action_signature">Signature</string>
+    <string name="action_text_sign">Text / Sign</string>
+    <string name="signature_dialog_title">Draw Signature</string>
+    <string name="signature_use">Use Signature</string>
+    <string name="signature_clear">Clear</string>
+    <string name="text_dialog_title">Add Text Annotation</string>
+    <string name="text_dialog_hint">Enter annotation text…</string>
+    <string name="stroke_width_fine">Fine</string>
+    <string name="stroke_width_medium">Medium</string>
+    <string name="stroke_width_bold">Bold</string>
+    <string name="editor_mode_batch">Batch Scan</string>
+    <string name="editor_mode_pdf">Edit Document</string>
+    <string name="editor_mode_single">Edit Scan</string>
+    <string name="delete_page_confirm_title">Delete Page %1$d?</string>
+    <string name="delete_page_confirm_message">Are you sure you want to remove this page from the document?</string>
 </resources>

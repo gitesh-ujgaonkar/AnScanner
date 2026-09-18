@@ -66,7 +66,7 @@
             style="@style/Widget.AnScanner.TextInputLayout"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="@string/save_file_name_hint"
+            app:hintEnabled="false"
             app:boxCornerRadiusTopStart="@dimen/text_input_corner_radius"
             app:boxCornerRadiusTopEnd="@dimen/text_input_corner_radius"
             app:boxCornerRadiusBottomStart="@dimen/text_input_corner_radius"

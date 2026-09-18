@@ -4,10 +4,12 @@
 
     <!-- ── Permissions ────────────────────────────────────────────────── -->
     <uses-permission android:name="android.permission.CAMERA" />
-    <uses-permission
-        android:name="android.permission.READ_EXTERNAL_STORAGE"
-        android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <!-- Android 11+ (API 30+) broad document access for scanner / PDF viewer -->
+    <uses-permission
+        android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
+        tools:ignore="ScopedStorage" />
 
     <!-- Required hardware feature -->
     <uses-feature
@@ -25,6 +27,7 @@
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.AnScanner"
+        android:requestLegacyExternalStorage="true"
         tools:targetApi="34">
 
         <!-- ── Screen 0: Onboarding ──────────────────────────────────── -->
@@ -54,6 +57,20 @@
         <!-- ── Screen 2: Crop Preview & Manual Edge Cropping ─────────── -->
         <activity
             android:name=".ui.crop.CropPreviewActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.AnScanner.CropPreview" />
+
+        <!-- ── Multi-Page PDF Editor ────────────────────────────────────── -->
+        <activity
+            android:name=".ui.crop.EditPdfActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.AnScanner.CropPreview" />
+
+        <!-- ── Unified Editor (Batch Scan & PDF Annotation / Editor) ───── -->
+        <activity
+            android:name=".ui.editor.UnifiedEditorActivity"
             android:exported="false"
             android:screenOrientation="portrait"
             android:theme="@style/Theme.AnScanner.CropPreview" />

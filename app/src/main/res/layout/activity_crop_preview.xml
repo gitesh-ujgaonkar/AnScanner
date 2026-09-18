@@ -103,18 +103,16 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/topBar">
 
-        <ImageView
-            android:id="@+id/ivDocument"
+        <androidx.viewpager2.widget.ViewPager2
+            android:id="@+id/viewPager"
             android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:layout_gravity="center"
-            android:adjustViewBounds="false"
-            android:scaleType="centerInside" />
+            android:layout_height="match_parent" />
 
         <com.anscanner.app.ui.crop.CropOverlayView
             android:id="@+id/cropOverlay"
             android:layout_width="match_parent"
-            android:layout_height="match_parent" />
+            android:layout_height="match_parent"
+            android:visibility="gone" />
 
         <com.anscanner.app.ui.custom.LensOverlayView
             android:id="@+id/lensOverlay"
@@ -206,12 +204,14 @@
                     android:paddingVertical="@dimen/spacing_xs">
 
                     <ImageView
+                        android:id="@+id/ivCropIcon"
                         android:layout_width="@dimen/icon_md"
                         android:layout_height="@dimen/icon_md"
                         android:src="@drawable/ic_crop"
                         app:tint="@android:color/white" />
 
                     <TextView
+                        android:id="@+id/tvCropLabel"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="4dp"
