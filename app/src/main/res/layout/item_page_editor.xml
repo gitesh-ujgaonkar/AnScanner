@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/background_primary">
+
+    <!-- 1. Base Image Layer (TouchImageView with 1x-5x pinch zoom) -->
+    <com.anscanner.app.ui.custom.TouchImageView
+        android:id="@+id/ivPageImage"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="fitCenter" />
+
+    <!-- 2. Interactive CropOverlayView (hidden by default) -->
+    <com.anscanner.app.ui.crop.CropOverlayView
+        android:id="@+id/cropOverlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="gone" />
+
+    <!-- 3. AnnotationDrawingView (transparent overlay) -->
+    <com.anscanner.app.ui.custom.AnnotationDrawingView
+        android:id="@+id/drawingOverlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="gone" />
+
+</FrameLayout>

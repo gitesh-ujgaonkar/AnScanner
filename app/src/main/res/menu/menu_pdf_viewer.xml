@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <item
+        android:id="@+id/action_reading_mode"
+        android:title="@string/reading_mode_title"
+        android:icon="@drawable/ic_reading_mode"
+        app:showAsAction="always" />
+
+    <item
+        android:id="@+id/action_ocr"
+        android:title="@string/cd_extract_text"
+        android:icon="@drawable/ic_ocr_text"
+        app:showAsAction="ifRoom" />
+
+    <item
+        android:id="@+id/action_annotate"
+        android:title="@string/cd_annotate"
+        android:icon="@drawable/ic_draw"
+        app:showAsAction="ifRoom" />
+
+    <item
+        android:id="@+id/action_edit"
+        android:title="@string/action_edit_page"
+        android:icon="@drawable/ic_edit"
+        app:showAsAction="ifRoom" />
+
+    <item
+        android:id="@+id/action_print"
+        android:title="@string/action_print"
+        android:icon="@drawable/ic_print"
+        app:showAsAction="never" />
+
+</menu>

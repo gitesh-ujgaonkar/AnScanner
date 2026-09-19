@@ -1,0 +1,594 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/background_primary">
+
+    <!-- ── 1. Top Clean Header ─────────────────────────────────────────── -->
+    <LinearLayout
+        android:id="@+id/topBar"
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/top_bar_height"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingHorizontal="@dimen/spacing_sm"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <!-- Left: Close Button -->
+        <ImageButton
+            android:id="@+id/btnClose"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/cd_close"
+            android:src="@drawable/ic_close"
+            app:tint="@android:color/white" />
+
+        <!-- Center: Dedicated Page Navigation (< Page X of Y >) -->
+        <LinearLayout
+            android:id="@+id/layoutPageNav"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:orientation="horizontal">
+
+            <ImageButton
+                android:id="@+id/btnPrevPage"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/action_back"
+                android:src="@drawable/ic_chevron_left"
+                app:tint="@android:color/white" />
+
+            <TextView
+                android:id="@+id/tvTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="2dp"
+                android:background="@drawable/bg_title_pill"
+                android:ellipsize="end"
+                android:gravity="center"
+                android:minWidth="70dp"
+                android:paddingHorizontal="10dp"
+                android:paddingVertical="5dp"
+                android:singleLine="true"
+                android:text="Page 1 of 1"
+                android:textAppearance="@style/TextAppearance.AnScanner.Title"
+                android:textColor="@android:color/white"
+                android:textSize="12sp" />
+
+            <ImageButton
+                android:id="@+id/btnNextPage"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/camera_see_all"
+                android:src="@drawable/ic_chevron_right"
+                app:tint="@android:color/white" />
+        </LinearLayout>
+
+        <!-- Right: Actions (Undo, OCR, Save) -->
+        <LinearLayout
+            android:id="@+id/layoutRightActions"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical|end"
+            android:orientation="horizontal">
+
+            <ImageButton
+                android:id="@+id/btnUndo"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/cd_undo"
+                android:enabled="false"
+                android:alpha="0.3"
+                android:src="@drawable/ic_undo"
+                app:tint="@android:color/white" />
+
+            <ImageButton
+                android:id="@+id/btnExtractText"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/cd_extract_text"
+                android:src="@drawable/ic_ocr_text"
+                app:tint="@android:color/white" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnSaveDocument"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:layout_marginStart="4dp"
+                android:backgroundTint="@color/accent_mint"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                android:minWidth="0dp"
+                android:paddingHorizontal="12dp"
+                android:text="@string/crop_confirm_save"
+                android:textAppearance="@style/TextAppearance.AnScanner.Button"
+                android:textColor="@color/background_primary"
+                android:textSize="12sp"
+                app:cornerRadius="18dp" />
+        </LinearLayout>
+
+    </LinearLayout>
+
+    <!-- ── 2. Canvas Viewport (Center) ─────────────────────────────────── -->
+    <FrameLayout
+        android:id="@+id/frameCenter"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:background="@color/background_primary"
+        android:padding="4dp"
+        app:layout_constraintBottom_toTopOf="@id/bottomContainer"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/topBar">
+
+        <androidx.viewpager2.widget.ViewPager2
+            android:id="@+id/viewPager"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+
+        <com.anscanner.app.ui.custom.LensOverlayView
+            android:id="@+id/lensOverlay"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="gone" />
+
+        <!-- Floating Corner Magnifier / Loupe -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/cardLoupe"
+            android:layout_width="@dimen/loupe_size"
+            android:layout_height="@dimen/loupe_size"
+            android:layout_gravity="top|start"
+            android:visibility="gone"
+            app:cardBackgroundColor="@color/background_primary"
+            app:cardCornerRadius="@dimen/loupe_corner_radius"
+            app:cardElevation="10dp"
+            app:cardPreventCornerOverlap="false"
+            app:contentPadding="0dp"
+            app:strokeColor="@color/accent_mint"
+            app:strokeWidth="2dp"
+            app:useCompatPadding="false">
+
+            <FrameLayout
+                android:layout_width="match_parent"
+                android:layout_height="match_parent">
+
+                <ImageView
+                    android:id="@+id/ivLoupe"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:scaleType="matrix" />
+
+                <ImageView
+                    android:id="@+id/ivLoupeCrosshair"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:layout_gravity="center"
+                    android:src="@drawable/ic_crosshair"
+                    app:tint="@color/accent_mint" />
+            </FrameLayout>
+        </com.google.android.material.card.MaterialCardView>
+    </FrameLayout>
+
+    <!-- ── 3. Bottom Controls Container ────────────────────────────────── -->
+    <LinearLayout
+        android:id="@+id/bottomContainer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingBottom="6dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent">
+
+        <!-- ── Annotation Sub-Toolbar (Visible during drawing mode) ─────── -->
+        <LinearLayout
+            android:id="@+id/layoutAnnotationBar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginHorizontal="12dp"
+            android:layout_marginBottom="6dp"
+            android:background="@drawable/bg_annotation_bar"
+            android:elevation="6dp"
+            android:orientation="vertical"
+            android:paddingHorizontal="10dp"
+            android:paddingVertical="6dp"
+            android:visibility="gone">
+
+            <!-- Tools Row: Pen, Highlighter, Stroke Width, Clear, Done -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="40dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <ImageButton
+                    android:id="@+id/btnToolPen"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/action_pen"
+                    android:src="@drawable/ic_edit"
+                    app:tint="@color/accent_mint" />
+
+                <ImageButton
+                    android:id="@+id/btnToolHighlighter"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/action_highlighter"
+                    android:src="@drawable/ic_ocr_text"
+                    app:tint="@color/text_secondary" />
+
+                <TextView
+                    android:id="@+id/btnStrokeWidth"
+                    android:layout_width="wrap_content"
+                    android:layout_height="28dp"
+                    android:layout_marginStart="6dp"
+                    android:background="@drawable/bg_title_pill"
+                    android:gravity="center"
+                    android:paddingHorizontal="10dp"
+                    android:text="@string/stroke_width_medium"
+                    android:textColor="@color/text_primary"
+                    android:textSize="11sp" />
+
+                <View
+                    android:layout_width="0dp"
+                    android:layout_height="1dp"
+                    android:layout_weight="1" />
+
+                <ImageButton
+                    android:id="@+id/btnClearAnnotation"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/annotate_clear"
+                    android:src="@drawable/ic_delete"
+                    app:tint="@color/text_secondary" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnDoneAnnotation"
+                    android:layout_width="wrap_content"
+                    android:layout_height="32dp"
+                    android:layout_marginStart="4dp"
+                    android:backgroundTint="@color/accent_mint"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:paddingHorizontal="12dp"
+                    android:text="@string/action_done"
+                    android:textColor="@color/background_primary"
+                    android:textSize="12sp"
+                    app:cornerRadius="16dp" />
+            </LinearLayout>
+
+            <!-- Color Palette Row (with outer selection rings) -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="36dp"
+                android:gravity="center"
+                android:orientation="horizontal"
+                android:paddingTop="2dp">
+
+                <!-- Slot 1: Mint Green #68D391 -->
+                <FrameLayout
+                    android:id="@+id/containerColorMint"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:layout_marginHorizontal="4dp">
+                    <View
+                        android:id="@+id/ringMint"
+                        android:layout_width="30dp"
+                        android:layout_height="30dp"
+                        android:layout_gravity="center"
+                        android:background="@drawable/bg_circle_ring"
+                        android:visibility="visible" />
+                    <View
+                        android:id="@+id/colorMint"
+                        android:layout_width="22dp"
+                        android:layout_height="22dp"
+                        android:layout_gravity="center"
+                        android:background="@drawable/bg_circle_mint" />
+                </FrameLayout>
+
+                <!-- Slot 2: Red #EF4444 -->
+                <FrameLayout
+                    android:id="@+id/containerColorRed"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:layout_marginHorizontal="4dp">
+                    <View
+                        android:id="@+id/ringRed"
+                        android:layout_width="30dp"
+                        android:layout_height="30dp"
+                        android:layout_gravity="center"
+                        android:background="@drawable/bg_circle_ring"
+                        android:visibility="gone" />
+                    <View
+                        android:id="@+id/colorRed"
+                        android:layout_width="22dp"
+                        android:layout_height="22dp"
+                        android:layout_gravity="center"
+                        android:background="@drawable/bg_circle_red" />
+                </FrameLayout>
+
+                <!-- Slot 3: Black #111827 -->
+                <FrameLayout
+                    android:id="@+id/containerColorBlack"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:layout_marginHorizontal="4dp">
+                    <View
+                        android:id="@+id/ringBlack"
+                        android:layout_width="30dp"
+                        android:layout_height="30dp"
+                        android:layout_gravity="center"
+                        android:background="@drawable/bg_circle_ring"
+                        android:visibility="gone" />
+                    <View
+                        android:id="@+id/colorBlack"
+                        android:layout_width="22dp"
+                        android:layout_height="22dp"
+                        android:layout_gravity="center"
+                        android:background="@drawable/bg_circle_black" />
+                </FrameLayout>
+
+                <!-- Slot 4: White #FFFFFF with subtle border -->
+                <FrameLayout
+                    android:id="@+id/containerColorWhite"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:layout_marginHorizontal="4dp">
+                    <View
+                        android:id="@+id/ringWhite"
+                        android:layout_width="30dp"
+                        android:layout_height="30dp"
+                        android:layout_gravity="center"
+                        android:background="@drawable/bg_circle_ring"
+                        android:visibility="gone" />
+                    <View
+                        android:id="@+id/colorWhite"
+                        android:layout_width="22dp"
+                        android:layout_height="22dp"
+                        android:layout_gravity="center"
+                        android:background="@drawable/bg_circle_white" />
+                </FrameLayout>
+
+                <!-- Slot 5: Yellow #FACC15 -->
+                <FrameLayout
+                    android:id="@+id/containerColorYellow"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:layout_marginHorizontal="4dp">
+                    <View
+                        android:id="@+id/ringYellow"
+                        android:layout_width="30dp"
+                        android:layout_height="30dp"
+                        android:layout_gravity="center"
+                        android:background="@drawable/bg_circle_ring"
+                        android:visibility="gone" />
+                    <View
+                        android:id="@+id/colorYellow"
+                        android:layout_width="22dp"
+                        android:layout_height="22dp"
+                        android:layout_gravity="center"
+                        android:background="@drawable/bg_circle_yellow" />
+                </FrameLayout>
+
+                <!-- Slot 6: Blue #3B82F6 -->
+                <FrameLayout
+                    android:id="@+id/containerColorBlue"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:layout_marginHorizontal="4dp">
+                    <View
+                        android:id="@+id/ringBlue"
+                        android:layout_width="30dp"
+                        android:layout_height="30dp"
+                        android:layout_gravity="center"
+                        android:background="@drawable/bg_circle_ring"
+                        android:visibility="gone" />
+                    <View
+                        android:id="@+id/colorBlue"
+                        android:layout_width="22dp"
+                        android:layout_height="22dp"
+                        android:layout_gravity="center"
+                        android:background="@drawable/bg_circle_blue" />
+                </FrameLayout>
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- ── Horizontal Thumbnail Strip (Batch Scan / Multi-Page) ────── -->
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/rvThumbnails"
+            android:layout_width="match_parent"
+            android:layout_height="78dp"
+            android:clipToPadding="false"
+            android:orientation="horizontal"
+            android:paddingHorizontal="12dp"
+            android:paddingVertical="4dp" />
+
+        <!-- ── Bottom Quick-Action Toolbar ─────────────────────────────── -->
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginHorizontal="12dp"
+            android:layout_marginTop="2dp"
+            android:layout_marginBottom="4dp"
+            app:cardBackgroundColor="@color/surface_card"
+            app:cardCornerRadius="@dimen/radius_lg"
+            app:cardElevation="4dp"
+            app:contentPadding="0dp"
+            app:strokeColor="@color/border_subtle"
+            app:strokeWidth="1dp"
+            app:useCompatPadding="false">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:paddingHorizontal="4dp"
+                android:paddingVertical="6dp">
+
+                <!-- 1. Crop Button -->
+                <LinearLayout
+                    android:id="@+id/btnCrop"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:background="?attr/selectableItemBackground"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center"
+                    android:orientation="vertical"
+                    android:paddingVertical="4dp">
+
+                    <ImageView
+                        android:id="@+id/ivCropIcon"
+                        android:layout_width="@dimen/icon_md"
+                        android:layout_height="@dimen/icon_md"
+                        android:src="@drawable/ic_crop"
+                        app:tint="@android:color/white" />
+
+                    <TextView
+                        android:id="@+id/tvCropLabel"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:text="@string/crop_action_crop"
+                        android:textAppearance="@style/TextAppearance.AnScanner.Label"
+                        android:textColor="@android:color/white"
+                        android:textSize="11sp" />
+                </LinearLayout>
+
+                <!-- 2. Annotate / Draw Button -->
+                <LinearLayout
+                    android:id="@+id/btnAnnotate"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:background="?attr/selectableItemBackground"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center"
+                    android:orientation="vertical"
+                    android:paddingVertical="4dp">
+
+                    <ImageView
+                        android:id="@+id/ivAnnotateIcon"
+                        android:layout_width="@dimen/icon_md"
+                        android:layout_height="@dimen/icon_md"
+                        android:src="@drawable/ic_edit"
+                        app:tint="@android:color/white" />
+
+                    <TextView
+                        android:id="@+id/tvAnnotateLabel"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:text="@string/action_annotate"
+                        android:textAppearance="@style/TextAppearance.AnScanner.Label"
+                        android:textColor="@android:color/white"
+                        android:textSize="11sp" />
+                </LinearLayout>
+
+                <!-- 3. Text / Signature Button -->
+                <LinearLayout
+                    android:id="@+id/btnTextSign"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:background="?attr/selectableItemBackground"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center"
+                    android:orientation="vertical"
+                    android:paddingVertical="4dp">
+
+                    <ImageView
+                        android:layout_width="@dimen/icon_md"
+                        android:layout_height="@dimen/icon_md"
+                        android:src="@drawable/ic_signature"
+                        app:tint="@android:color/white" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:text="@string/action_text_sign"
+                        android:textAppearance="@style/TextAppearance.AnScanner.Label"
+                        android:textColor="@android:color/white"
+                        android:textSize="11sp" />
+                </LinearLayout>
+
+                <!-- 4. Rotate Button -->
+                <LinearLayout
+                    android:id="@+id/btnRotate"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:background="?attr/selectableItemBackground"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center"
+                    android:orientation="vertical"
+                    android:paddingVertical="4dp">
+
+                    <ImageView
+                        android:layout_width="@dimen/icon_md"
+                        android:layout_height="@dimen/icon_md"
+                        android:src="@drawable/ic_rotate"
+                        app:tint="@android:color/white" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:text="@string/crop_action_rotate"
+                        android:textAppearance="@style/TextAppearance.AnScanner.Label"
+                        android:textColor="@android:color/white"
+                        android:textSize="11sp" />
+                </LinearLayout>
+
+                <!-- 5. Delete Button -->
+                <LinearLayout
+                    android:id="@+id/btnDelete"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:background="?attr/selectableItemBackground"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center"
+                    android:orientation="vertical"
+                    android:paddingVertical="4dp">
+
+                    <ImageView
+                        android:layout_width="@dimen/icon_md"
+                        android:layout_height="@dimen/icon_md"
+                        android:src="@drawable/ic_delete"
+                        app:tint="@android:color/white" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:text="@string/crop_action_delete"
+                        android:textAppearance="@style/TextAppearance.AnScanner.Label"
+                        android:textColor="@android:color/white"
+                        android:textSize="11sp" />
+                </LinearLayout>
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+    </LinearLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

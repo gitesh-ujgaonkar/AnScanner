@@ -14,6 +14,8 @@ import android.graphics.pdf.PdfDocument;
 import android.graphics.pdf.PdfRenderer;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.ParcelFileDescriptor;
 import android.print.PrintAttributes;
 import android.print.PrintManager;
@@ -106,6 +108,19 @@ public class PdfViewerActivity extends AppCompatActivity implements ReadingModeB
     private int currentOcrPageIndex = 0;
     private Bitmap currentOcrBitmap;
 
+    // Kindle-Style E-Reader mode state
+    private boolean isInEreaderMode = false;
+    private final Handler badgeHandler = new Handler(Looper.getMainLooper());
+    private final Runnable hideBadgeRunnable = () -> {
+        if (binding != null && binding.tvEreaderPageBadge != null) {
+            binding.tvEreaderPageBadge.animate().alpha(0f).setDuration(400).withEndAction(() -> {
+                if (binding != null && binding.tvEreaderPageBadge != null) {
+                    binding.tvEreaderPageBadge.setVisibility(View.GONE);
+                }
+            }).start();
+        }
+    };
+
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -130,7 +145,9 @@ public class PdfViewerActivity extends AppCompatActivity implements ReadingModeB
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override
             public void handleOnBackPressed() {
-                if (isOcrActive()) {
+                if (isInEreaderMode) {
+                    exitKindleReadingMode();
+                } else if (isOcrActive()) {
                     dismissOcrOverlay();
                 } else if (isAnnotationMode) {
                     exitAnnotationMode();
@@ -745,12 +762,186 @@ public class PdfViewerActivity extends AppCompatActivity implements ReadingModeB
         }
     }
 
-    // ── Kindle-Style Reading Mode ────────────────────────────────────────
+    // ── Kindle-Style Reading Mode (Single-Page & Realistic Page Curl) ────
 
     public void enableKindleReadingMode() {
-        ReadingModeBottomSheet sheet = ReadingModeBottomSheet.newInstance();
-        sheet.setOnReadingSettingsChangedListener(this);
-        sheet.show(getSupportFragmentManager(), ReadingModeBottomSheet.TAG);
+        if (pdfRenderer == null) {
+            Toast.makeText(this, "Reading mode is only available for PDF documents", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        if (isOcrActive()) {
+            dismissOcrOverlay();
+        }
+        if (isAnnotationMode) {
+            exitAnnotationMode();
+        }
+        if (binding.lensOverlay.getVisibility() == View.VISIBLE) {
+            dismissLensOverlay();
+        }
+
+        isInEreaderMode = true;
+
+        // Hide standard toolbars, action buttons, bottom bars, and ads
+        binding.topBar.setVisibility(View.GONE);
+        binding.topBarDivider.setVisibility(View.GONE);
+        if (binding.adView != null) {
+            binding.adView.setVisibility(View.GONE);
+        }
+        binding.rvPdfPages.setVisibility(View.GONE);
+        binding.photoView.setVisibility(View.GONE);
+
+        // Find current visible position to resume reading seamlessly
+        int currentPos = 0;
+        if (layoutManager != null) {
+            currentPos = Math.max(0, layoutManager.findFirstVisibleItemPosition());
+        }
+
+        // Initialize PageCurlView
+        binding.pageCurlView.setVisibility(View.VISIBLE);
+        binding.pageCurlView.initialize(pdfRenderer, currentPos);
+
+        // Bind callbacks
+        binding.pageCurlView.setOnPageTurnListener((newIndex, total) -> {
+            updateEreaderBadge(newIndex + 1, total);
+            showAndFadeEreaderBadge();
+            if (binding.tvEreaderPageIndicator != null) {
+                binding.tvEreaderPageIndicator.setText(getString(R.string.pdf_page_indicator, newIndex + 1, total));
+            }
+        });
+
+        binding.pageCurlView.setOnCenterTapListener(this::toggleEreaderControls);
+
+        // Setup overlays & controls
+        setupEreaderControls();
+
+        // Initial badge and indicator
+        if (binding.tvEreaderTitle != null) {
+            binding.tvEreaderTitle.setText(documentTitle != null ? documentTitle : "Document");
+        }
+        if (binding.tvEreaderPageIndicator != null) {
+            binding.tvEreaderPageIndicator.setText(getString(R.string.pdf_page_indicator, currentPos + 1, pageCount));
+        }
+        updateEreaderBadge(currentPos + 1, pageCount);
+        showAndFadeEreaderBadge();
+    }
+
+    public void exitKindleReadingMode() {
+        if (!isInEreaderMode) return;
+        isInEreaderMode = false;
+
+        badgeHandler.removeCallbacks(hideBadgeRunnable);
+
+        int lastPage = 0;
+        if (binding.pageCurlView != null) {
+            lastPage = binding.pageCurlView.getCurrentPageIndex();
+            binding.pageCurlView.cleanup();
+            binding.pageCurlView.setVisibility(View.GONE);
+        }
+
+        binding.layoutEreaderControls.setVisibility(View.GONE);
+        binding.tvEreaderPageBadge.setVisibility(View.GONE);
+
+        // Restore standard view
+        binding.rvPdfPages.setVisibility(View.VISIBLE);
+        binding.topBar.setVisibility(View.VISIBLE);
+        binding.topBarDivider.setVisibility(View.VISIBLE);
+        if (binding.adView != null) {
+            binding.adView.setVisibility(View.VISIBLE);
+        }
+
+        // Sync standard RecyclerView scroll position to last read page
+        if (layoutManager != null && lastPage >= 0 && lastPage < pageCount) {
+            layoutManager.scrollToPositionWithOffset(lastPage, 0);
+            updatePageIndicator(lastPage + 1);
+        }
+    }
+
+    private void toggleEreaderControls() {
+        if (binding.layoutEreaderControls == null) return;
+        boolean isVisible = binding.layoutEreaderControls.getVisibility() == View.VISIBLE;
+        if (isVisible) {
+            binding.layoutEreaderControls.setVisibility(View.GONE);
+        } else {
+            binding.layoutEreaderControls.setVisibility(View.VISIBLE);
+            if (binding.pageCurlView != null) {
+                updateToneCardSelection(binding.pageCurlView.getPaperWarmth());
+                binding.switchEInk.setChecked(binding.pageCurlView.isEInkMode());
+                binding.switchPaperTexture.setChecked(binding.pageCurlView.isPaperTextureEnabled());
+            }
+        }
+    }
+
+    private void setupEreaderControls() {
+        binding.btnExitEreader.setOnClickListener(v -> exitKindleReadingMode());
+
+        binding.cardToneWhite.setOnClickListener(v -> setEreaderWarmth(PageCurlView.PaperWarmth.WHITE));
+        binding.cardToneWarm.setOnClickListener(v -> setEreaderWarmth(PageCurlView.PaperWarmth.WARM));
+        binding.cardToneSepia.setOnClickListener(v -> setEreaderWarmth(PageCurlView.PaperWarmth.SEPIA));
+        binding.cardToneDark.setOnClickListener(v -> setEreaderWarmth(PageCurlView.PaperWarmth.DARK));
+        binding.cardToneNight.setOnClickListener(v -> setEreaderWarmth(PageCurlView.PaperWarmth.NIGHT));
+
+        binding.switchEInk.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            if (binding.pageCurlView != null) {
+                binding.pageCurlView.setEInkMode(isChecked);
+            }
+        });
+
+        binding.switchPaperTexture.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            if (binding.pageCurlView != null) {
+                binding.pageCurlView.setPaperTextureEnabled(isChecked);
+            }
+        });
+
+        if (binding.pageCurlView != null) {
+            updateToneCardSelection(binding.pageCurlView.getPaperWarmth());
+            binding.switchEInk.setChecked(binding.pageCurlView.isEInkMode());
+            binding.switchPaperTexture.setChecked(binding.pageCurlView.isPaperTextureEnabled());
+        }
+    }
+
+    private void setEreaderWarmth(PageCurlView.PaperWarmth warmth) {
+        if (binding.pageCurlView != null) {
+            binding.pageCurlView.setPaperWarmth(warmth);
+        }
+        updateToneCardSelection(warmth);
+    }
+
+    private void updateToneCardSelection(PageCurlView.PaperWarmth warmth) {
+        int activeStroke = ContextCompat.getColor(this, R.color.accent_mint);
+        int inactiveStroke = ContextCompat.getColor(this, R.color.divider);
+        int activeWidth = (int) (2 * getResources().getDisplayMetrics().density);
+        int inactiveWidth = (int) (1 * getResources().getDisplayMetrics().density);
+
+        binding.cardToneWhite.setStrokeColor(warmth == PageCurlView.PaperWarmth.WHITE ? activeStroke : inactiveStroke);
+        binding.cardToneWhite.setStrokeWidth(warmth == PageCurlView.PaperWarmth.WHITE ? activeWidth : inactiveWidth);
+
+        binding.cardToneWarm.setStrokeColor(warmth == PageCurlView.PaperWarmth.WARM ? activeStroke : inactiveStroke);
+        binding.cardToneWarm.setStrokeWidth(warmth == PageCurlView.PaperWarmth.WARM ? activeWidth : inactiveWidth);
+
+        binding.cardToneSepia.setStrokeColor(warmth == PageCurlView.PaperWarmth.SEPIA ? activeStroke : inactiveStroke);
+        binding.cardToneSepia.setStrokeWidth(warmth == PageCurlView.PaperWarmth.SEPIA ? activeWidth : inactiveWidth);
+
+        binding.cardToneDark.setStrokeColor(warmth == PageCurlView.PaperWarmth.DARK ? activeStroke : inactiveStroke);
+        binding.cardToneDark.setStrokeWidth(warmth == PageCurlView.PaperWarmth.DARK ? activeWidth : inactiveWidth);
+
+        binding.cardToneNight.setStrokeColor(warmth == PageCurlView.PaperWarmth.NIGHT ? activeStroke : inactiveStroke);
+        binding.cardToneNight.setStrokeWidth(warmth == PageCurlView.PaperWarmth.NIGHT ? activeWidth : inactiveWidth);
+    }
+
+    private void updateEreaderBadge(int current, int total) {
+        if (binding.tvEreaderPageBadge != null) {
+            binding.tvEreaderPageBadge.setText(String.format(Locale.US, "%d / %d", current, total));
+        }
+    }
+
+    private void showAndFadeEreaderBadge() {
+        if (binding == null || binding.tvEreaderPageBadge == null) return;
+        badgeHandler.removeCallbacks(hideBadgeRunnable);
+        binding.tvEreaderPageBadge.animate().cancel();
+        binding.tvEreaderPageBadge.setAlpha(1f);
+        binding.tvEreaderPageBadge.setVisibility(View.VISIBLE);
+        badgeHandler.postDelayed(hideBadgeRunnable, 2000);
     }
 
     @Override
@@ -1171,6 +1362,14 @@ public class PdfViewerActivity extends AppCompatActivity implements ReadingModeB
 
     @Override
     protected void onDestroy() {
+        if (badgeHandler != null) {
+            badgeHandler.removeCallbacks(hideBadgeRunnable);
+        }
+
+        if (binding != null && binding.pageCurlView != null) {
+            binding.pageCurlView.cleanup();
+        }
+
         if (binding != null && binding.adView != null) {
             binding.adView.destroy();
         }
