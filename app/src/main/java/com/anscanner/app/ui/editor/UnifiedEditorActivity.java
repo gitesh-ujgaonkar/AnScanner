@@ -49,9 +49,14 @@ import com.google.android.material.materialswitch.MaterialSwitch;
 import com.google.mlkit.vision.text.Text;
 
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Stack;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -107,6 +112,160 @@ public class UnifiedEditorActivity extends AppCompatActivity {
     private ExecutorService executor;
     private Handler mainHandler;
     private volatile boolean isBusy = false;
+
+    // ── Unified Undo / Redo Architecture ──────────────────────────────
+
+    public interface EditorAction {
+        void undo();
+        void redo();
+    }
+
+    public class ImageTransformAction implements EditorAction {
+        private final int targetPageIndex;
+        private final String backupPath;
+        private final String transformedPath;
+        private final Point[] previousCorners;
+        private final Point[] newCorners;
+
+        public ImageTransformAction(int targetPageIndex, String backupPath, String transformedPath, Point[] previousCorners, Point[] newCorners) {
+            this.targetPageIndex = targetPageIndex;
+            this.backupPath = backupPath;
+            this.transformedPath = transformedPath;
+            this.previousCorners = previousCorners;
+            this.newCorners = newCorners;
+        }
+
+        public int getTargetPageIndex() {
+            return targetPageIndex;
+        }
+
+        public String getBackupPath() {
+            return backupPath;
+        }
+
+        public String getTransformedPath() {
+            return transformedPath;
+        }
+
+        @Override
+        public void undo() {
+            if (targetPageIndex >= 0 && targetPageIndex < pagePaths.size()) {
+                pagePaths.set(targetPageIndex, backupPath);
+                if (previousCorners != null) {
+                    savedCornersMap.put(targetPageIndex, previousCorners);
+                } else {
+                    savedCornersMap.remove(targetPageIndex);
+                }
+
+                if (binding.viewPager.getCurrentItem() != targetPageIndex) {
+                    binding.viewPager.setCurrentItem(targetPageIndex, false);
+                }
+
+                pageAdapter.notifyItemChanged(targetPageIndex);
+                thumbAdapter.notifyItemChanged(targetPageIndex);
+
+                PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.viewPager, targetPageIndex);
+                if (vh != null) {
+                    Bitmap bmp = CacheManager.loadBitmap(backupPath);
+                    if (bmp != null) {
+                        vh.ivPageImage.setImageBitmap(bmp);
+                        vh.drawingOverlay.bindImageView(vh.ivPageImage);
+                        if (previousCorners != null) {
+                            vh.cropOverlay.setCorners(previousCorners);
+                        }
+                    }
+                }
+            }
+        }
+
+        @Override
+        public void redo() {
+            if (targetPageIndex >= 0 && targetPageIndex < pagePaths.size()) {
+                pagePaths.set(targetPageIndex, transformedPath);
+                if (newCorners != null) {
+                    savedCornersMap.put(targetPageIndex, newCorners);
+                }
+
+                if (binding.viewPager.getCurrentItem() != targetPageIndex) {
+                    binding.viewPager.setCurrentItem(targetPageIndex, false);
+                }
+
+                pageAdapter.notifyItemChanged(targetPageIndex);
+                thumbAdapter.notifyItemChanged(targetPageIndex);
+
+                PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.viewPager, targetPageIndex);
+                if (vh != null) {
+                    Bitmap bmp = CacheManager.loadBitmap(transformedPath);
+                    if (bmp != null) {
+                        vh.ivPageImage.setImageBitmap(bmp);
+                        vh.drawingOverlay.bindImageView(vh.ivPageImage);
+                        if (newCorners != null) {
+                            vh.cropOverlay.setCorners(newCorners);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    public class DrawingStrokeAction implements EditorAction {
+        private final int targetPageIndex;
+
+        public DrawingStrokeAction(int targetPageIndex) {
+            this.targetPageIndex = targetPageIndex;
+        }
+
+        @Override
+        public void undo() {
+            if (binding.viewPager.getCurrentItem() != targetPageIndex) {
+                binding.viewPager.setCurrentItem(targetPageIndex, false);
+            }
+            PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.viewPager, targetPageIndex);
+            if (vh != null) {
+                vh.drawingOverlay.undo();
+            }
+        }
+
+        @Override
+        public void redo() {
+        }
+    }
+
+    private final Stack<EditorAction> undoStack = new Stack<>();
+    private final Stack<EditorAction> redoStack = new Stack<>();
+
+    private String backupFile(String sourcePath, String prefix) {
+        if (sourcePath == null) return null;
+        try {
+            File src = new File(sourcePath);
+            if (!src.exists()) return null;
+            File backup = new File(getCacheDir(), prefix + "_" + System.currentTimeMillis() + "_" + UUID.randomUUID().toString() + ".jpg");
+            try (InputStream in = new FileInputStream(src);
+                 OutputStream out = new FileOutputStream(backup)) {
+                byte[] buf = new byte[8192];
+                int len;
+                while ((len = in.read(buf)) > 0) {
+                    out.write(buf, 0, len);
+                }
+            }
+            return backup.getAbsolutePath();
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to backup file: " + sourcePath, e);
+            return sourcePath;
+        }
+    }
+
+    private void updateUndoButtonState() {
+        boolean canUndo = !undoStack.isEmpty();
+        if (!canUndo && isDrawingMode) {
+            PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.viewPager, pageIndex);
+            if (vh != null && vh.drawingOverlay.getActionCount() > 0) {
+                canUndo = true;
+            }
+        }
+        binding.btnUndo.setEnabled(canUndo);
+        binding.btnUndo.setAlpha(canUndo ? 1.0f : 0.3f);
+    }
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -220,6 +379,7 @@ public class UnifiedEditorActivity extends AppCompatActivity {
         binding.rvThumbnails.smoothScrollToPosition(pageIndex);
 
         updateNavigationButtons();
+        updateUndoButtonState();
     }
 
     private void updateTitle() {
@@ -256,9 +416,17 @@ public class UnifiedEditorActivity extends AppCompatActivity {
         });
 
         binding.btnUndo.setOnClickListener(v -> {
-            PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.viewPager, pageIndex);
-            if (vh != null && isDrawingMode) {
-                vh.drawingOverlay.undo();
+            if (!undoStack.isEmpty()) {
+                EditorAction action = undoStack.pop();
+                action.undo();
+                redoStack.push(action);
+                updateUndoButtonState();
+            } else if (isDrawingMode) {
+                PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.viewPager, pageIndex);
+                if (vh != null && vh.drawingOverlay.getActionCount() > 0) {
+                    vh.drawingOverlay.undo();
+                    updateUndoButtonState();
+                }
             }
         });
 
@@ -385,6 +553,9 @@ public class UnifiedEditorActivity extends AppCompatActivity {
         final int targetPageIndex = pageIndex;
         final String originalPath = (targetPageIndex < originalPagePaths.size())
                 ? originalPagePaths.get(targetPageIndex) : pagePaths.get(targetPageIndex);
+        final String preCropPath = pagePaths.get(targetPageIndex);
+        final String backupPath = backupFile(preCropPath, "backup_crop_page_" + targetPageIndex);
+        final Point[] prevCorners = savedCornersMap.get(targetPageIndex);
 
         executor.execute(() -> {
             Bitmap master = CacheManager.loadBitmap(originalPath);
@@ -415,6 +586,11 @@ public class UnifiedEditorActivity extends AppCompatActivity {
                     savedCornersMap.put(targetPageIndex, cornersToApply);
                     pageAdapter.notifyItemChanged(targetPageIndex);
                     thumbAdapter.notifyItemChanged(targetPageIndex);
+
+                    undoStack.push(new ImageTransformAction(targetPageIndex, backupPath, croppedPath, prevCorners, cornersToApply));
+                    redoStack.clear();
+                    updateUndoButtonState();
+
                     Toast.makeText(UnifiedEditorActivity.this, "Crop applied", Toast.LENGTH_SHORT).show();
                 }
 
@@ -455,10 +631,10 @@ public class UnifiedEditorActivity extends AppCompatActivity {
         }
         isDrawingMode = true;
         updateSwipeLock();
+        binding.viewPager.setUserInputEnabled(false);
 
         binding.layoutAnnotationBar.setVisibility(View.VISIBLE);
-        binding.btnUndo.setEnabled(true);
-        binding.btnUndo.setAlpha(1.0f);
+        updateUndoButtonState();
 
         PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.viewPager, pageIndex);
         if (vh != null) {
@@ -467,6 +643,11 @@ public class UnifiedEditorActivity extends AppCompatActivity {
             vh.drawingOverlay.setToolMode(currentToolMode);
             vh.drawingOverlay.setStrokeColor(currentDrawingColor);
             vh.drawingOverlay.setStrokeWidth(currentStrokeWidth);
+            vh.drawingOverlay.setOnActionAddedListener(() -> {
+                undoStack.push(new DrawingStrokeAction(pageIndex));
+                redoStack.clear();
+                updateUndoButtonState();
+            });
             vh.drawingOverlay.setOnItemSelectionListener(new AnnotationDrawingView.OnItemSelectionListener() {
                 @Override
                 public void onTextItemTapped(@NonNull AnnotationDrawingView.TextItem item) {
@@ -489,6 +670,7 @@ public class UnifiedEditorActivity extends AppCompatActivity {
         isDrawingMode = false;
         binding.layoutAnnotationBar.setVisibility(View.GONE);
         updateSwipeLock();
+        updateUndoButtonState();
 
         PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.viewPager, pageIndex);
         if (vh != null) {
@@ -508,6 +690,7 @@ public class UnifiedEditorActivity extends AppCompatActivity {
 
         final int targetIndex = pageIndex;
         final String currentPath = pagePaths.get(targetIndex);
+        final String backupPath = backupFile(currentPath, "backup_annot_page_" + targetIndex);
 
         Bitmap base = CacheManager.loadBitmap(currentPath);
         if (base == null) return;
@@ -525,12 +708,18 @@ public class UnifiedEditorActivity extends AppCompatActivity {
             vh.drawingOverlay.clear();
             pageAdapter.notifyItemChanged(targetIndex);
             thumbAdapter.notifyItemChanged(targetIndex);
+
+            undoStack.push(new ImageTransformAction(targetIndex, backupPath, newPath, null, null));
+            redoStack.clear();
+            updateUndoButtonState();
+
             Toast.makeText(this, R.string.annotate_saved, Toast.LENGTH_SHORT).show();
         }
     }
 
     private void setupAnnotationBar() {
         binding.btnToolPen.setOnClickListener(v -> {
+            binding.viewPager.setUserInputEnabled(false);
             currentToolMode = AnnotationDrawingView.ToolMode.PEN;
             binding.btnToolPen.setColorFilter(ContextCompat.getColor(this, R.color.accent_mint));
             binding.btnToolHighlighter.setColorFilter(ContextCompat.getColor(this, R.color.text_secondary));
@@ -539,6 +728,7 @@ public class UnifiedEditorActivity extends AppCompatActivity {
         });
 
         binding.btnToolHighlighter.setOnClickListener(v -> {
+            binding.viewPager.setUserInputEnabled(false);
             currentToolMode = AnnotationDrawingView.ToolMode.HIGHLIGHTER;
             binding.btnToolHighlighter.setColorFilter(ContextCompat.getColor(this, R.color.accent_mint));
             binding.btnToolPen.setColorFilter(ContextCompat.getColor(this, R.color.text_secondary));
@@ -573,6 +763,10 @@ public class UnifiedEditorActivity extends AppCompatActivity {
             exitDrawingMode();
         });
 
+        setupColorPalette();
+    }
+
+    private void setupColorPalette() {
         // Color selection: 6 slots with outer outline rings
         binding.containerColorMint.setOnClickListener(v -> selectDrawingColor(Color.parseColor("#68D391")));
         binding.colorMint.setOnClickListener(v -> selectDrawingColor(Color.parseColor("#68D391")));
@@ -611,6 +805,10 @@ public class UnifiedEditorActivity extends AppCompatActivity {
     // ── Text & Signature Dialogs ─────────────────────────────────────────
 
     private void showTextOrSignatureChooser() {
+        if (!isDrawingMode) {
+            enterDrawingMode();
+        }
+        binding.viewPager.setUserInputEnabled(false);
         new MaterialAlertDialogBuilder(this)
                 .setTitle(R.string.action_text_sign)
                 .setItems(new CharSequence[]{getString(R.string.action_text), getString(R.string.action_signature)}, (dialog, which) -> {
@@ -967,10 +1165,12 @@ public class UnifiedEditorActivity extends AppCompatActivity {
 
         isBusy = true;
         final int targetIndex = pageIndex;
-        final String path = pagePaths.get(targetIndex);
+        final String preRotatePath = pagePaths.get(targetIndex);
+        final String backupPath = backupFile(preRotatePath, "backup_rot_page_" + targetIndex);
+        final Point[] prevCorners = savedCornersMap.get(targetIndex);
 
         executor.execute(() -> {
-            Bitmap base = CacheManager.loadBitmap(path);
+            Bitmap base = CacheManager.loadBitmap(preRotatePath);
             if (base == null) {
                 runOnUiThread(() -> isBusy = false);
                 return;
@@ -991,6 +1191,10 @@ public class UnifiedEditorActivity extends AppCompatActivity {
                     pagePaths.set(targetIndex, newPath);
                     pageAdapter.notifyItemChanged(targetIndex);
                     thumbAdapter.notifyItemChanged(targetIndex);
+
+                    undoStack.push(new ImageTransformAction(targetIndex, backupPath, newPath, prevCorners, null));
+                    redoStack.clear();
+                    updateUndoButtonState();
                 }
             });
         });

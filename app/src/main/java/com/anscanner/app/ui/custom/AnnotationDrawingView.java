@@ -18,6 +18,7 @@ import android.graphics.Typeface;
 import android.util.AttributeSet;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewParent;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -368,6 +369,7 @@ public class AnnotationDrawingView extends View {
 
         textItems.add(item);
         actionHistory.add(new AnnotationAction(ActionType.TEXT, item));
+        notifyActionAdded();
         invalidate();
     }
 
@@ -399,6 +401,7 @@ public class AnnotationDrawingView extends View {
 
         signatureItems.add(item);
         actionHistory.add(new AnnotationAction(ActionType.SIGNATURE, item));
+        notifyActionAdded();
         invalidate();
     }
 
@@ -478,10 +481,57 @@ public class AnnotationDrawingView extends View {
         return actionHistory.size();
     }
 
+    public interface OnActionAddedListener {
+        void onActionAdded();
+    }
+
+    private OnActionAddedListener actionAddedListener;
+
+    public void setOnActionAddedListener(OnActionAddedListener listener) {
+        this.actionAddedListener = listener;
+    }
+
+    private void notifyActionAdded() {
+        if (actionAddedListener != null) {
+            actionAddedListener.onActionAdded();
+        }
+    }
+
+    public boolean isDrawingModeActive() {
+        return currentToolMode != ToolMode.NONE;
+    }
+
+    @Override
+    public boolean dispatchTouchEvent(MotionEvent event) {
+        if (isDrawingModeActive()) {
+            disallowParentIntercept(true);
+        }
+        return super.dispatchTouchEvent(event);
+    }
+
+    private void disallowParentIntercept(boolean disallow) {
+        ViewParent parent = getParent();
+        while (parent != null) {
+            parent.requestDisallowInterceptTouchEvent(disallow);
+            parent = parent.getParent();
+        }
+    }
+
     @Override
     public boolean onTouchEvent(MotionEvent event) {
         if (currentToolMode == ToolMode.NONE) {
             return false;
+        }
+
+        int action = event.getActionMasked();
+
+        // CRITICAL: Block ViewPager2/ScrollView/RecyclerView from stealing drawing touches
+        if (action == MotionEvent.ACTION_DOWN) {
+            disallowParentIntercept(true);
+        } else if (action == MotionEvent.ACTION_MOVE && event.getPointerCount() == 1) {
+            disallowParentIntercept(true);
+        } else if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+            disallowParentIntercept(false);
         }
 
         updateMatrix();
@@ -493,25 +543,25 @@ public class AnnotationDrawingView extends View {
             if (targetImageView != null) {
                 targetImageView.dispatchTouchEvent(event);
             }
-            getParent().requestDisallowInterceptTouchEvent(true);
+            disallowParentIntercept(true);
             invalidate();
             return true;
         }
 
-        if (event.getActionMasked() == MotionEvent.ACTION_POINTER_UP) {
+        if (action == MotionEvent.ACTION_POINTER_UP) {
             // Discard residual drag after 2-finger zoom to avoid stray lines
             isMultiTouching = true;
             return true;
         }
 
-        if (event.getActionMasked() == MotionEvent.ACTION_UP || event.getActionMasked() == MotionEvent.ACTION_CANCEL) {
+        if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
             if (isMultiTouching) {
                 isMultiTouching = false;
                 currentPath.reset();
                 if (targetImageView != null) {
                     targetImageView.dispatchTouchEvent(event);
                 }
-                getParent().requestDisallowInterceptTouchEvent(false);
+                disallowParentIntercept(false);
                 invalidate();
                 return true;
             }
@@ -530,11 +580,11 @@ public class AnnotationDrawingView extends View {
 
         // ── 3. Interactive Text / Signature Manipulation Mode ──────────────
         if (currentToolMode == ToolMode.TEXT || currentToolMode == ToolMode.SIGNATURE) {
-            switch (event.getActionMasked()) {
+            switch (action) {
                 case MotionEvent.ACTION_DOWN:
                     downScreenX = event.getX();
                     downScreenY = event.getY();
-                    getParent().requestDisallowInterceptTouchEvent(true);
+                    disallowParentIntercept(true);
 
                     // A. Check if touched resize handle of selected text
                     TextItem selText = getSelectedTextItem();
@@ -592,6 +642,7 @@ public class AnnotationDrawingView extends View {
                     return true;
 
                 case MotionEvent.ACTION_MOVE:
+                    disallowParentIntercept(true);
                     // Resizing Text
                     if (activeResizingText != null) {
                         float delta = (docX - initialTouchX);
@@ -645,7 +696,7 @@ public class AnnotationDrawingView extends View {
                     activeDraggingSignature = null;
                     activeResizingText = null;
                     activeResizingSignature = null;
-                    getParent().requestDisallowInterceptTouchEvent(false);
+                    disallowParentIntercept(false);
                     return true;
             }
             return false;
@@ -653,9 +704,9 @@ public class AnnotationDrawingView extends View {
 
         // ── 4. Freehand Pen or Highlighter Drawing in Document Space ───────
         boolean isHighlighter = (currentToolMode == ToolMode.HIGHLIGHTER);
-        switch (event.getActionMasked()) {
+        switch (action) {
             case MotionEvent.ACTION_DOWN:
-                getParent().requestDisallowInterceptTouchEvent(true);
+                disallowParentIntercept(true);
                 currentPath.reset();
                 currentPath.moveTo(docX, docY);
                 lastDocX = docX;
@@ -664,6 +715,9 @@ public class AnnotationDrawingView extends View {
                 return true;
 
             case MotionEvent.ACTION_MOVE:
+                if (event.getPointerCount() == 1) {
+                    disallowParentIntercept(true);
+                }
                 float dx = Math.abs(docX - lastDocX);
                 float dy = Math.abs(docY - lastDocY);
                 if (dx >= 2f || dy >= 2f) {
@@ -682,9 +736,10 @@ public class AnnotationDrawingView extends View {
                 Stroke stroke = new Stroke(new Path(currentPath), finalColor, strokeW, isHighlighter);
                 strokes.add(stroke);
                 actionHistory.add(new AnnotationAction(ActionType.STROKE, stroke));
+                notifyActionAdded();
                 currentPath.reset();
                 invalidate();
-                getParent().requestDisallowInterceptTouchEvent(false);
+                disallowParentIntercept(false);
                 return true;
 
             default:

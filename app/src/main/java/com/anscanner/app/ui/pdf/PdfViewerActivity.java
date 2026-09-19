@@ -95,6 +95,7 @@ public class PdfViewerActivity extends AppCompatActivity implements ReadingModeB
 
     private Uri resolvedUri;
     private File resolvedFile;
+    private File decryptedTempFile = null;
     private String documentTitle = "Document";
     private int pageCount = 0;
 
@@ -221,29 +222,36 @@ public class PdfViewerActivity extends AppCompatActivity implements ReadingModeB
             return;
         }
 
-        // 1. Resolve URI, file path, and title from Intent
-        String pathExtra = intent.getStringExtra(EXTRA_PDF_PATH);
-        String uriExtra = intent.getStringExtra(EXTRA_PDF_URI);
-        String customTitle = intent.getStringExtra(EXTRA_DOCUMENT_TITLE);
+        // 1. Resolve URI, file path, and title from Intent (unless already unlocked from decrypted temp file)
+        if (decryptedTempFile != null && decryptedTempFile.exists()) {
+            resolvedFile = decryptedTempFile;
+            resolvedUri = Uri.fromFile(decryptedTempFile);
+        } else {
+            String pathExtra = intent.getStringExtra(EXTRA_PDF_PATH);
+            String uriExtra = intent.getStringExtra(EXTRA_PDF_URI);
+            String customTitle = intent.getStringExtra(EXTRA_DOCUMENT_TITLE);
 
-        if (Intent.ACTION_VIEW.equals(intent.getAction()) && intent.getData() != null) {
-            resolvedUri = intent.getData();
-        } else if (uriExtra != null) {
-            resolvedUri = Uri.parse(uriExtra);
-        } else if (pathExtra != null) {
-            resolvedFile = new File(pathExtra);
-            resolvedUri = Uri.fromFile(resolvedFile);
-        }
+            if (Intent.ACTION_VIEW.equals(intent.getAction()) && intent.getData() != null) {
+                resolvedUri = intent.getData();
+            } else if (uriExtra != null) {
+                resolvedUri = Uri.parse(uriExtra);
+            } else if (pathExtra != null) {
+                resolvedFile = new File(pathExtra);
+                resolvedUri = Uri.fromFile(resolvedFile);
+            }
 
-        // 2. Resolve document title
-        if (customTitle != null && !customTitle.trim().isEmpty()) {
-            documentTitle = customTitle;
-        } else if (resolvedUri != null) {
-            documentTitle = queryFileName(resolvedUri);
-        } else if (resolvedFile != null) {
-            documentTitle = resolvedFile.getName();
+            // 2. Resolve document title
+            if (customTitle != null && !customTitle.trim().isEmpty()) {
+                documentTitle = customTitle;
+            } else if (resolvedUri != null) {
+                documentTitle = queryFileName(resolvedUri);
+            } else if (resolvedFile != null) {
+                documentTitle = resolvedFile.getName();
+            }
         }
-        binding.tvTitle.setText(documentTitle);
+        if (documentTitle != null) {
+            binding.tvTitle.setText(documentTitle);
+        }
 
         // 3. Check for JPG / Image document
         if (isImageDocument()) {
@@ -399,6 +407,10 @@ public class PdfViewerActivity extends AppCompatActivity implements ReadingModeB
                     doc.save(unlockedFile);
 
                     runOnUiThread(() -> {
+                        if (decryptedTempFile != null && decryptedTempFile.exists() && !decryptedTempFile.equals(unlockedFile)) {
+                            decryptedTempFile.delete();
+                        }
+                        decryptedTempFile = unlockedFile;
                         resolvedFile = unlockedFile;
                         resolvedUri = Uri.fromFile(unlockedFile);
                         loadPdfDocument();
@@ -1376,6 +1388,11 @@ public class PdfViewerActivity extends AppCompatActivity implements ReadingModeB
 
         super.onDestroy();
         cleanupPdfResources();
+
+        if (decryptedTempFile != null && decryptedTempFile.exists()) {
+            decryptedTempFile.delete();
+            decryptedTempFile = null;
+        }
 
         if (currentImageBitmap != null && !currentImageBitmap.isRecycled()) {
             currentImageBitmap.recycle();

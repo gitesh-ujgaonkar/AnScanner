@@ -1,13 +1,16 @@
 package com.anscanner.app.ui.crop;
 
 import android.content.Context;
+import android.graphics.Bitmap;
 import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.Point;
 import android.graphics.PointF;
 import android.graphics.RectF;
+import android.graphics.drawable.BitmapDrawable;
 import android.util.AttributeSet;
 import android.view.GestureDetector;
 import android.view.MotionEvent;
@@ -26,6 +29,17 @@ public class CropOverlayView extends View {
     private final Paint handleStrokePaint;
     private final Path path;
     
+    // Magnifier / Loupe fields
+    private final Paint loupeBorderPaint;
+    private final Paint loupeShadowPaint;
+    private final Paint loupeCrosshairPaint;
+    private final Paint loupeCrosshairShadowPaint;
+    private final Paint loupeBitmapPaint;
+    private final Path loupeClipPath;
+    private final float loupeRadius;
+    private final float loupeMargin;
+    private final float zoomFactor = 2.0f;
+
     private Point[] imageCorners = null;
     private PointF[] viewCorners = new PointF[4];
     private ImageView imageView;
@@ -82,9 +96,37 @@ public class CropOverlayView extends View {
 
         path = new Path();
         
-        touchRadius = context.getResources().getDisplayMetrics().density * 32; // 32dp
-        handleRadius = context.getResources().getDisplayMetrics().density * 10; // 10dp
+        float density = context.getResources().getDisplayMetrics().density;
+        touchRadius = density * 32; // 32dp
+        handleRadius = density * 10; // 10dp
         
+        // Initialize Magnifier / Loupe
+        loupeRadius = density * 65; // 65dp
+        loupeMargin = density * 16; // 16dp
+
+        loupeBorderPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        loupeBorderPaint.setStyle(Paint.Style.STROKE);
+        loupeBorderPaint.setStrokeWidth(density * 2);
+        loupeBorderPaint.setColor(ContextCompat.getColor(context, R.color.accent_mint));
+
+        loupeShadowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        loupeShadowPaint.setColor(0x40000000);
+        loupeShadowPaint.setStyle(Paint.Style.FILL);
+
+        loupeCrosshairPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        loupeCrosshairPaint.setStyle(Paint.Style.STROKE);
+        loupeCrosshairPaint.setStrokeWidth(density * 2);
+        loupeCrosshairPaint.setColor(ContextCompat.getColor(context, R.color.accent_mint));
+
+        loupeCrosshairShadowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        loupeCrosshairShadowPaint.setStyle(Paint.Style.STROKE);
+        loupeCrosshairShadowPaint.setStrokeWidth(density * 4);
+        loupeCrosshairShadowPaint.setColor(0xCC000000);
+
+        loupeBitmapPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+
+        loupeClipPath = new Path();
+
         for (int i = 0; i < 4; i++) {
             viewCorners[i] = new PointF();
         }
@@ -220,6 +262,84 @@ public class CropOverlayView extends View {
             canvas.drawCircle(viewCorners[i].x, viewCorners[i].y, handleRadius, handleFillPaint);
             canvas.drawCircle(viewCorners[i].x, viewCorners[i].y, handleRadius, handleStrokePaint);
         }
+
+        // Draw Corner Magnifier / Zoom Loupe if a corner is actively being dragged
+        if (draggingCornerIndex >= 0 && draggingCornerIndex < 4 && imageView != null && imageView.getDrawable() != null) {
+            drawCornerMagnifier(canvas);
+        }
+    }
+
+    private void drawCornerMagnifier(Canvas canvas) {
+        Bitmap bitmap = null;
+        if (imageView.getDrawable() instanceof BitmapDrawable) {
+            bitmap = ((BitmapDrawable) imageView.getDrawable()).getBitmap();
+        }
+        if (bitmap == null || bitmap.isRecycled()) {
+            return;
+        }
+
+        float density = getResources().getDisplayMetrics().density;
+        float touchX = viewCorners[draggingCornerIndex].x;
+        float touchY = viewCorners[draggingCornerIndex].y;
+
+        // Determine opposite diagonal corner for magnifier placement
+        boolean isLeft = touchX < getWidth() / 2f;
+        boolean isTop = touchY < getHeight() / 2f;
+
+        float cx;
+        float cy;
+
+        if (isLeft && isTop) {
+            // Dragging Top-Left -> Magnifier at Bottom-Right
+            cx = getWidth() - loupeMargin - loupeRadius;
+            cy = getHeight() - loupeMargin - loupeRadius;
+        } else if (!isLeft && isTop) {
+            // Dragging Top-Right -> Magnifier at Bottom-Left
+            cx = loupeMargin + loupeRadius;
+            cy = getHeight() - loupeMargin - loupeRadius;
+        } else if (!isLeft && !isTop) {
+            // Dragging Bottom-Right -> Magnifier at Top-Left
+            cx = loupeMargin + loupeRadius;
+            cy = loupeMargin + loupeRadius;
+        } else {
+            // Dragging Bottom-Left -> Magnifier at Top-Right
+            cx = getWidth() - loupeMargin - loupeRadius;
+            cy = loupeMargin + loupeRadius;
+        }
+
+        // 1. Draw outer elevation drop shadow
+        canvas.drawCircle(cx, cy + density * 3f, loupeRadius + density * 2f, loupeShadowPaint);
+
+        // 2. Setup transform matrix: scale 2x centered at touch point, then translate to loupe center
+        Matrix imgMatrix = getImageViewToOverlayMatrix();
+        Matrix loupeMatrix = new Matrix(imgMatrix);
+        loupeMatrix.postScale(zoomFactor, zoomFactor, touchX, touchY);
+        loupeMatrix.postTranslate(cx - touchX, cy - touchY);
+
+        // 3. Clip to circular loupe area and draw source bitmap
+        canvas.save();
+        loupeClipPath.reset();
+        loupeClipPath.addCircle(cx, cy, loupeRadius, Path.Direction.CW);
+        canvas.clipPath(loupeClipPath);
+
+        // White background behind bitmap in case edge of image is reached
+        canvas.drawColor(Color.WHITE);
+        canvas.drawBitmap(bitmap, loupeMatrix, loupeBitmapPaint);
+        canvas.restore();
+
+        // 4. Draw high-contrast crosshair at center (cx, cy)
+        float crosshairSize = density * 12f;
+        // Horizontal shadow & line
+        canvas.drawLine(cx - crosshairSize, cy, cx + crosshairSize, cy, loupeCrosshairShadowPaint);
+        canvas.drawLine(cx - crosshairSize, cy, cx + crosshairSize, cy, loupeCrosshairPaint);
+        // Vertical shadow & line
+        canvas.drawLine(cx, cy - crosshairSize, cx, cy + crosshairSize, loupeCrosshairShadowPaint);
+        canvas.drawLine(cx, cy - crosshairSize, cx, cy + crosshairSize, loupeCrosshairPaint);
+        // Center dot
+        canvas.drawCircle(cx, cy, density * 2f, loupeCrosshairPaint);
+
+        // 5. Draw 2dp border around loupe
+        canvas.drawCircle(cx, cy, loupeRadius, loupeBorderPaint);
     }
 
     @Override
@@ -246,6 +366,7 @@ public class CropOverlayView extends View {
                     if (cornerDragListener != null) {
                         cornerDragListener.onCornerDragStarted(draggingCornerIndex, viewCorners[draggingCornerIndex].x, viewCorners[draggingCornerIndex].y);
                     }
+                    invalidate();
                     return true;
                 }
                 if (gestureDetector != null && pageSwipeListener != null) {
@@ -291,13 +412,13 @@ public class CropOverlayView extends View {
                     if (currentCorners != null) {
                         this.imageCorners = currentCorners;
                     }
-                    invalidate();
 
                     if (cornerDragListener != null) {
                         cornerDragListener.onCornerDragging(draggingCornerIndex, clampedX, clampedY);
                         cornerDragListener.onCornerDragEnded();
                     }
                     draggingCornerIndex = -1;
+                    invalidate();
                     return true;
                 } else if (gestureDetector != null && pageSwipeListener != null) {
                     gestureDetector.onTouchEvent(event);
@@ -310,6 +431,7 @@ public class CropOverlayView extends View {
                     if (cornerDragListener != null) {
                         cornerDragListener.onCornerDragEnded();
                     }
+                    invalidate();
                 }
                 break;
         }
