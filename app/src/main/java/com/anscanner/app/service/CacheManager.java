@@ -303,49 +303,101 @@ public final class CacheManager {
     }
 
     // ════════════════════════════════════════════════════════════════════
-    // Cache Clearing
+    // Cache Clearing & Lifecycle Scratch Purge
     // ════════════════════════════════════════════════════════════════════
 
     /**
-     * Clears all temporary scan files from the cache directory.
+     * Clears all temporary scan files from the scan_temp directory.
      * Called after a successful save/share operation.
      */
     public static void clearScanCache(Context context) {
+        if (context == null) return;
         File tempDir = getTempDir(context);
         int deletedCount = deleteDirectoryContents(tempDir);
         Log.i(TAG, "Scan cache cleared: " + deletedCount + " files deleted");
     }
 
     /**
-     * Clears ALL cache (temp scans + thumbnails).
-     * Called from Settings → Clear Cache.
+     * Lifecycle background purge: cleans up temporary scratch files (.tmp, temporary preview
+     * bitmaps, temporary scan exports) inside internal and external cache directories when the app
+     * transitions to the background.
+     *
+     * <p>STRICT EXCLUSIONS: Never touches code_cache, SharedPreferences, Room databases (*.db,
+     * *.db-shm, *.db-wal), or permanent user scan storage.</p>
      */
-    public static void clearAllCache(Context context) {
-        clearScanCache(context);
+    public static void purgeScratchCache(Context context) {
+        if (context == null) return;
+        try {
+            int purged = 0;
+            // 1. Purge scan_temp
+            purged += deleteDirectoryContents(getTempDir(context));
 
-        File thumbDir = getThumbDir(context);
-        int thumbCount = deleteDirectoryContents(thumbDir);
-        Log.i(TAG, "Thumbnail cache cleared: " + thumbCount + " files deleted");
+            // 2. Purge scratch files in getCacheDir()
+            purged += purgeScratchInDir(context.getCacheDir());
 
-        // Also clear any other files in the root cache dir
-        File cacheDir = context.getCacheDir();
-        File[] rootFiles = cacheDir.listFiles();
-        if (rootFiles != null) {
-            for (File f : rootFiles) {
-                if (f.isFile()) {
-                    f.delete();
+            // 3. Purge scratch files in getExternalCacheDir()
+            File extCache = context.getExternalCacheDir();
+            if (extCache != null) {
+                purged += purgeScratchInDir(extCache);
+            }
+            File[] extCaches = context.getExternalCacheDirs();
+            if (extCaches != null) {
+                for (File ec : extCaches) {
+                    if (ec != null && !ec.equals(extCache)) {
+                        purged += purgeScratchInDir(ec);
+                    }
                 }
             }
+            Log.i(TAG, "Lifecycle scratch cache purged: " + purged + " files deleted");
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to purge scratch cache", e);
         }
     }
 
     /**
-     * Calculates total cache size (scan_temp + thumbnails) and returns
-     * a human-readable string like "14 MB" or "256 KB".
+     * Clears ALL cache thoroughly (internal cache, external cache, scan_temp, and thumbnails).
+     * Called from Settings → Clear Cache.
+     * Recursively deletes subdirectories and files while strictly excluding code_cache,
+     * databases, and SharedPreferences.
+     */
+    public static void clearAllCache(Context context) {
+        if (context == null) return;
+        int deletedCount = 0;
+
+        // 1. Clear scan_temp
+        deletedCount += deleteDirectoryContents(getTempDir(context));
+
+        // 2. Clear thumbnails in filesDir
+        File thumbDir = getThumbDir(context);
+        deletedCount += deleteDirectoryContents(thumbDir);
+
+        // 3. Recursively clear internal cacheDir (excluding code_cache, databases, shared_prefs)
+        File cacheDir = context.getCacheDir();
+        deletedCount += deleteDirectoryContentsRecursive(cacheDir);
+
+        // 4. Recursively clear externalCacheDir(s)
+        File extCache = context.getExternalCacheDir();
+        if (extCache != null) {
+            deletedCount += deleteDirectoryContentsRecursive(extCache);
+        }
+        File[] extCaches = context.getExternalCacheDirs();
+        if (extCaches != null) {
+            for (File ec : extCaches) {
+                if (ec != null && !ec.equals(extCache)) {
+                    deletedCount += deleteDirectoryContentsRecursive(ec);
+                }
+            }
+        }
+
+        Log.i(TAG, "All cache cleared thoroughly: " + deletedCount + " files deleted");
+    }
+
+    /**
+     * Calculates total cache size (internal cache excluding code_cache + external cache + thumbnails)
+     * matching what mobile Android settings reports, and returns a human-readable string.
      */
     public static String getCacheSizeFormatted(Context context) {
-        long totalBytes = getDirectorySize(getTempDir(context))
-                + getDirectorySize(getThumbDir(context));
+        long totalBytes = getCacheSizeBytes(context);
 
         if (totalBytes < 1024) {
             return totalBytes + " B";
@@ -357,11 +409,26 @@ public final class CacheManager {
     }
 
     /**
-     * Returns total cache size in bytes.
+     * Returns total cache size in bytes matching system settings calculation.
      */
     public static long getCacheSizeBytes(Context context) {
-        return getDirectorySize(getTempDir(context))
-                + getDirectorySize(getThumbDir(context));
+        if (context == null) return 0;
+        long totalBytes = getDirectorySizeRecursive(context.getCacheDir());
+
+        File extCache = context.getExternalCacheDir();
+        if (extCache != null) {
+            totalBytes += getDirectorySizeRecursive(extCache);
+        }
+        File[] extCaches = context.getExternalCacheDirs();
+        if (extCaches != null) {
+            for (File ec : extCaches) {
+                if (ec != null && !ec.equals(extCache)) {
+                    totalBytes += getDirectorySizeRecursive(ec);
+                }
+            }
+        }
+        totalBytes += getDirectorySizeRecursive(getThumbDir(context));
+        return totalBytes;
     }
 
     // ════════════════════════════════════════════════════════════════════
@@ -384,12 +451,22 @@ public final class CacheManager {
         return dir;
     }
 
+    private static boolean isExcluded(File file) {
+        if (file == null) return true;
+        String name = file.getName();
+        if ("code_cache".equals(name)) return true;
+        if (name.endsWith(".db") || name.endsWith(".db-shm") || name.endsWith(".db-wal")) return true;
+        if ("databases".equals(name) || "shared_prefs".equals(name)) return true;
+        return false;
+    }
+
     private static int deleteDirectoryContents(File dir) {
         int count = 0;
-        if (dir.exists() && dir.isDirectory()) {
+        if (dir != null && dir.exists() && dir.isDirectory() && !isExcluded(dir)) {
             File[] files = dir.listFiles();
             if (files != null) {
                 for (File file : files) {
+                    if (isExcluded(file)) continue;
                     if (file.isFile() && file.delete()) {
                         count++;
                     }
@@ -399,15 +476,64 @@ public final class CacheManager {
         return count;
     }
 
-    private static long getDirectorySize(File dir) {
-        long size = 0;
-        if (dir.exists() && dir.isDirectory()) {
-            File[] files = dir.listFiles();
-            if (files != null) {
-                for (File file : files) {
-                    if (file.isFile()) {
-                        size += file.length();
+    private static int deleteDirectoryContentsRecursive(File dir) {
+        int count = 0;
+        if (dir == null || !dir.exists() || isExcluded(dir)) return 0;
+        File[] files = dir.listFiles();
+        if (files != null) {
+            for (File file : files) {
+                if (isExcluded(file)) continue;
+                if (file.isDirectory()) {
+                    count += deleteDirectoryContentsRecursive(file);
+                    file.delete(); // Delete empty directory
+                } else if (file.isFile()) {
+                    if (file.delete()) {
+                        count++;
                     }
+                }
+            }
+        }
+        return count;
+    }
+
+    private static int purgeScratchInDir(File dir) {
+        int count = 0;
+        if (dir == null || !dir.exists() || isExcluded(dir)) return 0;
+        File[] files = dir.listFiles();
+        if (files != null) {
+            for (File file : files) {
+                if (isExcluded(file)) continue;
+                if (file.isDirectory()) {
+                    count += purgeScratchInDir(file);
+                } else if (file.isFile()) {
+                    String name = file.getName().toLowerCase(Locale.US);
+                    if (name.endsWith(".tmp") || name.endsWith(".temp")
+                            || name.contains("_cropped_") || name.startsWith("backup_")
+                            || name.startsWith("temp_") || name.startsWith("ocr_")
+                            || name.startsWith("preview_") || name.startsWith("export_")
+                            || (name.startsWith("page_") && (name.endsWith(".jpg") || name.endsWith(".png")))) {
+                        if (file.delete()) {
+                            count++;
+                        }
+                    }
+                }
+            }
+        }
+        return count;
+    }
+
+    private static long getDirectorySizeRecursive(File dir) {
+        if (dir == null || !dir.exists() || isExcluded(dir)) return 0;
+        if (dir.isFile()) return dir.length();
+        long size = 0;
+        File[] files = dir.listFiles();
+        if (files != null) {
+            for (File file : files) {
+                if (isExcluded(file)) continue;
+                if (file.isDirectory()) {
+                    size += getDirectorySizeRecursive(file);
+                } else if (file.isFile()) {
+                    size += file.length();
                 }
             }
         }

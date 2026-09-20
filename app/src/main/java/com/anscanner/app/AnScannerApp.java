@@ -35,6 +35,18 @@ public class AnScannerApp extends Application {
             Log.e(TAG, "OpenCV initialization failed! Image processing will not work.");
         }
 
+        // ── Lifecycle-Aware Scratch Cache Cleanup ─────────────────────────
+        androidx.lifecycle.ProcessLifecycleOwner.get().getLifecycle().addObserver(new androidx.lifecycle.DefaultLifecycleObserver() {
+            @Override
+            public void onStop(@androidx.annotation.NonNull androidx.lifecycle.LifecycleOwner owner) {
+                // Application entered background -> purge scratch cache on background thread
+                java.util.concurrent.Executors.newSingleThreadExecutor().execute(() -> {
+                    com.anscanner.app.service.CacheManager.purgeScratchCache(AnScannerApp.this);
+                });
+            }
+        });
+        Log.i(TAG, "ProcessLifecycleOwner observer registered for automated scratch cache purge");
+
         Log.i(TAG, "AnScanner Application initialized");
     }
 

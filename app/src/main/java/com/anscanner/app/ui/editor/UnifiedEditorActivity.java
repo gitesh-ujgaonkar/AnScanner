@@ -12,8 +12,12 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.content.res.ColorStateList;
+import android.text.InputType;
 import android.util.Log;
 import android.view.View;
+import android.view.inputmethod.InputMethodManager;
+import android.widget.Button;
 import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
@@ -46,6 +50,8 @@ import com.anscanner.app.ui.custom.TouchImageView;
 import com.anscanner.app.ui.save.SaveScanBottomSheet;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.materialswitch.MaterialSwitch;
+import com.google.android.material.textfield.TextInputEditText;
+import com.google.android.material.textfield.TextInputLayout;
 import com.google.mlkit.vision.text.Text;
 
 import java.io.File;
@@ -431,6 +437,7 @@ public class UnifiedEditorActivity extends AppCompatActivity {
         });
 
         binding.btnExtractText.setOnClickListener(v -> extractTextFromCurrentScan());
+        binding.tvTitle.setOnClickListener(v -> showJumpToPageDialog());
 
         binding.btnSaveDocument.setOnClickListener(v -> {
             if (isBusy) return;
@@ -503,10 +510,11 @@ public class UnifiedEditorActivity extends AppCompatActivity {
         executor.execute(() -> {
             Point[] corners = savedCornersMap.get(index);
             if (corners == null) {
-                String origPath = (index < originalPagePaths.size()) ? originalPagePaths.get(index) : pagePaths.get(index);
-                Bitmap bmp = CacheManager.loadBitmap(origPath);
-                if (bmp == null) {
-                    bmp = CacheManager.loadBitmap(pagePaths.get(index));
+                // Use current page image so detected/default corners match the exact pixel dimensions displayed on screen
+                String currentPath = pagePaths.get(index);
+                Bitmap bmp = CacheManager.loadBitmap(currentPath);
+                if (bmp == null && index < originalPagePaths.size()) {
+                    bmp = CacheManager.loadBitmap(originalPagePaths.get(index));
                 }
                 if (bmp != null) {
                     org.opencv.core.Point[] detected = DocumentDetector.getInstance(UnifiedEditorActivity.this)
@@ -551,16 +559,15 @@ public class UnifiedEditorActivity extends AppCompatActivity {
         isBusy = true;
         final Point[] cornersToApply = currentCorners;
         final int targetPageIndex = pageIndex;
-        final String originalPath = (targetPageIndex < originalPagePaths.size())
-                ? originalPagePaths.get(targetPageIndex) : pagePaths.get(targetPageIndex);
-        final String preCropPath = pagePaths.get(targetPageIndex);
-        final String backupPath = backupFile(preCropPath, "backup_crop_page_" + targetPageIndex);
+        final String currentPath = pagePaths.get(targetPageIndex);
+        final String backupPath = backupFile(currentPath, "backup_crop_page_" + targetPageIndex);
         final Point[] prevCorners = savedCornersMap.get(targetPageIndex);
 
         executor.execute(() -> {
-            Bitmap master = CacheManager.loadBitmap(originalPath);
-            if (master == null) {
-                master = CacheManager.loadBitmap(pagePaths.get(targetPageIndex));
+            // Load bitmap directly from currentPath to guarantee 1:1 pixel alignment with crop overlay coordinates
+            Bitmap master = CacheManager.loadBitmap(currentPath);
+            if (master == null && targetPageIndex < originalPagePaths.size()) {
+                master = CacheManager.loadBitmap(originalPagePaths.get(targetPageIndex));
             }
             if (master == null) {
                 runOnUiThread(() -> {
@@ -575,15 +582,39 @@ public class UnifiedEditorActivity extends AppCompatActivity {
             Bitmap cropped = ImageProcessor.perspectiveWarp(master, opencvCorners);
             master.recycle();
 
+            if (cropped == null) {
+                runOnUiThread(() -> {
+                    isBusy = false;
+                    exitCropMode();
+                    if (onComplete != null) onComplete.run();
+                });
+                return;
+            }
+
+            // Save cropped bitmap to disk (overwriting cached page and saving new temp)
             String croppedPath = CacheManager.saveTempBitmap(
                     UnifiedEditorActivity.this, cropped, "page_" + targetPageIndex + "_cropped_" + UUID.randomUUID().toString());
-            cropped.recycle();
+            CacheManager.updateTempBitmap(UnifiedEditorActivity.this, cropped, currentPath);
+
+            final Bitmap displayCropped = cropped;
 
             runOnUiThread(() -> {
                 isBusy = false;
                 if (croppedPath != null) {
                     pagePaths.set(targetPageIndex, croppedPath);
-                    savedCornersMap.put(targetPageIndex, cornersToApply);
+                    if (targetPageIndex < originalPagePaths.size()) {
+                        originalPagePaths.set(targetPageIndex, croppedPath);
+                    }
+                    // Reset saved corners for this page so subsequent crops detect fresh on the new dimensions
+                    savedCornersMap.remove(targetPageIndex);
+
+                    // Update target ImageView immediately on UI thread so visual change reflects immediately
+                    if (vh != null) {
+                        vh.ivPageImage.setImageBitmap(displayCropped);
+                        vh.ivPageImage.setScale(1.0f, false);
+                        vh.drawingOverlay.setDocumentDimensions(displayCropped.getWidth(), displayCropped.getHeight());
+                    }
+
                     pageAdapter.notifyItemChanged(targetPageIndex);
                     thumbAdapter.notifyItemChanged(targetPageIndex);
 
@@ -1239,6 +1270,61 @@ public class UnifiedEditorActivity extends AppCompatActivity {
             return;
         }
 
+        if (pagePaths.size() > 1) {
+            new MaterialAlertDialogBuilder(this)
+                    .setTitle(R.string.ocr_dialog_title)
+                    .setItems(new CharSequence[]{
+                            getString(R.string.ocr_batch_all_pages),
+                            getString(R.string.ocr_current_page_lens)
+                    }, (dialog, which) -> {
+                        if (which == 0) {
+                            startBatchOcr();
+                        } else {
+                            extractTextFromSinglePage();
+                        }
+                    })
+                    .setNegativeButton(R.string.action_cancel, null)
+                    .show();
+        } else {
+            extractTextFromSinglePage();
+        }
+    }
+
+    private void startBatchOcr() {
+        if (pagePaths.isEmpty()) return;
+        OcrHelper.extractTextFromImagesBatch(this, pagePaths, new OcrHelper.BatchOcrCallback() {
+            @Override
+            public void onProgress(int currentPage, int totalPages) {
+                // Managed by OcrHelper's progress dialog
+            }
+
+            @Override
+            public void onSuccess(String aggregatedText) {
+                if (isFinishing() || isDestroyed()) return;
+                OcrHelper.showExtractedTextDialog(UnifiedEditorActivity.this, aggregatedText, false, pagePaths.size());
+            }
+
+            @Override
+            public void onCancelled(String partialText) {
+                if (isFinishing() || isDestroyed()) return;
+                if (partialText != null && !partialText.trim().isEmpty()) {
+                    OcrHelper.showExtractedTextDialog(UnifiedEditorActivity.this, partialText, true, pagePaths.size());
+                } else {
+                    Toast.makeText(UnifiedEditorActivity.this, R.string.ocr_cancelled_toast, Toast.LENGTH_SHORT).show();
+                }
+            }
+
+            @Override
+            public void onError(Exception e) {
+                if (isFinishing() || isDestroyed()) return;
+                Log.e(TAG, "Batch OCR failed", e);
+                Toast.makeText(UnifiedEditorActivity.this, R.string.ocr_error, Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
+    private void extractTextFromSinglePage() {
+        if (pageIndex < 0 || pageIndex >= pagePaths.size()) return;
         Bitmap activeBitmap = CacheManager.loadBitmap(pagePaths.get(pageIndex));
         if (activeBitmap == null || activeBitmap.isRecycled()) {
             Toast.makeText(this, R.string.ocr_error, Toast.LENGTH_SHORT).show();
@@ -1284,6 +1370,76 @@ public class UnifiedEditorActivity extends AppCompatActivity {
         });
     }
 
+    private void showJumpToPageDialog() {
+        int totalPages = pagePaths.size();
+        if (totalPages <= 1) return;
+
+        final int currentPage = pageIndex + 1;
+
+        FrameLayout container = new FrameLayout(this);
+        int padding = (int) (20 * getResources().getDisplayMetrics().density);
+        container.setPadding(padding, padding / 2, padding, 0);
+
+        TextInputLayout til = new TextInputLayout(this);
+        til.setHint(getString(R.string.jump_to_page_hint, totalPages));
+        til.setBoxBackgroundMode(TextInputLayout.BOX_BACKGROUND_OUTLINE);
+        til.setBoxStrokeColor(ContextCompat.getColor(this, R.color.accent_mint));
+        til.setDefaultHintTextColor(ColorStateList.valueOf(ContextCompat.getColor(this, R.color.text_secondary)));
+
+        TextInputEditText et = new TextInputEditText(this);
+        et.setInputType(InputType.TYPE_CLASS_NUMBER);
+        et.setTextColor(ContextCompat.getColor(this, R.color.text_primary));
+        et.setText(String.valueOf(currentPage));
+        et.selectAll();
+        til.addView(et);
+        container.addView(til);
+
+        AlertDialog dialog = new MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.jump_to_page_title)
+                .setView(container)
+                .setPositiveButton(R.string.jump_to_page_go, null)
+                .setNegativeButton(R.string.action_cancel, (d, which) -> d.dismiss())
+                .create();
+
+        dialog.setOnShowListener(d -> {
+            et.requestFocus();
+            InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+            if (imm != null) {
+                imm.showSoftInput(et, InputMethodManager.SHOW_IMPLICIT);
+            }
+
+            Button positiveBtn = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+            positiveBtn.setOnClickListener(v -> {
+                String text = et.getText() != null ? et.getText().toString().trim() : "";
+                if (text.isEmpty()) {
+                    til.setError(getString(R.string.jump_to_page_error, totalPages));
+                    return;
+                }
+                try {
+                    int targetPage = Integer.parseInt(text);
+                    if (targetPage < 1 || targetPage > totalPages) {
+                        til.setError(getString(R.string.jump_to_page_error, totalPages));
+                        return;
+                    }
+                    til.setError(null);
+                    if (imm != null) {
+                        imm.hideSoftInputFromWindow(et.getWindowToken(), 0);
+                    }
+                    dialog.dismiss();
+
+                    int targetIndex = targetPage - 1;
+                    if (isDrawingMode) commitCurrentAnnotations();
+                    else if (isCropMode) exitCropMode();
+                    binding.viewPager.setCurrentItem(targetIndex, true);
+                } catch (NumberFormatException e) {
+                    til.setError(getString(R.string.jump_to_page_error, totalPages));
+                }
+            });
+        });
+
+        dialog.show();
+    }
+
     private void dismissLensOverlay() {
         if (binding.lensOverlay.getVisibility() == View.VISIBLE) {
             binding.lensOverlay.setVisibility(View.GONE);
@@ -1298,6 +1454,12 @@ public class UnifiedEditorActivity extends AppCompatActivity {
             Intent resultIntent = new Intent();
             resultIntent.putStringArrayListExtra(EXTRA_PAGE_PATHS, pagePaths);
             resultIntent.putStringArrayListExtra(EXTRA_ORIGINAL_PAGE_PATHS, originalPagePaths);
+            if (!pagePaths.isEmpty()) {
+                String current = pagePaths.get(Math.min(pageIndex, pagePaths.size() - 1));
+                resultIntent.putExtra("extra_cropped_path", current);
+                resultIntent.putExtra(EXTRA_IMAGE_PATH, current);
+                resultIntent.putExtra(Intent.EXTRA_STREAM, Uri.fromFile(new File(current)));
+            }
             setResult(RESULT_OK, resultIntent);
             finish();
         } else {
@@ -1308,10 +1470,16 @@ public class UnifiedEditorActivity extends AppCompatActivity {
     }
 
     private void handleExit() {
-        if (isFromReview) {
+        if (isFromReview || isAddingPage) {
             Intent resultIntent = new Intent();
             resultIntent.putStringArrayListExtra(EXTRA_PAGE_PATHS, pagePaths);
             resultIntent.putStringArrayListExtra(EXTRA_ORIGINAL_PAGE_PATHS, originalPagePaths);
+            if (!pagePaths.isEmpty()) {
+                String current = pagePaths.get(Math.min(pageIndex, pagePaths.size() - 1));
+                resultIntent.putExtra("extra_cropped_path", current);
+                resultIntent.putExtra(EXTRA_IMAGE_PATH, current);
+                resultIntent.putExtra(Intent.EXTRA_STREAM, Uri.fromFile(new File(current)));
+            }
             setResult(RESULT_OK, resultIntent);
         }
         finish();

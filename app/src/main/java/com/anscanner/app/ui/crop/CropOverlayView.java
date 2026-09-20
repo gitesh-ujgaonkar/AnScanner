@@ -202,6 +202,10 @@ public class CropOverlayView extends View {
         Matrix inverse = new Matrix();
         if (!getImageViewToOverlayMatrix().invert(inverse)) return null;
         
+        int intrinsicWidth = imageView.getDrawable().getIntrinsicWidth();
+        int intrinsicHeight = imageView.getDrawable().getIntrinsicHeight();
+        if (intrinsicWidth <= 0 || intrinsicHeight <= 0) return null;
+
         Point[] result = new Point[4];
         float[] pts = new float[2];
         
@@ -209,7 +213,9 @@ public class CropOverlayView extends View {
             pts[0] = viewCorners[i].x;
             pts[1] = viewCorners[i].y;
             inverse.mapPoints(pts);
-            result[i] = new Point(Math.round(pts[0]), Math.round(pts[1]));
+            int px = Math.max(0, Math.min(Math.round(pts[0]), intrinsicWidth));
+            int py = Math.max(0, Math.min(Math.round(pts[1]), intrinsicHeight));
+            result[i] = new Point(px, py);
         }
         return result;
     }

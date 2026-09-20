@@ -333,4 +333,18 @@
     <string name="editor_mode_single">Edit Scan</string>
     <string name="delete_page_confirm_title">Delete Page %1$d?</string>
     <string name="delete_page_confirm_message">Are you sure you want to remove this page from the document?</string>
+
+    <!-- ── Jump to Page & Batch OCR ─────────────────────────────────── -->
+    <string name="jump_to_page_title">Jump to Page</string>
+    <string name="jump_to_page_hint">Page number (1 to %1$d)</string>
+    <string name="jump_to_page_error">Please enter a valid page between 1 and %1$d</string>
+    <string name="jump_to_page_go">Go</string>
+    <string name="ocr_batch_all_pages">Extract All Pages (Batch Text)</string>
+    <string name="ocr_current_page_lens">Extract Current Page (Interactive Lens)</string>
+    <string name="ocr_extracting_page">Extracting text: Page %1$d of %2$d…</string>
+    <string name="ocr_cancelled_preview_title">Extracted Text (Partial - Cancelled)</string>
+    <string name="ocr_cancelled_subtitle">Extraction stopped by user. Showing text gathered so far:</string>
+    <string name="ocr_all_pages_subtitle">Aggregated text from all %1$d pages:</string>
+    <string name="ocr_cancelled_toast">OCR cancelled</string>
 </resources>
+

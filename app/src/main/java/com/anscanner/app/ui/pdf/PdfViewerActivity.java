@@ -21,11 +21,16 @@ import android.print.PrintAttributes;
 import android.print.PrintManager;
 import android.provider.OpenableColumns;
 import android.content.SharedPreferences;
+import android.content.res.ColorStateList;
+import android.text.InputType;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.WindowManager;
+import android.view.inputmethod.InputMethodManager;
+import android.widget.Button;
+import android.widget.FrameLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -33,6 +38,7 @@ import android.widget.Toast;
 import androidx.activity.OnBackPressedCallback;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
 import androidx.print.PrintHelper;
@@ -51,6 +57,9 @@ import com.anscanner.app.ui.editor.UnifiedEditorActivity;
 import com.anscanner.app.util.PdfRendererHelper;
 import com.google.android.gms.ads.AdRequest;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+import com.google.android.material.slider.Slider;
+import com.google.android.material.textfield.TextInputEditText;
+import com.google.android.material.textfield.TextInputLayout;
 import com.google.mlkit.vision.text.Text;
 
 import java.io.File;
@@ -109,6 +118,9 @@ public class PdfViewerActivity extends AppCompatActivity implements ReadingModeB
     private int currentOcrPageIndex = 0;
     private Bitmap currentOcrBitmap;
 
+    // Scrubber slider state
+    private boolean isScrubbing = false;
+
     // Kindle-Style E-Reader mode state
     private boolean isInEreaderMode = false;
     private final Handler badgeHandler = new Handler(Looper.getMainLooper());
@@ -121,6 +133,33 @@ public class PdfViewerActivity extends AppCompatActivity implements ReadingModeB
             }).start();
         }
     };
+
+    private final Handler pillHandler = new Handler(Looper.getMainLooper());
+    private final Runnable fadePillRunnable = () -> {
+        if (binding != null && binding.cardEreaderMenuPill != null && isInEreaderMode) {
+            binding.cardEreaderMenuPill.animate()
+                    .alpha(0.25f)
+                    .setDuration(600)
+                    .start();
+        }
+    };
+
+    private void schedulePillFade() {
+        if (binding == null || binding.cardEreaderMenuPill == null || !isInEreaderMode) return;
+        pillHandler.removeCallbacks(fadePillRunnable);
+        pillHandler.postDelayed(fadePillRunnable, 3000);
+    }
+
+    private void wakePill() {
+        if (binding == null || binding.cardEreaderMenuPill == null || !isInEreaderMode) return;
+        pillHandler.removeCallbacks(fadePillRunnable);
+        binding.cardEreaderMenuPill.animate().cancel();
+        binding.cardEreaderMenuPill.animate()
+                .alpha(1.0f)
+                .setDuration(250)
+                .withEndAction(this::schedulePillFade)
+                .start();
+    }
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -142,6 +181,7 @@ public class PdfViewerActivity extends AppCompatActivity implements ReadingModeB
         binding.btnExtractText.setOnClickListener(v -> onExtractTextClicked());
         binding.btnAnnotate.setOnClickListener(v -> toggleAnnotationMode());
         binding.btnEdit.setOnClickListener(v -> editCurrentPage());
+        binding.tvPageIndicator.setOnClickListener(v -> showJumpToPageDialog());
 
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override
@@ -302,6 +342,7 @@ public class PdfViewerActivity extends AppCompatActivity implements ReadingModeB
             loadInitialReadingPreferences();
 
             updatePageIndicator(1);
+            setupPageScrubber();
 
             binding.rvPdfPages.addOnScrollListener(new RecyclerView.OnScrollListener() {
                 @Override
@@ -316,7 +357,16 @@ public class PdfViewerActivity extends AppCompatActivity implements ReadingModeB
                     if (layoutManager != null) {
                         int firstVisible = layoutManager.findFirstVisibleItemPosition();
                         if (firstVisible >= 0 && firstVisible < pageCount) {
-                            updatePageIndicator(firstVisible + 1);
+                            int currentPage = firstVisible + 1;
+                            updatePageIndicator(currentPage);
+                            if (!isScrubbing && binding.sliderPageScrubber != null && pageCount > 1) {
+                                float val = (float) currentPage;
+                                if (val >= binding.sliderPageScrubber.getValueFrom() && val <= binding.sliderPageScrubber.getValueTo()) {
+                                    if (binding.sliderPageScrubber.getValue() != val) {
+                                        binding.sliderPageScrubber.setValue(val);
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -465,6 +515,9 @@ public class PdfViewerActivity extends AppCompatActivity implements ReadingModeB
                     binding.photoView.setImageBitmap(currentImageBitmap);
                     binding.photoView.setVisibility(View.VISIBLE);
                     binding.tvPageIndicator.setText("1 of 1");
+                    if (binding.layoutPageScrubber != null) {
+                        binding.layoutPageScrubber.setVisibility(View.GONE);
+                    }
                     binding.pbLoading.setVisibility(View.GONE);
                 });
 
@@ -642,6 +695,9 @@ public class PdfViewerActivity extends AppCompatActivity implements ReadingModeB
                 layoutManager.scrollToPositionWithOffset(currentOcrPageIndex, 0);
                 updatePageIndicator(currentOcrPageIndex + 1);
             }
+            if (pageCount > 1 && binding.layoutPageScrubber != null) {
+                binding.layoutPageScrubber.setVisibility(View.VISIBLE);
+            }
         }
     }
 
@@ -655,16 +711,185 @@ public class PdfViewerActivity extends AppCompatActivity implements ReadingModeB
         }
 
         if (pdfRenderer != null) {
-            int currentPos = 0;
-            if (layoutManager != null) {
-                currentPos = layoutManager.findFirstVisibleItemPosition();
-                if (currentPos < 0) currentPos = 0;
+            if (pageCount > 1) {
+                new MaterialAlertDialogBuilder(this)
+                        .setTitle(R.string.ocr_dialog_title)
+                        .setItems(new CharSequence[]{
+                                getString(R.string.ocr_batch_all_pages),
+                                getString(R.string.ocr_current_page_lens)
+                        }, (dialog, which) -> {
+                            if (which == 0) {
+                                startBatchOcr();
+                            } else {
+                                int currentPos = 0;
+                                if (layoutManager != null) {
+                                    currentPos = layoutManager.findFirstVisibleItemPosition();
+                                    if (currentPos < 0) currentPos = 0;
+                                }
+                                currentOcrPageIndex = currentPos;
+                                extractTextFromPdfPage(currentPos);
+                            }
+                        })
+                        .setNegativeButton(R.string.action_cancel, null)
+                        .show();
+            } else {
+                currentOcrPageIndex = 0;
+                extractTextFromPdfPage(0);
             }
-            currentOcrPageIndex = currentPos;
-            extractTextFromPdfPage(currentPos);
         } else if (currentImageBitmap != null) {
             extractTextFromImage(currentImageBitmap);
         }
+    }
+
+    private void startBatchOcr() {
+        if (pdfRenderer == null) return;
+        OcrHelper.extractTextFromPdfBatch(this, pdfRenderer, new OcrHelper.BatchOcrCallback() {
+            @Override
+            public void onProgress(int currentPage, int totalPages) {
+                // Managed by OcrHelper's progress dialog
+            }
+
+            @Override
+            public void onSuccess(String aggregatedText) {
+                if (isFinishing() || isDestroyed()) return;
+                OcrHelper.showExtractedTextDialog(PdfViewerActivity.this, aggregatedText, false, pageCount);
+            }
+
+            @Override
+            public void onCancelled(String partialText) {
+                if (isFinishing() || isDestroyed()) return;
+                if (partialText != null && !partialText.trim().isEmpty()) {
+                    OcrHelper.showExtractedTextDialog(PdfViewerActivity.this, partialText, true, pageCount);
+                } else {
+                    Toast.makeText(PdfViewerActivity.this, R.string.ocr_cancelled_toast, Toast.LENGTH_SHORT).show();
+                }
+            }
+
+            @Override
+            public void onError(Exception e) {
+                if (isFinishing() || isDestroyed()) return;
+                Log.e(TAG, "Batch OCR failed", e);
+                Toast.makeText(PdfViewerActivity.this, R.string.ocr_error, Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
+    private void setupPageScrubber() {
+        if (binding.sliderPageScrubber == null || binding.layoutPageScrubber == null) return;
+        if (pageCount > 1 && pdfRenderer != null) {
+            binding.sliderPageScrubber.setValueFrom(1.0f);
+            binding.sliderPageScrubber.setValueTo((float) pageCount);
+            binding.sliderPageScrubber.setStepSize(1.0f);
+            binding.sliderPageScrubber.setValue(1.0f);
+            binding.sliderPageScrubber.setLabelFormatter(value -> "Page " + (int) value);
+
+            binding.sliderPageScrubber.clearOnChangeListeners();
+            binding.sliderPageScrubber.clearOnSliderTouchListeners();
+
+            binding.sliderPageScrubber.addOnSliderTouchListener(new Slider.OnSliderTouchListener() {
+                @Override
+                public void onStartTrackingTouch(@NonNull Slider slider) {
+                    isScrubbing = true;
+                }
+
+                @Override
+                public void onStopTrackingTouch(@NonNull Slider slider) {
+                    isScrubbing = false;
+                }
+            });
+
+            binding.sliderPageScrubber.addOnChangeListener((slider, value, fromUser) -> {
+                if (fromUser && layoutManager != null && pdfRenderer != null) {
+                    int targetPage = (int) value - 1;
+                    if (targetPage >= 0 && targetPage < pageCount) {
+                        layoutManager.scrollToPositionWithOffset(targetPage, 0);
+                        updatePageIndicator(targetPage + 1);
+                    }
+                }
+            });
+
+            binding.layoutPageScrubber.setVisibility(View.VISIBLE);
+        } else {
+            binding.layoutPageScrubber.setVisibility(View.GONE);
+        }
+    }
+
+    private void showJumpToPageDialog() {
+        if (pageCount <= 1) return;
+
+        int currentPos = 0;
+        if (layoutManager != null) {
+            currentPos = layoutManager.findFirstVisibleItemPosition();
+            if (currentPos < 0) currentPos = 0;
+        }
+        final int currentPage = currentPos + 1;
+
+        FrameLayout container = new FrameLayout(this);
+        int padding = (int) (20 * getResources().getDisplayMetrics().density);
+        container.setPadding(padding, padding / 2, padding, 0);
+
+        TextInputLayout til = new TextInputLayout(this);
+        til.setHint(getString(R.string.jump_to_page_hint, pageCount));
+        til.setBoxBackgroundMode(TextInputLayout.BOX_BACKGROUND_OUTLINE);
+        til.setBoxStrokeColor(ContextCompat.getColor(this, R.color.accent_mint));
+        til.setDefaultHintTextColor(ColorStateList.valueOf(ContextCompat.getColor(this, R.color.text_secondary)));
+
+        TextInputEditText et = new TextInputEditText(this);
+        et.setInputType(InputType.TYPE_CLASS_NUMBER);
+        et.setTextColor(ContextCompat.getColor(this, R.color.text_primary));
+        et.setText(String.valueOf(currentPage));
+        et.selectAll();
+        til.addView(et);
+        container.addView(til);
+
+        AlertDialog dialog = new MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.jump_to_page_title)
+                .setView(container)
+                .setPositiveButton(R.string.jump_to_page_go, null)
+                .setNegativeButton(R.string.action_cancel, (d, which) -> d.dismiss())
+                .create();
+
+        dialog.setOnShowListener(d -> {
+            et.requestFocus();
+            InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+            if (imm != null) {
+                imm.showSoftInput(et, InputMethodManager.SHOW_IMPLICIT);
+            }
+
+            Button positiveBtn = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+            positiveBtn.setOnClickListener(v -> {
+                String text = et.getText() != null ? et.getText().toString().trim() : "";
+                if (text.isEmpty()) {
+                    til.setError(getString(R.string.jump_to_page_error, pageCount));
+                    return;
+                }
+                try {
+                    int targetPage = Integer.parseInt(text);
+                    if (targetPage < 1 || targetPage > pageCount) {
+                        til.setError(getString(R.string.jump_to_page_error, pageCount));
+                        return;
+                    }
+                    til.setError(null);
+                    if (imm != null) {
+                        imm.hideSoftInputFromWindow(et.getWindowToken(), 0);
+                    }
+                    dialog.dismiss();
+
+                    int targetIndex = targetPage - 1;
+                    if (layoutManager != null) {
+                        layoutManager.scrollToPositionWithOffset(targetIndex, 0);
+                        updatePageIndicator(targetPage);
+                    }
+                    if (binding.sliderPageScrubber != null && pageCount > 1) {
+                        binding.sliderPageScrubber.setValue((float) targetPage);
+                    }
+                } catch (NumberFormatException e) {
+                    til.setError(getString(R.string.jump_to_page_error, pageCount));
+                }
+            });
+        });
+
+        dialog.show();
     }
 
     private void extractTextFromPdfPage(int pageIndex) {
@@ -752,6 +977,9 @@ public class PdfViewerActivity extends AppCompatActivity implements ReadingModeB
                     binding.ocrOverlay.setVisionText(visionText, bitmap.getWidth(), bitmap.getHeight());
                     binding.ocrOverlay.setVisibility(View.VISIBLE);
                     binding.layoutOcrBar.setVisibility(View.VISIBLE);
+                    if (binding.layoutPageScrubber != null) {
+                        binding.layoutPageScrubber.setVisibility(View.GONE);
+                    }
                     Toast.makeText(PdfViewerActivity.this, R.string.ocr_lens_hint, Toast.LENGTH_SHORT).show();
                 });
             }
@@ -800,6 +1028,9 @@ public class PdfViewerActivity extends AppCompatActivity implements ReadingModeB
         if (binding.adView != null) {
             binding.adView.setVisibility(View.GONE);
         }
+        if (binding.layoutPageScrubber != null) {
+            binding.layoutPageScrubber.setVisibility(View.GONE);
+        }
         binding.rvPdfPages.setVisibility(View.GONE);
         binding.photoView.setVisibility(View.GONE);
 
@@ -817,12 +1048,27 @@ public class PdfViewerActivity extends AppCompatActivity implements ReadingModeB
         binding.pageCurlView.setOnPageTurnListener((newIndex, total) -> {
             updateEreaderBadge(newIndex + 1, total);
             showAndFadeEreaderBadge();
+            wakePill();
             if (binding.tvEreaderPageIndicator != null) {
                 binding.tvEreaderPageIndicator.setText(getString(R.string.pdf_page_indicator, newIndex + 1, total));
             }
         });
 
-        binding.pageCurlView.setOnCenterTapListener(this::toggleEreaderControls);
+        binding.pageCurlView.setOnCenterTapListener(() -> {
+            wakePill();
+            toggleEreaderControls();
+        });
+
+        // Setup persistent floating action pill
+        if (binding.cardEreaderMenuPill != null) {
+            binding.cardEreaderMenuPill.setVisibility(View.VISIBLE);
+            binding.cardEreaderMenuPill.setAlpha(1.0f);
+            binding.cardEreaderMenuPill.setOnClickListener(v -> toggleEreaderControls());
+            if (binding.btnPillExit != null) {
+                binding.btnPillExit.setOnClickListener(v -> exitKindleReadingMode());
+            }
+            schedulePillFade();
+        }
 
         // Setup overlays & controls
         setupEreaderControls();
@@ -843,6 +1089,12 @@ public class PdfViewerActivity extends AppCompatActivity implements ReadingModeB
         isInEreaderMode = false;
 
         badgeHandler.removeCallbacks(hideBadgeRunnable);
+        pillHandler.removeCallbacks(fadePillRunnable);
+
+        if (binding.cardEreaderMenuPill != null) {
+            binding.cardEreaderMenuPill.animate().cancel();
+            binding.cardEreaderMenuPill.setVisibility(View.GONE);
+        }
 
         int lastPage = 0;
         if (binding.pageCurlView != null) {
@@ -867,6 +1119,13 @@ public class PdfViewerActivity extends AppCompatActivity implements ReadingModeB
             layoutManager.scrollToPositionWithOffset(lastPage, 0);
             updatePageIndicator(lastPage + 1);
         }
+
+        if (pageCount > 1 && pdfRenderer != null && binding.layoutPageScrubber != null) {
+            binding.layoutPageScrubber.setVisibility(View.VISIBLE);
+            if (!isScrubbing && binding.sliderPageScrubber != null && lastPage >= 0 && lastPage < pageCount) {
+                binding.sliderPageScrubber.setValue(lastPage + 1);
+            }
+        }
     }
 
     private void toggleEreaderControls() {
@@ -874,8 +1133,15 @@ public class PdfViewerActivity extends AppCompatActivity implements ReadingModeB
         boolean isVisible = binding.layoutEreaderControls.getVisibility() == View.VISIBLE;
         if (isVisible) {
             binding.layoutEreaderControls.setVisibility(View.GONE);
+            if (binding.cardEreaderMenuPill != null && isInEreaderMode) {
+                binding.cardEreaderMenuPill.setVisibility(View.VISIBLE);
+                wakePill();
+            }
         } else {
             binding.layoutEreaderControls.setVisibility(View.VISIBLE);
+            if (binding.cardEreaderMenuPill != null) {
+                binding.cardEreaderMenuPill.setVisibility(View.GONE);
+            }
             if (binding.pageCurlView != null) {
                 updateToneCardSelection(binding.pageCurlView.getPaperWarmth());
                 binding.switchEInk.setChecked(binding.pageCurlView.isEInkMode());
@@ -885,7 +1151,24 @@ public class PdfViewerActivity extends AppCompatActivity implements ReadingModeB
     }
 
     private void setupEreaderControls() {
+        binding.layoutEreaderControls.setOnClickListener(v -> toggleEreaderControls());
         binding.btnExitEreader.setOnClickListener(v -> exitKindleReadingMode());
+
+        if (binding.sliderEreaderBrightness != null) {
+            android.view.WindowManager.LayoutParams lp = getWindow().getAttributes();
+            float currentBrightness = lp.screenBrightness;
+            if (currentBrightness < 0) {
+                currentBrightness = 0.8f;
+            }
+            binding.sliderEreaderBrightness.setValue(Math.max(0.05f, Math.min(currentBrightness, 1.0f)));
+            binding.sliderEreaderBrightness.addOnChangeListener((slider, value, fromUser) -> {
+                if (fromUser) {
+                    android.view.WindowManager.LayoutParams attrs = getWindow().getAttributes();
+                    attrs.screenBrightness = value;
+                    getWindow().setAttributes(attrs);
+                }
+            });
+        }
 
         binding.cardToneWhite.setOnClickListener(v -> setEreaderWarmth(PageCurlView.PaperWarmth.WHITE));
         binding.cardToneWarm.setOnClickListener(v -> setEreaderWarmth(PageCurlView.PaperWarmth.WARM));
@@ -1163,6 +1446,9 @@ public class PdfViewerActivity extends AppCompatActivity implements ReadingModeB
         binding.drawingOverlay.setVisibility(View.VISIBLE);
         binding.drawingOverlay.setDrawingEnabled(true);
         binding.layoutAnnotationBar.setVisibility(View.VISIBLE);
+        if (binding.layoutPageScrubber != null) {
+            binding.layoutPageScrubber.setVisibility(View.GONE);
+        }
     }
 
     private void exitAnnotationMode() {
@@ -1178,6 +1464,9 @@ public class PdfViewerActivity extends AppCompatActivity implements ReadingModeB
             if (currentAnnotatedPageBitmap != null && !currentAnnotatedPageBitmap.isRecycled()) {
                 currentAnnotatedPageBitmap.recycle();
                 currentAnnotatedPageBitmap = null;
+            }
+            if (pageCount > 1 && binding.layoutPageScrubber != null) {
+                binding.layoutPageScrubber.setVisibility(View.VISIBLE);
             }
         }
     }
