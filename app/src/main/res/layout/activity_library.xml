@@ -39,6 +39,7 @@
                 android:layout_width="@dimen/icon_md"
                 android:layout_height="@dimen/icon_md"
                 android:src="@drawable/ic_search"
+                android:importantForAccessibility="no"
                 app:tint="@color/text_muted" />
 
             <EditText
@@ -102,12 +103,14 @@
                 android:layout_height="match_parent"
                 android:layout_weight="1"
                 android:gravity="center"
+                android:contentDescription="@string/nav_library"
                 android:orientation="vertical">
 
                 <ImageView
                     android:layout_width="@dimen/icon_md"
                     android:layout_height="@dimen/icon_md"
                     android:src="@drawable/ic_library"
+                    android:importantForAccessibility="no"
                     app:tint="@color/nav_icon_active" />
 
                 <TextView
@@ -130,12 +133,14 @@
                 android:layout_height="match_parent"
                 android:layout_weight="1"
                 android:gravity="center"
+                android:contentDescription="@string/nav_settings"
                 android:orientation="vertical">
 
                 <ImageView
                     android:layout_width="@dimen/icon_md"
                     android:layout_height="@dimen/icon_md"
                     android:src="@drawable/ic_settings"
+                    android:importantForAccessibility="no"
                     app:tint="@color/nav_icon_inactive" />
 
                 <TextView

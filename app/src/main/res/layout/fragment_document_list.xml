@@ -40,6 +40,7 @@
         <ImageView
             android:layout_width="64dp"
             android:layout_height="64dp"
+            android:importantForAccessibility="no"
             android:src="@drawable/ic_library"
             app:tint="@color/text_muted" />
 

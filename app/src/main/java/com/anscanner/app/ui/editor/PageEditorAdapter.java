@@ -64,6 +64,7 @@ public class PageEditorAdapter extends RecyclerView.Adapter<PageEditorAdapter.Pa
         holder.cropOverlay.setVisibility(View.GONE);
         holder.cropOverlay.resetCornerMoved();
         holder.drawingOverlay.setVisibility(View.GONE);
+        holder.ivPageImage.setZoomable(false); // Global whole-document zoom handled by DocumentZoomLayout
         holder.ivPageImage.setScale(1.0f, false);
         holder.drawingOverlay.bindImageView(holder.ivPageImage);
 
@@ -97,16 +98,20 @@ public class PageEditorAdapter extends RecyclerView.Adapter<PageEditorAdapter.Pa
     }
 
     @Nullable
+    public static PageViewHolder getViewHolder(@Nullable RecyclerView recyclerView, int position) {
+        if (recyclerView == null) return null;
+        RecyclerView.ViewHolder vh = recyclerView.findViewHolderForAdapterPosition(position);
+        if (vh instanceof PageViewHolder) {
+            return (PageViewHolder) vh;
+        }
+        return null;
+    }
+
+    @Nullable
     public static PageViewHolder getViewHolder(@Nullable ViewPager2 viewPager, int position) {
         if (viewPager == null) return null;
         RecyclerView rv = (RecyclerView) viewPager.getChildAt(0);
-        if (rv != null) {
-            RecyclerView.ViewHolder vh = rv.findViewHolderForAdapterPosition(position);
-            if (vh instanceof PageViewHolder) {
-                return (PageViewHolder) vh;
-            }
-        }
-        return null;
+        return getViewHolder(rv, position);
     }
 
     public static class PageViewHolder extends RecyclerView.ViewHolder {

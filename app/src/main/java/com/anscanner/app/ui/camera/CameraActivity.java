@@ -293,6 +293,7 @@ public class CameraActivity extends AppCompatActivity {
             editorIntent.putStringArrayListExtra(UnifiedEditorActivity.EXTRA_PAGE_PATHS, new ArrayList<>(batchPagePaths));
             editorIntent.putStringArrayListExtra(UnifiedEditorActivity.EXTRA_ORIGINAL_PAGE_PATHS, new ArrayList<>(batchPagePaths));
             editorIntent.putExtra(UnifiedEditorActivity.EXTRA_MODE, UnifiedEditorActivity.MODE_BATCH_SCAN);
+            editorIntent.putExtra(UnifiedEditorActivity.EXTRA_ENABLE_CROP_DEFAULT, true);
             startActivity(editorIntent);
         }
     }
@@ -654,6 +655,7 @@ public class CameraActivity extends AppCompatActivity {
                         editorIntent.putStringArrayListExtra(UnifiedEditorActivity.EXTRA_PAGE_PATHS, savedPaths);
                         editorIntent.putStringArrayListExtra(UnifiedEditorActivity.EXTRA_ORIGINAL_PAGE_PATHS, savedPaths);
                         editorIntent.putExtra(UnifiedEditorActivity.EXTRA_MODE, UnifiedEditorActivity.MODE_BATCH_SCAN);
+                        editorIntent.putExtra(UnifiedEditorActivity.EXTRA_ENABLE_CROP_DEFAULT, true);
                         startActivity(editorIntent);
                     }
                 }
@@ -685,6 +687,7 @@ public class CameraActivity extends AppCompatActivity {
             Intent intent = new Intent(CameraActivity.this, CropPreviewActivity.class);
             intent.putExtra(EXTRA_IMAGE_PATH, path);
             intent.putExtra(EXTRA_IS_ADDING_PAGE, isAddingPage);
+            intent.putExtra(UnifiedEditorActivity.EXTRA_ENABLE_CROP_DEFAULT, true);
 
             // Pass detected corners as a double array [x0,y0,x1,y1,...,x3,y3]
             if (corners != null && corners.length == 4) {

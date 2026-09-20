@@ -20,7 +20,7 @@
             android:layout_height="48dp"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:src="@drawable/ic_close"
-            android:contentDescription="@string/app_name"
+            android:contentDescription="@string/cd_close"
             app:tint="@color/text_primary" />
 
         <LinearLayout

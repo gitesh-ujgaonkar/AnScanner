@@ -17,6 +17,7 @@
         <ImageView
             android:layout_width="48dp"
             android:layout_height="48dp"
+            android:importantForAccessibility="no"
             android:src="@drawable/ic_add_page"
             app:tint="@color/text_muted" />
 

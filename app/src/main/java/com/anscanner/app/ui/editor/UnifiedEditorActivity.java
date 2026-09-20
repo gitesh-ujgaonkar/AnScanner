@@ -8,6 +8,7 @@ import android.graphics.Color;
 import android.graphics.Matrix;
 import android.graphics.Point;
 import android.graphics.RectF;
+import android.graphics.Typeface;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
@@ -33,7 +34,7 @@ import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
-import androidx.viewpager2.widget.ViewPager2;
+import androidx.recyclerview.widget.RecyclerView;
 
 import com.anscanner.app.R;
 import com.anscanner.app.databinding.ActivityUnifiedEditorBinding;
@@ -48,6 +49,9 @@ import com.anscanner.app.ui.custom.AnnotationDrawingView;
 import com.anscanner.app.ui.custom.DrawingOverlayView;
 import com.anscanner.app.ui.custom.TouchImageView;
 import com.anscanner.app.ui.save.SaveScanBottomSheet;
+import com.anscanner.app.util.FontUtils;
+import android.text.Editable;
+import android.text.TextWatcher;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.materialswitch.MaterialSwitch;
 import com.google.android.material.textfield.TextInputEditText;
@@ -90,6 +94,7 @@ public class UnifiedEditorActivity extends AppCompatActivity {
     public static final String EXTRA_START_ANNOTATE = "extra_start_annotate";
     public static final String EXTRA_IS_ADDING_PAGE = "extra_is_adding_page";
     public static final String EXTRA_FROM_REVIEW = "extra_from_review";
+    public static final String EXTRA_ENABLE_CROP_DEFAULT = "extra_enable_crop_default";
 
     public static final String MODE_BATCH_SCAN = "BATCH_SCAN";
     public static final String MODE_PDF_EDIT = "PDF_EDIT";
@@ -163,14 +168,14 @@ public class UnifiedEditorActivity extends AppCompatActivity {
                     savedCornersMap.remove(targetPageIndex);
                 }
 
-                if (binding.viewPager.getCurrentItem() != targetPageIndex) {
-                    binding.viewPager.setCurrentItem(targetPageIndex, false);
+                if (pageIndex != targetPageIndex) {
+                    scrollToPage(targetPageIndex, false);
                 }
 
                 pageAdapter.notifyItemChanged(targetPageIndex);
                 thumbAdapter.notifyItemChanged(targetPageIndex);
 
-                PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.viewPager, targetPageIndex);
+                PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.recyclerViewDocumentPages, targetPageIndex);
                 if (vh != null) {
                     Bitmap bmp = CacheManager.loadBitmap(backupPath);
                     if (bmp != null) {
@@ -192,14 +197,14 @@ public class UnifiedEditorActivity extends AppCompatActivity {
                     savedCornersMap.put(targetPageIndex, newCorners);
                 }
 
-                if (binding.viewPager.getCurrentItem() != targetPageIndex) {
-                    binding.viewPager.setCurrentItem(targetPageIndex, false);
+                if (pageIndex != targetPageIndex) {
+                    scrollToPage(targetPageIndex, false);
                 }
 
                 pageAdapter.notifyItemChanged(targetPageIndex);
                 thumbAdapter.notifyItemChanged(targetPageIndex);
 
-                PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.viewPager, targetPageIndex);
+                PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.recyclerViewDocumentPages, targetPageIndex);
                 if (vh != null) {
                     Bitmap bmp = CacheManager.loadBitmap(transformedPath);
                     if (bmp != null) {
@@ -223,10 +228,10 @@ public class UnifiedEditorActivity extends AppCompatActivity {
 
         @Override
         public void undo() {
-            if (binding.viewPager.getCurrentItem() != targetPageIndex) {
-                binding.viewPager.setCurrentItem(targetPageIndex, false);
+            if (pageIndex != targetPageIndex) {
+                scrollToPage(targetPageIndex, false);
             }
-            PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.viewPager, targetPageIndex);
+            PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.recyclerViewDocumentPages, targetPageIndex);
             if (vh != null) {
                 vh.drawingOverlay.undo();
             }
@@ -264,7 +269,7 @@ public class UnifiedEditorActivity extends AppCompatActivity {
     private void updateUndoButtonState() {
         boolean canUndo = !undoStack.isEmpty();
         if (!canUndo && isDrawingMode) {
-            PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.viewPager, pageIndex);
+            PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.recyclerViewDocumentPages, pageIndex);
             if (vh != null && vh.drawingOverlay.getActionCount() > 0) {
                 canUndo = true;
             }
@@ -325,7 +330,7 @@ public class UnifiedEditorActivity extends AppCompatActivity {
             pageIndex = 0;
         }
 
-        setupViewPager();
+        setupDocumentRecyclerView();
         setupThumbnailStrip();
         setupTopBar();
         setupBottomToolbar();
@@ -333,25 +338,88 @@ public class UnifiedEditorActivity extends AppCompatActivity {
         updateTitle();
         updateSwipeLock();
 
-        // Check if opened directly into annotation mode
+        // Read pre-detected corners if passed from CameraActivity
+        double[] cornerArray = intent.getDoubleArrayExtra(CameraActivity.EXTRA_DETECTED_CORNERS);
+        if (cornerArray != null && cornerArray.length == 8) {
+            Point[] corners = new Point[4];
+            for (int i = 0; i < 4; i++) {
+                corners[i] = new Point((int) Math.round(cornerArray[i * 2]), (int) Math.round(cornerArray[i * 2 + 1]));
+            }
+            savedCornersMap.put(pageIndex, corners);
+        }
+
+        // Check if opened directly into annotation or crop mode
         if (intent.getBooleanExtra(EXTRA_START_ANNOTATE, false)) {
             binding.getRoot().post(this::enterDrawingMode);
+        } else if (intent.getBooleanExtra(EXTRA_ENABLE_CROP_DEFAULT, false)) {
+            binding.recyclerViewDocumentPages.post(this::enterCropMode);
         }
     }
 
-    private void setupViewPager() {
+    private void setupDocumentRecyclerView() {
         pageAdapter = new PageEditorAdapter(pagePaths, null);
-        binding.viewPager.setAdapter(pageAdapter);
-        binding.viewPager.setOffscreenPageLimit(1);
-        binding.viewPager.setCurrentItem(pageIndex, false);
+        LinearLayoutManager layoutManager = new LinearLayoutManager(this, LinearLayoutManager.VERTICAL, false);
+        binding.recyclerViewDocumentPages.setLayoutManager(layoutManager);
+        binding.recyclerViewDocumentPages.setAdapter(pageAdapter);
+        binding.recyclerViewDocumentPages.setItemViewCacheSize(4);
 
-        binding.viewPager.registerOnPageChangeCallback(new ViewPager2.OnPageChangeCallback() {
+        binding.recyclerViewDocumentPages.addOnScrollListener(new RecyclerView.OnScrollListener() {
             @Override
-            public void onPageSelected(int position) {
-                super.onPageSelected(position);
-                onPageSwitched(position);
+            public void onScrolled(@NonNull RecyclerView recyclerView, int dx, int dy) {
+                super.onScrolled(recyclerView, dx, dy);
+                if (dy != 0 || dx != 0) {
+                    int centerPos = findCenterPagePosition(layoutManager);
+                    if (centerPos >= 0 && centerPos < pagePaths.size() && centerPos != pageIndex) {
+                        onPageSwitched(centerPos);
+                    }
+                }
             }
         });
+
+        if (pageIndex > 0 && pageIndex < pagePaths.size()) {
+            layoutManager.scrollToPositionWithOffset(pageIndex, 0);
+        }
+    }
+
+    private int findCenterPagePosition(LinearLayoutManager lm) {
+        int rvHeight = binding.recyclerViewDocumentPages.getHeight();
+        if (rvHeight <= 0) return lm.findFirstVisibleItemPosition();
+        int center = rvHeight / 2;
+        int closestPos = -1;
+        int minDiff = Integer.MAX_VALUE;
+        int first = lm.findFirstVisibleItemPosition();
+        int last = lm.findLastVisibleItemPosition();
+        for (int i = first; i <= last; i++) {
+            View child = lm.findViewByPosition(i);
+            if (child != null) {
+                int childCenter = (child.getTop() + child.getBottom()) / 2;
+                int diff = Math.abs(childCenter - center);
+                if (diff < minDiff) {
+                    minDiff = diff;
+                    closestPos = i;
+                }
+            }
+        }
+        return closestPos >= 0 ? closestPos : first;
+    }
+
+    private void scrollToPage(int targetPageIndex, boolean smooth) {
+        if (targetPageIndex < 0 || targetPageIndex >= pagePaths.size()) return;
+        pageIndex = targetPageIndex;
+        updateTitle();
+        thumbAdapter.setSelectedPosition(pageIndex);
+        binding.rvThumbnails.smoothScrollToPosition(pageIndex);
+        updateNavigationButtons();
+        updateUndoButtonState();
+
+        if (smooth) {
+            binding.recyclerViewDocumentPages.smoothScrollToPosition(targetPageIndex);
+        } else {
+            LinearLayoutManager lm = (LinearLayoutManager) binding.recyclerViewDocumentPages.getLayoutManager();
+            if (lm != null) {
+                lm.scrollToPositionWithOffset(targetPageIndex, 0);
+            }
+        }
     }
 
     private void setupThumbnailStrip() {
@@ -362,7 +430,7 @@ public class UnifiedEditorActivity extends AppCompatActivity {
                 } else if (isCropMode) {
                     exitCropMode();
                 }
-                binding.viewPager.setCurrentItem(position, true);
+                scrollToPage(position, true);
             }
         });
         binding.rvThumbnails.setLayoutManager(new LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false));
@@ -398,10 +466,13 @@ public class UnifiedEditorActivity extends AppCompatActivity {
     }
 
     /**
-     * Requirement 1: Disable ViewPager2 touch/swipe gestures while in an active editing state.
+     * Disable whole-document zoom and scrolling gestures while in an active editing state.
      */
     private void updateSwipeLock() {
-        binding.viewPager.setUserInputEnabled(!isDrawingMode && !isCropMode);
+        boolean enabled = !isDrawingMode && !isCropMode;
+        binding.documentZoomLayout.setZoomEnabled(enabled);
+        binding.documentZoomLayout.setPanEnabled(enabled);
+        binding.recyclerViewDocumentPages.setNestedScrollingEnabled(enabled);
     }
 
     private void setupTopBar() {
@@ -410,14 +481,14 @@ public class UnifiedEditorActivity extends AppCompatActivity {
         binding.btnPrevPage.setOnClickListener(v -> {
             if (pageIndex > 0) {
                 if (isDrawingMode) commitCurrentAnnotations();
-                binding.viewPager.setCurrentItem(pageIndex - 1, true);
+                scrollToPage(pageIndex - 1, true);
             }
         });
 
         binding.btnNextPage.setOnClickListener(v -> {
             if (pageIndex < pagePaths.size() - 1) {
                 if (isDrawingMode) commitCurrentAnnotations();
-                binding.viewPager.setCurrentItem(pageIndex + 1, true);
+                scrollToPage(pageIndex + 1, true);
             }
         });
 
@@ -428,7 +499,7 @@ public class UnifiedEditorActivity extends AppCompatActivity {
                 redoStack.push(action);
                 updateUndoButtonState();
             } else if (isDrawingMode) {
-                PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.viewPager, pageIndex);
+                PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.recyclerViewDocumentPages, pageIndex);
                 if (vh != null && vh.drawingOverlay.getActionCount() > 0) {
                     vh.drawingOverlay.undo();
                     updateUndoButtonState();
@@ -481,27 +552,41 @@ public class UnifiedEditorActivity extends AppCompatActivity {
         if (isBusy) return;
 
         if (!isCropMode) {
-            // Enter crop mode
-            if (isDrawingMode) {
-                commitCurrentAnnotations();
-                exitDrawingMode();
-            }
-            isCropMode = true;
-            updateSwipeLock();
-
-            binding.tvCropLabel.setText(R.string.action_apply);
-            binding.ivCropIcon.setImageResource(R.drawable.ic_check);
-
-            PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.viewPager, pageIndex);
-            if (vh != null) {
-                vh.ivPageImage.setScale(1.0f, false);
-                vh.cropOverlay.setImageView(vh.ivPageImage);
-                prepareCropForPage(pageIndex, vh);
-            }
+            enterCropMode();
             Toast.makeText(this, "Adjust edges & tap Apply to crop", Toast.LENGTH_SHORT).show();
         } else {
             // Apply crop
             commitCrop(null);
+        }
+    }
+
+    private void enterCropMode() {
+        if (isBusy || isCropMode) return;
+
+        if (isDrawingMode) {
+            commitCurrentAnnotations();
+            exitDrawingMode();
+        }
+        isCropMode = true;
+        updateSwipeLock();
+
+        binding.tvCropLabel.setText(R.string.action_apply);
+        binding.ivCropIcon.setImageResource(R.drawable.ic_check);
+
+        PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.recyclerViewDocumentPages, pageIndex);
+        if (vh != null) {
+            vh.ivPageImage.setScale(1.0f, false);
+            vh.cropOverlay.setImageView(vh.ivPageImage);
+            prepareCropForPage(pageIndex, vh);
+        } else {
+            binding.recyclerViewDocumentPages.post(() -> {
+                PageEditorAdapter.PageViewHolder vhPost = PageEditorAdapter.getViewHolder(binding.recyclerViewDocumentPages, pageIndex);
+                if (vhPost != null) {
+                    vhPost.ivPageImage.setScale(1.0f, false);
+                    vhPost.cropOverlay.setImageView(vhPost.ivPageImage);
+                    prepareCropForPage(pageIndex, vhPost);
+                }
+            });
         }
     }
 
@@ -510,11 +595,10 @@ public class UnifiedEditorActivity extends AppCompatActivity {
         executor.execute(() -> {
             Point[] corners = savedCornersMap.get(index);
             if (corners == null) {
-                // Use current page image so detected/default corners match the exact pixel dimensions displayed on screen
-                String currentPath = pagePaths.get(index);
-                Bitmap bmp = CacheManager.loadBitmap(currentPath);
-                if (bmp == null && index < originalPagePaths.size()) {
-                    bmp = CacheManager.loadBitmap(originalPagePaths.get(index));
+                String origPath = (index < originalPagePaths.size()) ? originalPagePaths.get(index) : pagePaths.get(index);
+                Bitmap bmp = CacheManager.loadBitmap(origPath);
+                if (bmp == null) {
+                    bmp = CacheManager.loadBitmap(pagePaths.get(index));
                 }
                 if (bmp != null) {
                     org.opencv.core.Point[] detected = DocumentDetector.getInstance(UnifiedEditorActivity.this)
@@ -545,7 +629,7 @@ public class UnifiedEditorActivity extends AppCompatActivity {
     }
 
     private void commitCrop(@Nullable Runnable onComplete) {
-        PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.viewPager, pageIndex);
+        PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.recyclerViewDocumentPages, pageIndex);
         Point[] currentCorners = vh != null ? vh.cropOverlay.getCornerPoints() : null;
         if (currentCorners == null || currentCorners.length != 4) {
             currentCorners = savedCornersMap.get(pageIndex);
@@ -559,15 +643,16 @@ public class UnifiedEditorActivity extends AppCompatActivity {
         isBusy = true;
         final Point[] cornersToApply = currentCorners;
         final int targetPageIndex = pageIndex;
-        final String currentPath = pagePaths.get(targetPageIndex);
-        final String backupPath = backupFile(currentPath, "backup_crop_page_" + targetPageIndex);
+        final String originalPath = (targetPageIndex < originalPagePaths.size())
+                ? originalPagePaths.get(targetPageIndex) : pagePaths.get(targetPageIndex);
+        final String preCropPath = pagePaths.get(targetPageIndex);
+        final String backupPath = backupFile(preCropPath, "backup_crop_page_" + targetPageIndex);
         final Point[] prevCorners = savedCornersMap.get(targetPageIndex);
 
         executor.execute(() -> {
-            // Load bitmap directly from currentPath to guarantee 1:1 pixel alignment with crop overlay coordinates
-            Bitmap master = CacheManager.loadBitmap(currentPath);
-            if (master == null && targetPageIndex < originalPagePaths.size()) {
-                master = CacheManager.loadBitmap(originalPagePaths.get(targetPageIndex));
+            Bitmap master = CacheManager.loadBitmap(originalPath);
+            if (master == null) {
+                master = CacheManager.loadBitmap(pagePaths.get(targetPageIndex));
             }
             if (master == null) {
                 runOnUiThread(() -> {
@@ -582,39 +667,15 @@ public class UnifiedEditorActivity extends AppCompatActivity {
             Bitmap cropped = ImageProcessor.perspectiveWarp(master, opencvCorners);
             master.recycle();
 
-            if (cropped == null) {
-                runOnUiThread(() -> {
-                    isBusy = false;
-                    exitCropMode();
-                    if (onComplete != null) onComplete.run();
-                });
-                return;
-            }
-
-            // Save cropped bitmap to disk (overwriting cached page and saving new temp)
             String croppedPath = CacheManager.saveTempBitmap(
                     UnifiedEditorActivity.this, cropped, "page_" + targetPageIndex + "_cropped_" + UUID.randomUUID().toString());
-            CacheManager.updateTempBitmap(UnifiedEditorActivity.this, cropped, currentPath);
-
-            final Bitmap displayCropped = cropped;
+            cropped.recycle();
 
             runOnUiThread(() -> {
                 isBusy = false;
                 if (croppedPath != null) {
                     pagePaths.set(targetPageIndex, croppedPath);
-                    if (targetPageIndex < originalPagePaths.size()) {
-                        originalPagePaths.set(targetPageIndex, croppedPath);
-                    }
-                    // Reset saved corners for this page so subsequent crops detect fresh on the new dimensions
-                    savedCornersMap.remove(targetPageIndex);
-
-                    // Update target ImageView immediately on UI thread so visual change reflects immediately
-                    if (vh != null) {
-                        vh.ivPageImage.setImageBitmap(displayCropped);
-                        vh.ivPageImage.setScale(1.0f, false);
-                        vh.drawingOverlay.setDocumentDimensions(displayCropped.getWidth(), displayCropped.getHeight());
-                    }
-
+                    savedCornersMap.put(targetPageIndex, cornersToApply);
                     pageAdapter.notifyItemChanged(targetPageIndex);
                     thumbAdapter.notifyItemChanged(targetPageIndex);
 
@@ -633,7 +694,7 @@ public class UnifiedEditorActivity extends AppCompatActivity {
 
     private void exitCropMode() {
         isCropMode = false;
-        PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.viewPager, pageIndex);
+        PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.recyclerViewDocumentPages, pageIndex);
         if (vh != null) {
             vh.cropOverlay.resetCornerMoved();
             vh.cropOverlay.setVisibility(View.GONE);
@@ -662,12 +723,11 @@ public class UnifiedEditorActivity extends AppCompatActivity {
         }
         isDrawingMode = true;
         updateSwipeLock();
-        binding.viewPager.setUserInputEnabled(false);
 
         binding.layoutAnnotationBar.setVisibility(View.VISIBLE);
         updateUndoButtonState();
 
-        PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.viewPager, pageIndex);
+        PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.recyclerViewDocumentPages, pageIndex);
         if (vh != null) {
             vh.drawingOverlay.setVisibility(View.VISIBLE);
             vh.drawingOverlay.bindImageView(vh.ivPageImage);
@@ -703,7 +763,7 @@ public class UnifiedEditorActivity extends AppCompatActivity {
         updateSwipeLock();
         updateUndoButtonState();
 
-        PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.viewPager, pageIndex);
+        PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.recyclerViewDocumentPages, pageIndex);
         if (vh != null) {
             vh.drawingOverlay.setVisibility(View.GONE);
             vh.drawingOverlay.setToolMode(AnnotationDrawingView.ToolMode.NONE);
@@ -714,7 +774,7 @@ public class UnifiedEditorActivity extends AppCompatActivity {
      * Requirement 4: Flatten applied annotations directly into the page's temporary image file.
      */
     private void commitCurrentAnnotations() {
-        PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.viewPager, pageIndex);
+        PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.recyclerViewDocumentPages, pageIndex);
         if (vh == null || vh.drawingOverlay.isEmpty()) {
             return;
         }
@@ -750,20 +810,20 @@ public class UnifiedEditorActivity extends AppCompatActivity {
 
     private void setupAnnotationBar() {
         binding.btnToolPen.setOnClickListener(v -> {
-            binding.viewPager.setUserInputEnabled(false);
+            updateSwipeLock();
             currentToolMode = AnnotationDrawingView.ToolMode.PEN;
             binding.btnToolPen.setColorFilter(ContextCompat.getColor(this, R.color.accent_mint));
             binding.btnToolHighlighter.setColorFilter(ContextCompat.getColor(this, R.color.text_secondary));
-            PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.viewPager, pageIndex);
+            PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.recyclerViewDocumentPages, pageIndex);
             if (vh != null) vh.drawingOverlay.setToolMode(currentToolMode);
         });
 
         binding.btnToolHighlighter.setOnClickListener(v -> {
-            binding.viewPager.setUserInputEnabled(false);
+            updateSwipeLock();
             currentToolMode = AnnotationDrawingView.ToolMode.HIGHLIGHTER;
             binding.btnToolHighlighter.setColorFilter(ContextCompat.getColor(this, R.color.accent_mint));
             binding.btnToolPen.setColorFilter(ContextCompat.getColor(this, R.color.text_secondary));
-            PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.viewPager, pageIndex);
+            PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.recyclerViewDocumentPages, pageIndex);
             if (vh != null) vh.drawingOverlay.setToolMode(currentToolMode);
         });
 
@@ -780,12 +840,12 @@ public class UnifiedEditorActivity extends AppCompatActivity {
                 currentStrokeWidth = 16f * density;
                 binding.btnStrokeWidth.setText(R.string.stroke_width_bold);
             }
-            PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.viewPager, pageIndex);
+            PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.recyclerViewDocumentPages, pageIndex);
             if (vh != null) vh.drawingOverlay.setStrokeWidth(currentStrokeWidth);
         });
 
         binding.btnClearAnnotation.setOnClickListener(v -> {
-            PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.viewPager, pageIndex);
+            PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.recyclerViewDocumentPages, pageIndex);
             if (vh != null) vh.drawingOverlay.clear();
         });
 
@@ -829,7 +889,7 @@ public class UnifiedEditorActivity extends AppCompatActivity {
         binding.ringYellow.setVisibility(color == Color.parseColor("#FACC15") ? View.VISIBLE : View.GONE);
         binding.ringBlue.setVisibility(color == Color.parseColor("#3B82F6") ? View.VISIBLE : View.GONE);
 
-        PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.viewPager, pageIndex);
+        PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.recyclerViewDocumentPages, pageIndex);
         if (vh != null) vh.drawingOverlay.setStrokeColor(color);
     }
 
@@ -839,12 +899,14 @@ public class UnifiedEditorActivity extends AppCompatActivity {
         if (!isDrawingMode) {
             enterDrawingMode();
         }
-        binding.viewPager.setUserInputEnabled(false);
+        updateSwipeLock();
         new MaterialAlertDialogBuilder(this)
                 .setTitle(R.string.action_text_sign)
                 .setItems(new CharSequence[]{getString(R.string.action_text), getString(R.string.action_signature)}, (dialog, which) -> {
                     if (which == 0) {
-                        showTextCustomizationDialog(null);
+                        PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.recyclerViewDocumentPages, pageIndex);
+                        AnnotationDrawingView.TextItem activeItem = vh != null ? vh.drawingOverlay.getSelectedTextItem() : null;
+                        showTextCustomizationDialog(activeItem);
                     } else {
                         showSignatureCaptureDialog();
                     }
@@ -855,12 +917,21 @@ public class UnifiedEditorActivity extends AppCompatActivity {
     private void showTextCustomizationDialog(@Nullable AnnotationDrawingView.TextItem existingItem) {
         float density = getResources().getDisplayMetrics().density;
 
+        // Save original snapshot for clean cancellation/revert
+        final String origText = existingItem != null ? existingItem.text : null;
+        final String origFont = existingItem != null ? existingItem.fontFamily : null;
+        final float origSize = existingItem != null ? existingItem.textSize : 0f;
+        final int origColor = existingItem != null ? existingItem.color : 0;
+        final boolean origBg = existingItem != null ? existingItem.hasBackground : true;
+
         ScrollView scrollView = new ScrollView(this);
         LinearLayout layout = new LinearLayout(this);
         layout.setOrientation(LinearLayout.VERTICAL);
         int pad = (int) (20 * density);
         layout.setPadding(pad, pad, pad, pad);
         scrollView.addView(layout);
+
+        final String[] selectedFont = new String[]{existingItem != null ? existingItem.fontFamily : "sans"};
 
         // 1. Text input
         final EditText input = new EditText(this);
@@ -871,6 +942,20 @@ public class UnifiedEditorActivity extends AppCompatActivity {
             input.setText(existingItem.text);
             input.setSelection(existingItem.text.length());
         }
+        input.setTypeface(FontUtils.getTypeface(this, selectedFont[0]));
+        input.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
+                if (existingItem != null) {
+                    existingItem.text = s.toString();
+                    PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.recyclerViewDocumentPages, pageIndex);
+                    if (vh != null) {
+                        vh.drawingOverlay.invalidate();
+                    }
+                }
+            }
+            @Override public void afterTextChanged(Editable s) {}
+        });
         layout.addView(input);
 
         // 2. Font Family Selector
@@ -887,7 +972,6 @@ public class UnifiedEditorActivity extends AppCompatActivity {
         final String[] fonts = {"Sans", "Serif", "Mono", "Cursive"};
         final String[] fontValues = {"sans", "serif", "monospace", "cursive"};
         final TextView[] fontButtons = new TextView[fonts.length];
-        final String[] selectedFont = new String[]{existingItem != null ? existingItem.fontFamily : "sans"};
 
         for (int i = 0; i < fonts.length; i++) {
             final int idx = i;
@@ -899,7 +983,7 @@ public class UnifiedEditorActivity extends AppCompatActivity {
             lp.setMargins((int) (2 * density), 0, (int) (2 * density), 0);
             btn.setLayoutParams(lp);
             btn.setGravity(android.view.Gravity.CENTER);
-            btn.setTypeface(AnnotationDrawingView.getTypefaceForFont(fontValues[i]));
+            btn.setTypeface(FontUtils.getTypeface(this, fontValues[i]));
 
             boolean isCurrent = fontValues[i].equalsIgnoreCase(selectedFont[0]);
             btn.setBackgroundResource(isCurrent ? R.drawable.bg_title_pill : 0);
@@ -912,7 +996,17 @@ public class UnifiedEditorActivity extends AppCompatActivity {
                     fontButtons[j].setBackgroundResource(sel ? R.drawable.bg_title_pill : 0);
                     fontButtons[j].setTextColor(sel ? ContextCompat.getColor(this, R.color.accent_mint) : ContextCompat.getColor(this, R.color.text_primary));
                 }
-                input.setTypeface(AnnotationDrawingView.getTypefaceForFont(selectedFont[0]));
+                Typeface tf = FontUtils.getTypeface(this, selectedFont[0]);
+                input.setTypeface(tf);
+
+                // Update active text annotation directly and invalidate canvas immediately
+                if (existingItem != null) {
+                    existingItem.setFontFamily(selectedFont[0]);
+                    PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.recyclerViewDocumentPages, pageIndex);
+                    if (vh != null) {
+                        vh.drawingOverlay.invalidate();
+                    }
+                }
             });
 
             fontButtons[i] = btn;
@@ -940,6 +1034,13 @@ public class UnifiedEditorActivity extends AppCompatActivity {
                 selectedSize[0] = 12 + progress;
                 tvSizeLabel.setText(String.format(java.util.Locale.US, "Font Size: %dsp", (int) selectedSize[0]));
                 input.setTextSize(selectedSize[0]);
+                if (existingItem != null) {
+                    existingItem.textSize = selectedSize[0] * density;
+                    PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.recyclerViewDocumentPages, pageIndex);
+                    if (vh != null) {
+                        vh.drawingOverlay.invalidate();
+                    }
+                }
             }
             @Override public void onStartTrackingTouch(SeekBar sb) {}
             @Override public void onStopTrackingTouch(SeekBar sb) {}
@@ -1008,6 +1109,13 @@ public class UnifiedEditorActivity extends AppCompatActivity {
                     rings[j].setVisibility(j == idx ? View.VISIBLE : View.GONE);
                 }
                 input.setTextColor(c);
+                if (existingItem != null) {
+                    existingItem.color = c;
+                    PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.recyclerViewDocumentPages, pageIndex);
+                    if (vh != null) {
+                        vh.drawingOverlay.invalidate();
+                    }
+                }
             });
             colorRow.addView(slot);
         }
@@ -1020,6 +1128,15 @@ public class UnifiedEditorActivity extends AppCompatActivity {
         switchBg.setTextSize(13);
         switchBg.setChecked(existingItem != null ? existingItem.hasBackground : true);
         switchBg.setPadding(0, (int) (14 * density), 0, (int) (8 * density));
+        switchBg.setOnCheckedChangeListener((btn, isChecked) -> {
+            if (existingItem != null) {
+                existingItem.hasBackground = isChecked;
+                PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.recyclerViewDocumentPages, pageIndex);
+                if (vh != null) {
+                    vh.drawingOverlay.invalidate();
+                }
+            }
+        });
         layout.addView(switchBg);
 
         // Build Dialog
@@ -1030,32 +1147,40 @@ public class UnifiedEditorActivity extends AppCompatActivity {
                     String text = input.getText().toString().trim();
                     if (!text.isEmpty()) {
                         enterDrawingMode();
-                        PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.viewPager, pageIndex);
+                        PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.recyclerViewDocumentPages, pageIndex);
                         if (vh != null) {
                             if (existingItem != null) {
                                 existingItem.text = text;
-                                existingItem.fontFamily = selectedFont[0];
+                                existingItem.setFontFamily(selectedFont[0]);
                                 existingItem.textSize = selectedSize[0] * density;
                                 existingItem.color = selectedColor[0];
                                 existingItem.hasBackground = switchBg.isChecked();
                                 vh.drawingOverlay.invalidate();
                             } else {
-                                vh.drawingOverlay.addTextAnnotation(text, selectedColor[0], selectedSize[0]);
-                                AnnotationDrawingView.TextItem newItem = vh.drawingOverlay.getSelectedTextItem();
-                                if (newItem != null) {
-                                    newItem.fontFamily = selectedFont[0];
-                                    newItem.hasBackground = switchBg.isChecked();
-                                }
+                                vh.drawingOverlay.addTextAnnotation(
+                                        text, selectedColor[0], selectedSize[0], selectedFont[0], switchBg.isChecked());
                                 vh.drawingOverlay.setToolMode(AnnotationDrawingView.ToolMode.TEXT);
                             }
                         }
                     }
                 })
-                .setNegativeButton(R.string.action_cancel, null);
+                .setNegativeButton(R.string.action_cancel, (dialog, which) -> {
+                    if (existingItem != null) {
+                        existingItem.text = origText;
+                        existingItem.fontFamily = origFont;
+                        existingItem.textSize = origSize;
+                        existingItem.color = origColor;
+                        existingItem.hasBackground = origBg;
+                        PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.recyclerViewDocumentPages, pageIndex);
+                        if (vh != null) {
+                            vh.drawingOverlay.invalidate();
+                        }
+                    }
+                });
 
         if (existingItem != null) {
             builder.setNeutralButton(R.string.action_delete, (dialog, which) -> {
-                PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.viewPager, pageIndex);
+                PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.recyclerViewDocumentPages, pageIndex);
                 if (vh != null) {
                     vh.drawingOverlay.deleteSelectedItem();
                 }
@@ -1171,7 +1296,7 @@ public class UnifiedEditorActivity extends AppCompatActivity {
                         sigCanvas.drawToCanvas(c, null, w, sigH);
 
                         enterDrawingMode();
-                        PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.viewPager, pageIndex);
+                        PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.recyclerViewDocumentPages, pageIndex);
                         if (vh != null) {
                             vh.drawingOverlay.addSignatureAnnotation(sigBmp);
                             AnnotationDrawingView.SignatureItem sigItem = vh.drawingOverlay.getSelectedSignatureItem();
@@ -1255,7 +1380,7 @@ public class UnifiedEditorActivity extends AppCompatActivity {
                     pageAdapter.notifyDataSetChanged();
                     thumbAdapter.notifyDataSetChanged();
                     int newIndex = Math.min(pageIndex, pagePaths.size() - 1);
-                    binding.viewPager.setCurrentItem(newIndex, false);
+                    scrollToPage(newIndex, false);
                     onPageSwitched(newIndex);
                 })
                 .setNegativeButton(R.string.action_cancel, null)
@@ -1352,7 +1477,7 @@ public class UnifiedEditorActivity extends AppCompatActivity {
                     return;
                 }
 
-                PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.viewPager, pageIndex);
+                PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.recyclerViewDocumentPages, pageIndex);
                 RectF displayRect = vh != null ? vh.ivPageImage.getDisplayRect() : null;
                 binding.lensOverlay.setTargetRect(displayRect);
                 binding.lensOverlay.setVisionText(text, bmpW, bmpH);
@@ -1430,7 +1555,7 @@ public class UnifiedEditorActivity extends AppCompatActivity {
                     int targetIndex = targetPage - 1;
                     if (isDrawingMode) commitCurrentAnnotations();
                     else if (isCropMode) exitCropMode();
-                    binding.viewPager.setCurrentItem(targetIndex, true);
+                    scrollToPage(targetIndex, true);
                 } catch (NumberFormatException e) {
                     til.setError(getString(R.string.jump_to_page_error, totalPages));
                 }

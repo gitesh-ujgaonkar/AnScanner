@@ -246,6 +246,7 @@ public class ReviewScanActivity extends AppCompatActivity implements PageGridAda
             intent.putStringArrayListExtra(com.anscanner.app.ui.crop.CropPreviewActivity.EXTRA_ORIGINAL_PAGE_PATHS, originalPagePaths);
             intent.putExtra(com.anscanner.app.ui.crop.CropPreviewActivity.EXTRA_PAGE_INDEX, position);
             intent.putExtra(com.anscanner.app.ui.crop.CropPreviewActivity.EXTRA_FROM_REVIEW, true);
+            intent.putExtra(com.anscanner.app.ui.editor.UnifiedEditorActivity.EXTRA_ENABLE_CROP_DEFAULT, false);
             editPageLauncher.launch(intent);
         }
     }

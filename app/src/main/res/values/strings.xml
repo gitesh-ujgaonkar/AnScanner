@@ -143,6 +143,9 @@
     <string name="cd_search">Search documents</string>
     <string name="cd_settings">Open settings</string>
     <string name="cd_camera">Open camera</string>
+    <string name="cd_prev_page">Previous page</string>
+    <string name="cd_next_page">Next page</string>
+    <string name="cd_drag_handle">Drag to reorder page</string>
 
     <string name="recent_scans">Recent scans</string>
     <string name="see_all">See all ></string>
@@ -199,21 +202,10 @@
     <string name="ocr_close_layer">Close OCR</string>
     <string name="ocr_nothing_selected">Tap a highlighted text block to select</string>
 
-    <!-- ── Kindle-Style Reading Mode ──────────────────────────────────── -->
-    <string name="reading_mode_title">Reading Mode</string>
-    <string name="cd_reading_mode">Toggle reading mode</string>
-    <string name="reading_settings">Reading Settings</string>
-    <string name="reading_theme">Theme</string>
-    <string name="reading_theme_light">Light</string>
-    <string name="reading_theme_sepia">Sepia</string>
-    <string name="reading_theme_dark">Dark</string>
-    <string name="reading_theme_night">Night</string>
-    <string name="reading_margins">Margins</string>
-    <string name="reading_margin_compact">Compact</string>
-    <string name="reading_margin_normal">Normal</string>
-    <string name="reading_margin_wide">Wide</string>
-    <string name="reading_page_snap">Page-by-Page Snap</string>
-    <string name="reading_keep_awake">Keep Screen Awake</string>
+    <!-- ── PDF View Mode ──────────────────────────────────────────────── -->
+    <string name="pdf_view_mode_vertical">Continuous Vertical</string>
+    <string name="pdf_view_mode_horizontal">Continuous Horizontal</string>
+    <string name="cd_toggle_orientation">Toggle page flow orientation</string>
 
 
     <!-- ── Onboarding Flow ──────────────────────────────────────────────── -->
@@ -346,5 +338,14 @@
     <string name="ocr_cancelled_subtitle">Extraction stopped by user. Showing text gathered so far:</string>
     <string name="ocr_all_pages_subtitle">Aggregated text from all %1$d pages:</string>
     <string name="ocr_cancelled_toast">OCR cancelled</string>
+
+    <!-- ── Legal, Open Source & Data Management ───────────────────────── -->
+    <string name="settings_about_legal">About &amp; Legal</string>
+    <string name="settings_open_source_licenses">Open Source Licenses</string>
+    <string name="settings_reset_data">Reset App Data</string>
+    <string name="settings_reset_data_confirm_title">Reset All App Data?</string>
+    <string name="settings_reset_data_confirm_message">This will clear all scanned document records and preferences stored in the app. Scanned PDFs saved to your device storage will not be affected. This action cannot be undone.</string>
+    <string name="settings_reset_data_action">Reset Data</string>
+    <string name="settings_reset_data_success">App data reset successfully</string>
 </resources>
 

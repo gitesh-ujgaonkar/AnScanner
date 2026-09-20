@@ -68,13 +68,5 @@
     <color name="md_theme_error">#FFEF4444</color>
     <color name="md_theme_onError">#FFFFFFFF</color>
 
-    <!-- ── Kindle Reading Mode Colors ──────────────────────────────────── -->
-    <color name="reading_sepia_bg">#FFFBF0D9</color>
-    <color name="reading_sepia_card">#FFF4ECD8</color>
-    <color name="reading_dark_bg">#FF1E1E1E</color>
-    <color name="reading_dark_card">#FF2A2A2A</color>
-    <color name="reading_night_bg">#FF000000</color>
-    <color name="reading_night_card">#FF000000</color>
-
 </resources>
 

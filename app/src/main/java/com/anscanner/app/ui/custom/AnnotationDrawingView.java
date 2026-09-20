@@ -24,6 +24,8 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.graphics.ColorUtils;
 
+import com.anscanner.app.util.FontUtils;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -87,6 +89,14 @@ public class AnnotationDrawingView extends View {
             this.y = y;
             this.color = color;
             this.textSize = textSize;
+        }
+
+        public void setFontFamily(@Nullable String fontFamily) {
+            this.fontFamily = (fontFamily != null && !fontFamily.trim().isEmpty()) ? fontFamily.trim() : "sans";
+        }
+
+        public void setTypeface(@Nullable Context context, @Nullable String fontFamily) {
+            setFontFamily(fontFamily);
         }
 
         public RectF getBoundingBox(float density) {
@@ -343,6 +353,10 @@ public class AnnotationDrawingView extends View {
     }
 
     public void addTextAnnotation(String text, int color, float textSizeSp) {
+        addTextAnnotation(text, color, textSizeSp, "sans", true);
+    }
+
+    public void addTextAnnotation(String text, int color, float textSizeSp, @Nullable String fontFamily, boolean hasBackground) {
         float density = getResources().getDisplayMetrics().density;
         float textSizePx = textSizeSp * density;
 
@@ -362,15 +376,28 @@ public class AnnotationDrawingView extends View {
 
         clearSelection();
         TextItem item = new TextItem(text, spawnX, spawnY, color, textSizePx);
+        item.setFontFamily(fontFamily);
+        item.hasBackground = hasBackground;
         item.isSelected = true;
         textPaint.setTextSize(textSizePx);
-        textPaint.setTypeface(getTypefaceForFont(item.fontFamily));
+        textPaint.setTypeface(getTypefaceForFont(getContext(), item.fontFamily));
         textPaint.getTextBounds(text, 0, text.length(), item.bounds);
 
         textItems.add(item);
         actionHistory.add(new AnnotationAction(ActionType.TEXT, item));
         notifyActionAdded();
         invalidate();
+    }
+
+    public void updateSelectedTextFont(@Nullable String fontFamily) {
+        TextItem sel = getSelectedTextItem();
+        if (sel != null) {
+            sel.setFontFamily(fontFamily);
+            textPaint.setTextSize(sel.textSize);
+            textPaint.setTypeface(getTypefaceForFont(getContext(), sel.fontFamily));
+            textPaint.getTextBounds(sel.text, 0, sel.text.length(), sel.bounds);
+            invalidate();
+        }
     }
 
     public void addSignatureAnnotation(@NonNull Bitmap signatureBitmap) {
@@ -796,7 +823,7 @@ public class AnnotationDrawingView extends View {
         // 4. Draw text items
         for (TextItem txt : textItems) {
             textPaint.setTextSize(txt.textSize);
-            textPaint.setTypeface(getTypefaceForFont(txt.fontFamily));
+            textPaint.setTypeface(getTypefaceForFont(getContext(), txt.fontFamily));
             textPaint.getTextBounds(txt.text, 0, txt.text.length(), txt.bounds);
 
             RectF pillRect = txt.getBoundingBox(density);
@@ -826,26 +853,12 @@ public class AnnotationDrawingView extends View {
         canvas.drawCircle(box.right, box.bottom, handleRadius, handleStrokePaint);
     }
 
-    public static Typeface getTypefaceForFont(String fontFamily) {
-        if (fontFamily == null) return Typeface.SANS_SERIF;
-        switch (fontFamily.toLowerCase()) {
-            case "serif":
-                return Typeface.SERIF;
-            case "monospace":
-            case "mono":
-                return Typeface.MONOSPACE;
-            case "cursive":
-                try {
-                    Typeface cursive = Typeface.create("cursive", Typeface.NORMAL);
-                    if (cursive != null && !cursive.equals(Typeface.DEFAULT)) {
-                        return cursive;
-                    }
-                } catch (Exception ignored) {}
-                return Typeface.create(Typeface.SERIF, Typeface.ITALIC);
-            case "sans":
-            default:
-                return Typeface.SANS_SERIF;
-        }
+    public static Typeface getTypefaceForFont(@Nullable String fontFamily) {
+        return FontUtils.getTypeface(fontFamily);
+    }
+
+    public static Typeface getTypefaceForFont(@Nullable Context context, @Nullable String fontFamily) {
+        return FontUtils.getTypeface(context, fontFamily);
     }
 
     /**
@@ -896,7 +909,7 @@ public class AnnotationDrawingView extends View {
 
         for (TextItem txt : textItems) {
             flatTextPaint.setTextSize(txt.textSize);
-            flatTextPaint.setTypeface(getTypefaceForFont(txt.fontFamily));
+            flatTextPaint.setTypeface(getTypefaceForFont(getContext(), txt.fontFamily));
             flatTextPaint.setColor(txt.color);
 
             Rect bounds = new Rect();

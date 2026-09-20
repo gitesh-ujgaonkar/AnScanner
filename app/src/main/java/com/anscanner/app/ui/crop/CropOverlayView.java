@@ -97,7 +97,7 @@ public class CropOverlayView extends View {
         path = new Path();
         
         float density = context.getResources().getDisplayMetrics().density;
-        touchRadius = density * 32; // 32dp
+        touchRadius = density * 40; // Generous 40dp touch target
         handleRadius = density * 10; // 10dp
         
         // Initialize Magnifier / Loupe
@@ -202,10 +202,6 @@ public class CropOverlayView extends View {
         Matrix inverse = new Matrix();
         if (!getImageViewToOverlayMatrix().invert(inverse)) return null;
         
-        int intrinsicWidth = imageView.getDrawable().getIntrinsicWidth();
-        int intrinsicHeight = imageView.getDrawable().getIntrinsicHeight();
-        if (intrinsicWidth <= 0 || intrinsicHeight <= 0) return null;
-
         Point[] result = new Point[4];
         float[] pts = new float[2];
         
@@ -213,9 +209,7 @@ public class CropOverlayView extends View {
             pts[0] = viewCorners[i].x;
             pts[1] = viewCorners[i].y;
             inverse.mapPoints(pts);
-            int px = Math.max(0, Math.min(Math.round(pts[0]), intrinsicWidth));
-            int py = Math.max(0, Math.min(Math.round(pts[1]), intrinsicHeight));
-            result[i] = new Point(px, py);
+            result[i] = new Point(Math.round(pts[0]), Math.round(pts[1]));
         }
         return result;
     }
@@ -369,6 +363,9 @@ public class CropOverlayView extends View {
                     }
                 }
                 if (draggingCornerIndex != -1) {
+                    if (getParent() != null) {
+                        getParent().requestDisallowInterceptTouchEvent(true);
+                    }
                     if (cornerDragListener != null) {
                         cornerDragListener.onCornerDragStarted(draggingCornerIndex, viewCorners[draggingCornerIndex].x, viewCorners[draggingCornerIndex].y);
                     }
@@ -383,6 +380,9 @@ public class CropOverlayView extends View {
 
             case MotionEvent.ACTION_MOVE:
                 if (draggingCornerIndex != -1) {
+                    if (getParent() != null) {
+                        getParent().requestDisallowInterceptTouchEvent(true);
+                    }
                     isCornerMoved = true;
                     // Get image bounds in view coordinates to clamp using accurate matrix
                     RectF bounds = new RectF(0, 0, (float) imageView.getDrawable().getIntrinsicWidth(), (float) imageView.getDrawable().getIntrinsicHeight());
@@ -404,6 +404,9 @@ public class CropOverlayView extends View {
                 break;
 
             case MotionEvent.ACTION_UP:
+                if (getParent() != null) {
+                    getParent().requestDisallowInterceptTouchEvent(false);
+                }
                 if (draggingCornerIndex != -1) {
                     isCornerMoved = true;
                     RectF bounds = new RectF(0, 0, (float) imageView.getDrawable().getIntrinsicWidth(), (float) imageView.getDrawable().getIntrinsicHeight());
@@ -432,6 +435,9 @@ public class CropOverlayView extends View {
                 break;
 
             case MotionEvent.ACTION_CANCEL:
+                if (getParent() != null) {
+                    getParent().requestDisallowInterceptTouchEvent(false);
+                }
                 if (draggingCornerIndex != -1) {
                     draggingCornerIndex = -1;
                     if (cornerDragListener != null) {

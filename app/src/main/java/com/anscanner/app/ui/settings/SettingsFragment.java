@@ -71,8 +71,9 @@ public class SettingsFragment extends Fragment {
         updateThemeDisplay();
         binding.rowTheme.setOnClickListener(v -> showThemeDialog());
 
-        // ── Cache ───────────────────────────────────────────────────────────
+        // ── Cache & Storage ────────────────────────────────────────────────
         binding.btnClearCache.setOnClickListener(v -> clearCache());
+        binding.btnResetAppData.setOnClickListener(v -> showResetAppDataDialog());
 
         // ── Analytics ───────────────────────────────────────────────────────
         boolean analyticsEnabled = prefs.getBoolean("analytics_enabled", true);
@@ -84,7 +85,11 @@ public class SettingsFragment extends Fragment {
         // ── Legal & Feedback ────────────────────────────────────────────────
         binding.rowPrivacyPolicy.setOnClickListener(v -> showPrivacyPolicy());
         binding.rowTerms.setOnClickListener(v -> showTermsAndConditions());
+        binding.rowLicenses.setOnClickListener(v -> showOpenSourceLicenses());
         binding.rowFeedback.setOnClickListener(v -> showFeedbackDialog());
+
+        // ── About & Version ─────────────────────────────────────────────────
+        binding.tvAppVersion.setText(getString(R.string.app_name) + " v" + com.anscanner.app.BuildConfig.VERSION_NAME);
     }
 
     private void updateThemeDisplay() {
@@ -201,6 +206,115 @@ public class SettingsFragment extends Fragment {
                     Intent browserIntent = new Intent(Intent.ACTION_VIEW,
                             Uri.parse("https://gitesh-ujgaonkar.github.io/AnScanner-Privacy/terms.html"));
                     startActivity(browserIntent);
+                })
+                .show();
+    }
+
+    private void showOpenSourceLicenses() {
+        if (getContext() == null) return;
+
+        String licenseContent = "<h3>Open Source Licenses</h3>"
+                + "<p>AnScanner is built using the following open-source software and libraries:</p>"
+                + "<hr/>"
+                + "<h4>Android PDF Viewer (barteksc / mhiew)</h4>"
+                + "<p><b>License:</b> Apache License 2.0<br/>"
+                + "Copyright 2017 Bartosz Bińkowski<br/>"
+                + "Licensed under the Apache License, Version 2.0.</p>"
+                + "<hr/>"
+                + "<h4>Material Components for Android</h4>"
+                + "<p><b>License:</b> Apache License 2.0<br/>"
+                + "Copyright (C) The Android Open Source Project<br/>"
+                + "Licensed under the Apache License, Version 2.0.</p>"
+                + "<hr/>"
+                + "<h4>AndroidX CameraX</h4>"
+                + "<p><b>License:</b> Apache License 2.0<br/>"
+                + "Copyright (C) The Android Open Source Project<br/>"
+                + "Licensed under the Apache License, Version 2.0.</p>"
+                + "<hr/>"
+                + "<h4>Apache PDFBox for Android</h4>"
+                + "<p><b>License:</b> Apache License 2.0<br/>"
+                + "Copyright (C) The Apache Software Foundation<br/>"
+                + "Licensed under the Apache License, Version 2.0.</p>"
+                + "<hr/>"
+                + "<h4>PhotoView</h4>"
+                + "<p><b>License:</b> Apache License 2.0<br/>"
+                + "Copyright 2017 Chris Banes<br/>"
+                + "Licensed under the Apache License, Version 2.0.</p>"
+                + "<hr/>"
+                + "<h4>OpenCV Android SDK</h4>"
+                + "<p><b>License:</b> 3-Clause BSD License<br/>"
+                + "Copyright (C) 2000-2024, Intel Corporation, all rights reserved.<br/>"
+                + "Copyright (C) 2009-2011, Willow Garage Inc., all rights reserved.<br/>"
+                + "Copyright (C) 2009-2016, Itseez Inc., all rights reserved.<br/>"
+                + "Copyright (C) 2017-2024, OpenCV Foundation, all rights reserved.</p>"
+                + "<hr/>"
+                + "<h4>TensorFlow Lite &amp; Support</h4>"
+                + "<p><b>License:</b> Apache License 2.0<br/>"
+                + "Copyright (C) The TensorFlow Authors<br/>"
+                + "Licensed under the Apache License, Version 2.0.</p>"
+                + "<hr/>"
+                + "<h4>Google Guava</h4>"
+                + "<p><b>License:</b> Apache License 2.0<br/>"
+                + "Copyright (C) The Guava Authors<br/>"
+                + "Licensed under the Apache License, Version 2.0.</p>"
+                + "<hr/>"
+                + "<h4>Google ML Kit Text Recognition</h4>"
+                + "<p><b>License:</b> Apache License 2.0 / Google APIs Terms of Service<br/>"
+                + "Copyright (C) Google LLC</p>"
+                + "<hr/>"
+                + "<h4>AndroidX Architecture &amp; UI Components</h4>"
+                + "<p><b>License:</b> Apache License 2.0<br/>"
+                + "Copyright (C) The Android Open Source Project<br/>"
+                + "Licensed under the Apache License, Version 2.0.</p>";
+
+        WebView webView = new WebView(requireContext());
+        String styledHtml = "<html><head><style>"
+                + "body { font-family: sans-serif; padding: 16px; color: #E2E8F0; background-color: #1A202C; line-height: 1.5; font-size: 13px; }"
+                + "h3 { color: #68D391; margin-top: 0; }"
+                + "h4 { color: #FFFFFF; margin-bottom: 4px; }"
+                + "p { margin-top: 4px; }"
+                + "hr { border: 0; border-top: 1px solid #2D3748; margin: 12px 0; }"
+                + "</style></head><body>" + licenseContent + "</body></html>";
+        webView.loadDataWithBaseURL(null, styledHtml, "text/html", "UTF-8", null);
+
+        new MaterialAlertDialogBuilder(requireContext())
+                .setTitle(R.string.settings_open_source_licenses)
+                .setView(webView)
+                .setPositiveButton(R.string.action_close, null)
+                .show();
+    }
+
+    private void showResetAppDataDialog() {
+        if (getContext() == null) return;
+
+        new MaterialAlertDialogBuilder(requireContext())
+                .setTitle(R.string.settings_reset_data_confirm_title)
+                .setMessage(R.string.settings_reset_data_confirm_message)
+                .setNegativeButton(R.string.action_cancel, null)
+                .setPositiveButton(R.string.settings_reset_data_action, (dialog, which) -> {
+                    Context appContext = requireContext().getApplicationContext();
+                    executor.execute(() -> {
+                        // 1. Wipe Room DB tables
+                        com.anscanner.app.data.AppDatabase.getInstance(appContext).clearAllTables();
+
+                        // 2. Clear app preferences
+                        prefs.edit().clear().apply();
+                        appContext.getSharedPreferences(com.anscanner.app.ui.onboarding.OnboardingActivity.PREF_NAME, Context.MODE_PRIVATE)
+                                .edit().clear().apply();
+
+                        // 3. Purge temporary cache
+                        CacheManager.clearAllCache(appContext);
+
+                        if (getActivity() != null) {
+                            getActivity().runOnUiThread(() -> {
+                                if (binding != null && isAdded()) {
+                                    Toast.makeText(appContext, R.string.settings_reset_data_success, Toast.LENGTH_SHORT).show();
+                                    updateCacheSize();
+                                    updateThemeDisplay();
+                                }
+                            });
+                        }
+                    });
                 })
                 .show();
     }

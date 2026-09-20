@@ -20,8 +20,8 @@
         <!-- Left: Close Button -->
         <ImageButton
             android:id="@+id/btnClose"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="@string/cd_close"
             android:src="@drawable/ic_close"
@@ -38,10 +38,10 @@
 
             <ImageButton
                 android:id="@+id/btnPrevPage"
-                android:layout_width="32dp"
-                android:layout_height="32dp"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
                 android:background="?attr/selectableItemBackgroundBorderless"
-                android:contentDescription="@string/action_back"
+                android:contentDescription="@string/cd_prev_page"
                 android:src="@drawable/ic_chevron_left"
                 app:tint="@android:color/white" />
 
@@ -64,10 +64,10 @@
 
             <ImageButton
                 android:id="@+id/btnNextPage"
-                android:layout_width="32dp"
-                android:layout_height="32dp"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
                 android:background="?attr/selectableItemBackgroundBorderless"
-                android:contentDescription="@string/camera_see_all"
+                android:contentDescription="@string/cd_next_page"
                 android:src="@drawable/ic_chevron_right"
                 app:tint="@android:color/white" />
         </LinearLayout>
@@ -82,8 +82,8 @@
 
             <ImageButton
                 android:id="@+id/btnUndo"
-                android:layout_width="36dp"
-                android:layout_height="36dp"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:contentDescription="@string/cd_undo"
                 android:enabled="false"
@@ -93,8 +93,8 @@
 
             <ImageButton
                 android:id="@+id/btnExtractText"
-                android:layout_width="36dp"
-                android:layout_height="36dp"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:contentDescription="@string/cd_extract_text"
                 android:src="@drawable/ic_ocr_text"
@@ -103,7 +103,8 @@
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnSaveDocument"
                 android:layout_width="wrap_content"
-                android:layout_height="36dp"
+                android:layout_height="wrap_content"
+                android:minHeight="48dp"
                 android:layout_marginStart="4dp"
                 android:backgroundTint="@color/accent_mint"
                 android:insetTop="0dp"
@@ -131,10 +132,19 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/topBar">
 
-        <androidx.viewpager2.widget.ViewPager2
-            android:id="@+id/viewPager"
+        <com.anscanner.app.ui.view.DocumentZoomLayout
+            android:id="@+id/documentZoomLayout"
             android:layout_width="match_parent"
-            android:layout_height="match_parent" />
+            android:layout_height="match_parent">
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/recyclerViewDocumentPages"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:clipToPadding="false"
+                android:orientation="vertical" />
+
+        </com.anscanner.app.ui.view.DocumentZoomLayout>
 
         <com.anscanner.app.ui.custom.LensOverlayView
             android:id="@+id/lensOverlay"
@@ -166,6 +176,7 @@
                     android:id="@+id/ivLoupe"
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"
+                    android:importantForAccessibility="no"
                     android:scaleType="matrix" />
 
                 <ImageView
@@ -173,6 +184,7 @@
                     android:layout_width="32dp"
                     android:layout_height="32dp"
                     android:layout_gravity="center"
+                    android:importantForAccessibility="no"
                     android:src="@drawable/ic_crosshair"
                     app:tint="@color/accent_mint" />
             </FrameLayout>
@@ -207,14 +219,14 @@
             <!-- Tools Row: Pen, Highlighter, Stroke Width, Clear, Done -->
             <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="40dp"
+                android:layout_height="48dp"
                 android:gravity="center_vertical"
                 android:orientation="horizontal">
 
                 <ImageButton
                     android:id="@+id/btnToolPen"
-                    android:layout_width="36dp"
-                    android:layout_height="36dp"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
                     android:background="?attr/selectableItemBackgroundBorderless"
                     android:contentDescription="@string/action_pen"
                     android:src="@drawable/ic_edit"
@@ -222,8 +234,8 @@
 
                 <ImageButton
                     android:id="@+id/btnToolHighlighter"
-                    android:layout_width="36dp"
-                    android:layout_height="36dp"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
                     android:background="?attr/selectableItemBackgroundBorderless"
                     android:contentDescription="@string/action_highlighter"
                     android:src="@drawable/ic_ocr_text"
@@ -232,7 +244,7 @@
                 <TextView
                     android:id="@+id/btnStrokeWidth"
                     android:layout_width="wrap_content"
-                    android:layout_height="28dp"
+                    android:layout_height="32dp"
                     android:layout_marginStart="6dp"
                     android:background="@drawable/bg_title_pill"
                     android:gravity="center"
@@ -248,8 +260,8 @@
 
                 <ImageButton
                     android:id="@+id/btnClearAnnotation"
-                    android:layout_width="36dp"
-                    android:layout_height="36dp"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
                     android:background="?attr/selectableItemBackgroundBorderless"
                     android:contentDescription="@string/annotate_clear"
                     android:src="@drawable/ic_delete"
@@ -258,7 +270,8 @@
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnDoneAnnotation"
                     android:layout_width="wrap_content"
-                    android:layout_height="32dp"
+                    android:layout_height="wrap_content"
+                    android:minHeight="48dp"
                     android:layout_marginStart="4dp"
                     android:backgroundTint="@color/accent_mint"
                     android:insetTop="0dp"
@@ -447,6 +460,7 @@
                     android:background="?attr/selectableItemBackground"
                     android:clickable="true"
                     android:focusable="true"
+                    android:contentDescription="@string/crop_action_crop"
                     android:gravity="center"
                     android:orientation="vertical"
                     android:paddingVertical="4dp">
@@ -455,6 +469,7 @@
                         android:id="@+id/ivCropIcon"
                         android:layout_width="@dimen/icon_md"
                         android:layout_height="@dimen/icon_md"
+                        android:importantForAccessibility="no"
                         android:src="@drawable/ic_crop"
                         app:tint="@android:color/white" />
 
@@ -478,6 +493,7 @@
                     android:background="?attr/selectableItemBackground"
                     android:clickable="true"
                     android:focusable="true"
+                    android:contentDescription="@string/action_annotate"
                     android:gravity="center"
                     android:orientation="vertical"
                     android:paddingVertical="4dp">
@@ -486,6 +502,7 @@
                         android:id="@+id/ivAnnotateIcon"
                         android:layout_width="@dimen/icon_md"
                         android:layout_height="@dimen/icon_md"
+                        android:importantForAccessibility="no"
                         android:src="@drawable/ic_edit"
                         app:tint="@android:color/white" />
 
@@ -509,17 +526,21 @@
                     android:background="?attr/selectableItemBackground"
                     android:clickable="true"
                     android:focusable="true"
+                    android:contentDescription="@string/action_text_sign"
                     android:gravity="center"
                     android:orientation="vertical"
                     android:paddingVertical="4dp">
 
                     <ImageView
+                        android:id="@+id/ivTextSignIcon"
                         android:layout_width="@dimen/icon_md"
                         android:layout_height="@dimen/icon_md"
+                        android:importantForAccessibility="no"
                         android:src="@drawable/ic_signature"
                         app:tint="@android:color/white" />
 
                     <TextView
+                        android:id="@+id/tvTextSignLabel"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="2dp"
@@ -538,17 +559,21 @@
                     android:background="?attr/selectableItemBackground"
                     android:clickable="true"
                     android:focusable="true"
+                    android:contentDescription="@string/crop_action_rotate"
                     android:gravity="center"
                     android:orientation="vertical"
                     android:paddingVertical="4dp">
 
                     <ImageView
+                        android:id="@+id/ivRotateIcon"
                         android:layout_width="@dimen/icon_md"
                         android:layout_height="@dimen/icon_md"
+                        android:importantForAccessibility="no"
                         android:src="@drawable/ic_rotate"
                         app:tint="@android:color/white" />
 
                     <TextView
+                        android:id="@+id/tvRotateLabel"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="2dp"
@@ -567,17 +592,21 @@
                     android:background="?attr/selectableItemBackground"
                     android:clickable="true"
                     android:focusable="true"
+                    android:contentDescription="@string/crop_action_delete"
                     android:gravity="center"
                     android:orientation="vertical"
                     android:paddingVertical="4dp">
 
                     <ImageView
+                        android:id="@+id/ivDeleteIcon"
                         android:layout_width="@dimen/icon_md"
                         android:layout_height="@dimen/icon_md"
+                        android:importantForAccessibility="no"
                         android:src="@drawable/ic_delete"
                         app:tint="@android:color/white" />
 
                     <TextView
+                        android:id="@+id/tvDeleteLabel"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="2dp"

@@ -74,6 +74,8 @@ public class DrawingOverlayView extends View {
 
     public void setDrawingEnabled(boolean enabled) {
         this.isDrawingEnabled = enabled;
+        setClickable(enabled);
+        setFocusable(enabled);
     }
 
     public boolean isDrawingEnabled() {
@@ -120,15 +122,30 @@ public class DrawingOverlayView extends View {
     @Override
     public boolean onTouchEvent(MotionEvent event) {
         if (!isDrawingEnabled || !isEnabled()) {
-            return super.onTouchEvent(event);
+            return false;
         }
 
+        // Multi-finger detected: let parent / underlying PDFView take full native control of zoom & pan
+        if (event.getPointerCount() > 1) {
+            if (!currentPath.isEmpty()) {
+                currentPath.reset();
+                invalidate();
+            }
+            if (getParent() != null) {
+                getParent().requestDisallowInterceptTouchEvent(false);
+            }
+            return false;
+        }
+
+        int action = event.getActionMasked();
         float x = event.getX();
         float y = event.getY();
 
-        switch (event.getActionMasked()) {
+        switch (action) {
             case MotionEvent.ACTION_DOWN:
-                getParent().requestDisallowInterceptTouchEvent(true);
+                if (getParent() != null) {
+                    getParent().requestDisallowInterceptTouchEvent(true);
+                }
                 currentPath.reset();
                 currentPath.moveTo(x, y);
                 lastTouchX = x;
@@ -137,6 +154,9 @@ public class DrawingOverlayView extends View {
                 return true;
 
             case MotionEvent.ACTION_MOVE:
+                if (getParent() != null) {
+                    getParent().requestDisallowInterceptTouchEvent(true);
+                }
                 float dx = Math.abs(x - lastTouchX);
                 float dy = Math.abs(y - lastTouchY);
                 if (dx >= 3f || dy >= 3f) {
@@ -149,15 +169,19 @@ public class DrawingOverlayView extends View {
 
             case MotionEvent.ACTION_UP:
             case MotionEvent.ACTION_CANCEL:
-                currentPath.lineTo(x, y);
-                strokes.add(new Stroke(new Path(currentPath), currentColor, currentStrokeWidth));
+                if (action == MotionEvent.ACTION_UP && !currentPath.isEmpty()) {
+                    currentPath.lineTo(x, y);
+                    strokes.add(new Stroke(new Path(currentPath), currentColor, currentStrokeWidth));
+                }
                 currentPath.reset();
                 invalidate();
-                getParent().requestDisallowInterceptTouchEvent(false);
+                if (getParent() != null) {
+                    getParent().requestDisallowInterceptTouchEvent(false);
+                }
                 return true;
 
             default:
-                return super.onTouchEvent(event);
+                return false;
         }
     }
 

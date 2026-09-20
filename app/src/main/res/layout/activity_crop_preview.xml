@@ -35,11 +35,11 @@
 
             <ImageButton
                 android:id="@+id/btnPrevPage"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
                 android:layout_marginEnd="4dp"
                 android:background="?attr/selectableItemBackgroundBorderless"
-                android:contentDescription="@string/action_back"
+                android:contentDescription="@string/cd_prev_page"
                 android:src="@drawable/ic_chevron_left"
                 android:visibility="gone"
                 app:tint="@android:color/white" />
@@ -59,11 +59,11 @@
 
             <ImageButton
                 android:id="@+id/btnNextPage"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
                 android:layout_marginStart="4dp"
                 android:background="?attr/selectableItemBackgroundBorderless"
-                android:contentDescription="@string/camera_see_all"
+                android:contentDescription="@string/cd_next_page"
                 android:src="@drawable/ic_chevron_right"
                 android:visibility="gone"
                 app:tint="@android:color/white" />
@@ -144,6 +144,7 @@
                     android:id="@+id/ivLoupe"
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"
+                    android:importantForAccessibility="no"
                     android:scaleType="matrix" />
 
                 <!-- Reticle crosshair in the center of the loupe -->
@@ -152,6 +153,7 @@
                     android:layout_width="32dp"
                     android:layout_height="32dp"
                     android:layout_gravity="center"
+                    android:importantForAccessibility="no"
                     android:src="@drawable/ic_crosshair"
                     app:tint="@color/accent_mint" />
             </FrameLayout>
@@ -199,6 +201,7 @@
                     android:background="?attr/selectableItemBackground"
                     android:clickable="true"
                     android:focusable="true"
+                    android:contentDescription="@string/crop_action_crop"
                     android:gravity="center"
                     android:orientation="vertical"
                     android:paddingVertical="@dimen/spacing_xs">
@@ -207,6 +210,7 @@
                         android:id="@+id/ivCropIcon"
                         android:layout_width="@dimen/icon_md"
                         android:layout_height="@dimen/icon_md"
+                        android:importantForAccessibility="no"
                         android:src="@drawable/ic_crop"
                         app:tint="@android:color/white" />
 
@@ -229,17 +233,21 @@
                     android:background="?attr/selectableItemBackground"
                     android:clickable="true"
                     android:focusable="true"
+                    android:contentDescription="@string/crop_action_filter"
                     android:gravity="center"
                     android:orientation="vertical"
                     android:paddingVertical="@dimen/spacing_xs">
 
                     <ImageView
+                        android:id="@+id/ivFilterIcon"
                         android:layout_width="@dimen/icon_md"
                         android:layout_height="@dimen/icon_md"
+                        android:importantForAccessibility="no"
                         android:src="@drawable/ic_filter"
                         app:tint="@android:color/white" />
 
                     <TextView
+                        android:id="@+id/tvFilterLabel"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="4dp"
@@ -257,17 +265,21 @@
                     android:background="?attr/selectableItemBackground"
                     android:clickable="true"
                     android:focusable="true"
+                    android:contentDescription="@string/crop_action_rotate"
                     android:gravity="center"
                     android:orientation="vertical"
                     android:paddingVertical="@dimen/spacing_xs">
 
                     <ImageView
+                        android:id="@+id/ivRotateIcon"
                         android:layout_width="@dimen/icon_md"
                         android:layout_height="@dimen/icon_md"
+                        android:importantForAccessibility="no"
                         android:src="@drawable/ic_rotate"
                         app:tint="@android:color/white" />
 
                     <TextView
+                        android:id="@+id/tvRotateLabel"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="4dp"
@@ -285,17 +297,21 @@
                     android:background="?attr/selectableItemBackground"
                     android:clickable="true"
                     android:focusable="true"
+                    android:contentDescription="@string/crop_action_delete"
                     android:gravity="center"
                     android:orientation="vertical"
                     android:paddingVertical="@dimen/spacing_xs">
 
                     <ImageView
+                        android:id="@+id/ivDeleteIcon"
                         android:layout_width="@dimen/icon_md"
                         android:layout_height="@dimen/icon_md"
+                        android:importantForAccessibility="no"
                         android:src="@drawable/ic_delete"
                         app:tint="@android:color/white" />
 
                     <TextView
+                        android:id="@+id/tvDeleteLabel"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="4dp"
@@ -363,7 +379,8 @@
                         android:id="@+id/btnFilterOriginal"
                         style="@style/Widget.Material3.Button.TonalButton"
                         android:layout_width="wrap_content"
-                        android:layout_height="38dp"
+                        android:layout_height="wrap_content"
+                        android:minHeight="48dp"
                         android:layout_marginEnd="@dimen/spacing_sm"
                         android:insetTop="0dp"
                         android:insetBottom="0dp"
@@ -377,7 +394,8 @@
                         android:id="@+id/btnFilterMagic"
                         style="@style/Widget.Material3.Button.TonalButton"
                         android:layout_width="wrap_content"
-                        android:layout_height="38dp"
+                        android:layout_height="wrap_content"
+                        android:minHeight="48dp"
                         android:layout_marginEnd="@dimen/spacing_sm"
                         android:insetTop="0dp"
                         android:insetBottom="0dp"
@@ -391,7 +409,8 @@
                         android:id="@+id/btnFilterBW"
                         style="@style/Widget.Material3.Button.TonalButton"
                         android:layout_width="wrap_content"
-                        android:layout_height="38dp"
+                        android:layout_height="wrap_content"
+                        android:minHeight="48dp"
                         android:layout_marginEnd="@dimen/spacing_sm"
                         android:insetTop="0dp"
                         android:insetBottom="0dp"
@@ -405,7 +424,8 @@
                         android:id="@+id/btnFilterGrayscale"
                         style="@style/Widget.Material3.Button.TonalButton"
                         android:layout_width="wrap_content"
-                        android:layout_height="38dp"
+                        android:layout_height="wrap_content"
+                        android:minHeight="48dp"
                         android:layout_marginEnd="@dimen/spacing_sm"
                         android:insetTop="0dp"
                         android:insetBottom="0dp"
@@ -419,7 +439,8 @@
                         android:id="@+id/btnFilterSharpen"
                         style="@style/Widget.Material3.Button.TonalButton"
                         android:layout_width="wrap_content"
-                        android:layout_height="38dp"
+                        android:layout_height="wrap_content"
+                        android:minHeight="48dp"
                         android:layout_marginEnd="@dimen/spacing_sm"
                         android:insetTop="0dp"
                         android:insetBottom="0dp"
@@ -433,7 +454,8 @@
                         android:id="@+id/btnFilterScanEnhance"
                         style="@style/Widget.Material3.Button.TonalButton"
                         android:layout_width="wrap_content"
-                        android:layout_height="38dp"
+                        android:layout_height="wrap_content"
+                        android:minHeight="48dp"
                         android:insetTop="0dp"
                         android:insetBottom="0dp"
                         android:text="Scan Enhance"

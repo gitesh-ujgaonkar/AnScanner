@@ -3,13 +3,12 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <!-- ── Permissions ────────────────────────────────────────────────── -->
+    <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Legacy read/write for older Android versions (API <= 32) -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
-    <!-- Android 11+ (API 30+) broad document access for scanner / PDF viewer -->
-    <uses-permission
-        android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
-        tools:ignore="ScopedStorage" />
 
     <!-- Required hardware feature -->
     <uses-feature
@@ -27,7 +26,6 @@
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.AnScanner"
-        android:requestLegacyExternalStorage="true"
         tools:targetApi="34">
 
         <!-- ── Screen 0: Onboarding ──────────────────────────────────── -->
@@ -72,7 +70,8 @@
         <activity
             android:name=".ui.editor.UnifiedEditorActivity"
             android:exported="false"
-            android:screenOrientation="portrait"
+            android:screenOrientation="user"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize"
             android:theme="@style/Theme.AnScanner.CropPreview" />
 
         <!-- ── Screen 3: Review Scan (Multi-Page Grid) ───────────────── -->
@@ -91,7 +90,8 @@
         <activity
             android:name=".ui.pdf.PdfViewerActivity"
             android:exported="true"
-            android:screenOrientation="portrait">
+            android:screenOrientation="user"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize">
             <intent-filter tools:ignore="AppLinkUrlError">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />

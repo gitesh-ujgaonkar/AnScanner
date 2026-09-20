@@ -82,15 +82,6 @@ public class DeviceDocsFragment extends Fragment implements DocumentListAdapter.
                 }
             });
 
-    private final ActivityResultLauncher<Intent> manageStorageLauncher =
-            registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
-                if (hasStoragePermission()) {
-                    loadDevicePdfs(currentSearchQuery);
-                } else {
-                    showPermissionRequiredUi();
-                }
-            });
-
     private final ActivityResultLauncher<String[]> openDocumentLauncher =
             registerForActivityResult(new ActivityResultContracts.OpenDocument(), uri -> {
                 if (uri != null && isAdded()) {
@@ -169,23 +160,16 @@ public class DeviceDocsFragment extends Fragment implements DocumentListAdapter.
         Context context = getContext();
         if (context == null) return false;
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            return Environment.isExternalStorageManager()
-                    || ContextCompat.checkSelfPermission(context, Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED;
+        // On Android 13+ (API 33+), public files can be queried via MediaStore.Files without broad storage permissions.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            return true;
         } else {
             return ContextCompat.checkSelfPermission(context, Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED;
         }
     }
 
     public String[] getRequiredPermissions() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            return new String[]{
-                    Manifest.permission.READ_MEDIA_IMAGES,
-                    Manifest.permission.READ_EXTERNAL_STORAGE
-            };
-        } else {
-            return new String[]{Manifest.permission.READ_EXTERNAL_STORAGE};
-        }
+        return new String[]{Manifest.permission.READ_EXTERNAL_STORAGE};
     }
 
     private void checkAndRequestStoragePermission() {
@@ -194,22 +178,18 @@ public class DeviceDocsFragment extends Fragment implements DocumentListAdapter.
             return;
         }
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        boolean shouldShowRationale = false;
+        for (String perm : getRequiredPermissions()) {
+            if (shouldShowRequestPermissionRationale(perm)) {
+                shouldShowRationale = true;
+                break;
+            }
+        }
+
+        if (shouldShowRationale) {
             showPermissionRationaleDialog();
         } else {
-            boolean shouldShowRationale = false;
-            for (String perm : getRequiredPermissions()) {
-                if (shouldShowRequestPermissionRationale(perm)) {
-                    shouldShowRationale = true;
-                    break;
-                }
-            }
-
-            if (shouldShowRationale) {
-                showPermissionRationaleDialog();
-            } else {
-                permissionLauncher.launch(getRequiredPermissions());
-            }
+            permissionLauncher.launch(getRequiredPermissions());
         }
     }
 
@@ -220,22 +200,7 @@ public class DeviceDocsFragment extends Fragment implements DocumentListAdapter.
                 .setTitle(R.string.permission_storage_rationale_title)
                 .setMessage(R.string.permission_storage_rationale_message)
                 .setPositiveButton(R.string.permission_grant, (dialog, which) -> {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                        try {
-                            Intent intent = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION);
-                            intent.setData(Uri.parse("package:" + requireContext().getPackageName()));
-                            manageStorageLauncher.launch(intent);
-                        } catch (Exception e) {
-                            try {
-                                Intent intent = new Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION);
-                                manageStorageLauncher.launch(intent);
-                            } catch (Exception ex) {
-                                showSettingsDialog();
-                            }
-                        }
-                    } else {
-                        permissionLauncher.launch(getRequiredPermissions());
-                    }
+                    permissionLauncher.launch(getRequiredPermissions());
                 })
                 .setNegativeButton(R.string.action_cancel, (dialog, which) -> {
                     showPermissionRequiredUi();
@@ -251,25 +216,12 @@ public class DeviceDocsFragment extends Fragment implements DocumentListAdapter.
                 .setMessage(R.string.permission_storage_rationale_message)
                 .setPositiveButton(R.string.permission_open_settings, (dialog, which) -> {
                     try {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                            Intent intent = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION);
-                            intent.setData(Uri.parse("package:" + requireContext().getPackageName()));
-                            manageStorageLauncher.launch(intent);
-                        } else {
-                            Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
-                            Uri uri = Uri.fromParts("package", requireContext().getPackageName(), null);
-                            intent.setData(uri);
-                            startActivity(intent);
-                        }
-                    } catch (Exception e) {
-                        try {
-                            Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
-                            Uri uri = Uri.fromParts("package", requireContext().getPackageName(), null);
-                            intent.setData(uri);
-                            startActivity(intent);
-                        } catch (Exception ex) {
-                            Log.e(TAG, "Failed to launch app details settings", ex);
-                        }
+                        Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+                        Uri uri = Uri.fromParts("package", requireContext().getPackageName(), null);
+                        intent.setData(uri);
+                        startActivity(intent);
+                    } catch (Exception ex) {
+                        Log.e(TAG, "Failed to launch app details settings", ex);
                     }
                 })
                 .setNegativeButton(R.string.action_cancel, (dialog, which) -> {
@@ -439,8 +391,8 @@ public class DeviceDocsFragment extends Fragment implements DocumentListAdapter.
                 }
             }
 
-            // Fallback direct storage directory scanning (Download/ and Documents/)
-            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R || Environment.isExternalStorageManager()) {
+            // Fallback direct storage directory scanning (Download/ and Documents/) on Android 10 and below
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
                 try {
                     scanDirectoryForPdfs(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), seenPaths, pdfList, query, context);
                     scanDirectoryForPdfs(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), seenPaths, pdfList, query, context);

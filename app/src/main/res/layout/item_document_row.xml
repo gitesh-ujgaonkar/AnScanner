@@ -20,6 +20,7 @@
             android:layout_width="@dimen/thumbnail_library"
             android:layout_height="@dimen/thumbnail_library"
             android:scaleType="centerCrop"
+            android:importantForAccessibility="no"
             android:background="@drawable/bg_card"
             android:clipToOutline="true"
             tools:src="@tools:sample/backgrounds/scenic" />
@@ -88,8 +89,8 @@
 
         <ImageButton
             android:id="@+id/btnMore"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
             android:layout_marginStart="@dimen/spacing_sm"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="@string/cd_more_options"
