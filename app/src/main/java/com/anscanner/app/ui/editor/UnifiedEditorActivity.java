@@ -35,6 +35,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+import androidx.viewpager2.widget.ViewPager2;
 
 import com.anscanner.app.R;
 import com.anscanner.app.databinding.ActivityUnifiedEditorBinding;
@@ -175,7 +176,7 @@ public class UnifiedEditorActivity extends AppCompatActivity {
                 pageAdapter.notifyItemChanged(targetPageIndex);
                 thumbAdapter.notifyItemChanged(targetPageIndex);
 
-                PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.recyclerViewDocumentPages, targetPageIndex);
+                PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.viewPagerPages, targetPageIndex);
                 if (vh != null) {
                     Bitmap bmp = CacheManager.loadBitmap(backupPath);
                     if (bmp != null) {
@@ -204,7 +205,7 @@ public class UnifiedEditorActivity extends AppCompatActivity {
                 pageAdapter.notifyItemChanged(targetPageIndex);
                 thumbAdapter.notifyItemChanged(targetPageIndex);
 
-                PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.recyclerViewDocumentPages, targetPageIndex);
+                PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.viewPagerPages, targetPageIndex);
                 if (vh != null) {
                     Bitmap bmp = CacheManager.loadBitmap(transformedPath);
                     if (bmp != null) {
@@ -231,7 +232,7 @@ public class UnifiedEditorActivity extends AppCompatActivity {
             if (pageIndex != targetPageIndex) {
                 scrollToPage(targetPageIndex, false);
             }
-            PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.recyclerViewDocumentPages, targetPageIndex);
+            PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.viewPagerPages, targetPageIndex);
             if (vh != null) {
                 vh.drawingOverlay.undo();
             }
@@ -269,7 +270,7 @@ public class UnifiedEditorActivity extends AppCompatActivity {
     private void updateUndoButtonState() {
         boolean canUndo = !undoStack.isEmpty();
         if (!canUndo && isDrawingMode) {
-            PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.recyclerViewDocumentPages, pageIndex);
+            PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.viewPagerPages, pageIndex);
             if (vh != null && vh.drawingOverlay.getActionCount() > 0) {
                 canUndo = true;
             }
@@ -288,23 +289,31 @@ public class UnifiedEditorActivity extends AppCompatActivity {
         mainHandler = new Handler(Looper.getMainLooper());
 
         Intent intent = getIntent();
-        editorMode = intent.getStringExtra(EXTRA_MODE);
+        if (intent != null) {
+            editorMode = intent.getStringExtra(EXTRA_MODE);
+            isAddingPage = intent.getBooleanExtra(EXTRA_IS_ADDING_PAGE, false);
+            isFromReview = intent.getBooleanExtra(EXTRA_FROM_REVIEW, false);
+        }
         if (editorMode == null) editorMode = MODE_SINGLE_SCAN;
 
-        isAddingPage = intent.getBooleanExtra(EXTRA_IS_ADDING_PAGE, false);
-        isFromReview = intent.getBooleanExtra(EXTRA_FROM_REVIEW, false);
-
         // Resolve input paths or PDF URI
-        Uri pdfUri = intent.getData();
-        if (pdfUri == null && intent.hasExtra(EXTRA_PDF_URI)) {
-            pdfUri = intent.getParcelableExtra(EXTRA_PDF_URI);
+        Uri pdfUri = intent != null ? intent.getData() : null;
+        if (pdfUri == null && intent != null && intent.hasExtra(EXTRA_PDF_URI)) {
+            try {
+                Object extra = intent.getExtras() != null ? intent.getExtras().get(EXTRA_PDF_URI) : null;
+                if (extra instanceof Uri) {
+                    pdfUri = (Uri) extra;
+                } else if (extra instanceof String) {
+                    pdfUri = Uri.parse((String) extra);
+                }
+            } catch (Exception ignored) {}
         }
-        String singleImagePath = intent.getStringExtra(EXTRA_IMAGE_PATH);
+        String singleImagePath = intent != null ? intent.getStringExtra(EXTRA_IMAGE_PATH) : null;
         if (pdfUri == null && singleImagePath != null && singleImagePath.toLowerCase().endsWith(".pdf")) {
             pdfUri = Uri.fromFile(new File(singleImagePath));
         }
 
-        if (intent.hasExtra(EXTRA_PAGE_PATHS)) {
+        if (intent != null && intent.hasExtra(EXTRA_PAGE_PATHS)) {
             pagePaths = intent.getStringArrayListExtra(EXTRA_PAGE_PATHS);
         } else if (pdfUri != null) {
             pagePaths = CropPreviewActivity.extractAllPagesFromPdf(this, pdfUri);
@@ -319,114 +328,99 @@ public class UnifiedEditorActivity extends AppCompatActivity {
             pagePaths = new ArrayList<>();
         }
 
-        if (intent.hasExtra(EXTRA_ORIGINAL_PAGE_PATHS)) {
+        if (intent != null && intent.hasExtra(EXTRA_ORIGINAL_PAGE_PATHS)) {
             originalPagePaths = intent.getStringArrayListExtra(EXTRA_ORIGINAL_PAGE_PATHS);
         } else {
             originalPagePaths = new ArrayList<>(pagePaths);
         }
 
-        pageIndex = intent.getIntExtra(EXTRA_PAGE_INDEX, 0);
+        if (originalPagePaths == null) {
+            originalPagePaths = new ArrayList<>(pagePaths);
+        }
+
+        pageIndex = intent != null ? intent.getIntExtra(EXTRA_PAGE_INDEX, 0) : 0;
         if (pageIndex < 0 || pageIndex >= pagePaths.size()) {
             pageIndex = 0;
         }
 
-        setupDocumentRecyclerView();
+        if (pagePaths.isEmpty()) {
+            Toast.makeText(this, R.string.error_generic, Toast.LENGTH_SHORT).show();
+            finish();
+            return;
+        }
+
         setupThumbnailStrip();
+        setupViewPager();
         setupTopBar();
         setupBottomToolbar();
         setupAnnotationBar();
         updateTitle();
+        updateNavigationButtons();
         updateSwipeLock();
 
         // Read pre-detected corners if passed from CameraActivity
-        double[] cornerArray = intent.getDoubleArrayExtra(CameraActivity.EXTRA_DETECTED_CORNERS);
-        if (cornerArray != null && cornerArray.length == 8) {
-            Point[] corners = new Point[4];
-            for (int i = 0; i < 4; i++) {
-                corners[i] = new Point((int) Math.round(cornerArray[i * 2]), (int) Math.round(cornerArray[i * 2 + 1]));
+        if (intent != null) {
+            double[] cornerArray = intent.getDoubleArrayExtra(CameraActivity.EXTRA_DETECTED_CORNERS);
+            if (cornerArray != null && cornerArray.length == 8) {
+                Point[] corners = new Point[4];
+                for (int i = 0; i < 4; i++) {
+                    corners[i] = new Point((int) Math.round(cornerArray[i * 2]), (int) Math.round(cornerArray[i * 2 + 1]));
+                }
+                savedCornersMap.put(pageIndex, corners);
             }
-            savedCornersMap.put(pageIndex, corners);
-        }
 
-        // Check if opened directly into annotation or crop mode
-        if (intent.getBooleanExtra(EXTRA_START_ANNOTATE, false)) {
-            binding.getRoot().post(this::enterDrawingMode);
-        } else if (intent.getBooleanExtra(EXTRA_ENABLE_CROP_DEFAULT, false)) {
-            binding.recyclerViewDocumentPages.post(this::enterCropMode);
+            // Check if opened directly into annotation or crop mode
+            if (intent.getBooleanExtra(EXTRA_START_ANNOTATE, false)) {
+                binding.getRoot().post(this::enterDrawingMode);
+            } else if (intent.getBooleanExtra(EXTRA_ENABLE_CROP_DEFAULT, false)) {
+                binding.viewPagerPages.post(this::enterCropMode);
+            }
         }
     }
 
-    private void setupDocumentRecyclerView() {
+    private void setupViewPager() {
+        if (binding == null || binding.viewPagerPages == null) return;
         pageAdapter = new PageEditorAdapter(pagePaths, null);
-        LinearLayoutManager layoutManager = new LinearLayoutManager(this, LinearLayoutManager.VERTICAL, false);
-        binding.recyclerViewDocumentPages.setLayoutManager(layoutManager);
-        binding.recyclerViewDocumentPages.setAdapter(pageAdapter);
-        binding.recyclerViewDocumentPages.setItemViewCacheSize(4);
-
-        binding.recyclerViewDocumentPages.addOnScrollListener(new RecyclerView.OnScrollListener() {
+        binding.viewPagerPages.setAdapter(pageAdapter);
+        binding.viewPagerPages.setOffscreenPageLimit(1);
+        binding.viewPagerPages.registerOnPageChangeCallback(new ViewPager2.OnPageChangeCallback() {
             @Override
-            public void onScrolled(@NonNull RecyclerView recyclerView, int dx, int dy) {
-                super.onScrolled(recyclerView, dx, dy);
-                if (dy != 0 || dx != 0) {
-                    int centerPos = findCenterPagePosition(layoutManager);
-                    if (centerPos >= 0 && centerPos < pagePaths.size() && centerPos != pageIndex) {
-                        onPageSwitched(centerPos);
-                    }
-                }
+            public void onPageSelected(int position) {
+                super.onPageSelected(position);
+                onPageSwitched(position);
             }
         });
 
         if (pageIndex > 0 && pageIndex < pagePaths.size()) {
-            layoutManager.scrollToPositionWithOffset(pageIndex, 0);
+            binding.viewPagerPages.setCurrentItem(pageIndex, false);
         }
-    }
-
-    private int findCenterPagePosition(LinearLayoutManager lm) {
-        int rvHeight = binding.recyclerViewDocumentPages.getHeight();
-        if (rvHeight <= 0) return lm.findFirstVisibleItemPosition();
-        int center = rvHeight / 2;
-        int closestPos = -1;
-        int minDiff = Integer.MAX_VALUE;
-        int first = lm.findFirstVisibleItemPosition();
-        int last = lm.findLastVisibleItemPosition();
-        for (int i = first; i <= last; i++) {
-            View child = lm.findViewByPosition(i);
-            if (child != null) {
-                int childCenter = (child.getTop() + child.getBottom()) / 2;
-                int diff = Math.abs(childCenter - center);
-                if (diff < minDiff) {
-                    minDiff = diff;
-                    closestPos = i;
-                }
-            }
-        }
-        return closestPos >= 0 ? closestPos : first;
     }
 
     private void scrollToPage(int targetPageIndex, boolean smooth) {
         if (targetPageIndex < 0 || targetPageIndex >= pagePaths.size()) return;
         pageIndex = targetPageIndex;
         updateTitle();
-        thumbAdapter.setSelectedPosition(pageIndex);
-        binding.rvThumbnails.smoothScrollToPosition(pageIndex);
+        if (thumbAdapter != null) {
+            thumbAdapter.setSelectedPosition(pageIndex);
+        }
+        if (binding != null && binding.rvThumbnails != null) {
+            binding.rvThumbnails.smoothScrollToPosition(pageIndex);
+        }
         updateNavigationButtons();
         updateUndoButtonState();
 
-        if (smooth) {
-            binding.recyclerViewDocumentPages.smoothScrollToPosition(targetPageIndex);
-        } else {
-            LinearLayoutManager lm = (LinearLayoutManager) binding.recyclerViewDocumentPages.getLayoutManager();
-            if (lm != null) {
-                lm.scrollToPositionWithOffset(targetPageIndex, 0);
-            }
+        if (binding != null && binding.viewPagerPages != null) {
+            binding.viewPagerPages.setCurrentItem(targetPageIndex, smooth);
         }
     }
 
     private void setupThumbnailStrip() {
+        if (binding == null || binding.rvThumbnails == null) return;
         thumbAdapter = new ThumbnailStripAdapter(pagePaths, pageIndex, position -> {
             if (position >= 0 && position < pagePaths.size()) {
                 if (isDrawingMode) {
                     commitCurrentAnnotations();
+                    exitDrawingMode();
                 } else if (isCropMode) {
                     exitCropMode();
                 }
@@ -440,39 +434,49 @@ public class UnifiedEditorActivity extends AppCompatActivity {
     private void onPageSwitched(int newPosition) {
         if (newPosition < 0 || newPosition >= pagePaths.size()) return;
 
-        // Auto-commit any active drawing before switching
+        // Auto-commit any active drawing before switching and dismiss annotation menu
         if (isDrawingMode) {
             commitCurrentAnnotations();
+            exitDrawingMode();
         } else if (isCropMode) {
             exitCropMode();
         }
 
         pageIndex = newPosition;
         updateTitle();
-        thumbAdapter.setSelectedPosition(pageIndex);
-        binding.rvThumbnails.smoothScrollToPosition(pageIndex);
+        if (thumbAdapter != null) {
+            thumbAdapter.setSelectedPosition(pageIndex);
+        }
+        if (binding != null && binding.rvThumbnails != null) {
+            binding.rvThumbnails.smoothScrollToPosition(pageIndex);
+        }
 
         updateNavigationButtons();
         updateUndoButtonState();
     }
 
     private void updateTitle() {
+        if (binding == null || binding.tvTitle == null) return;
         binding.tvTitle.setText(getString(R.string.crop_title, pageIndex + 1, Math.max(1, pagePaths.size())));
     }
 
     private void updateNavigationButtons() {
-        binding.btnPrevPage.setVisibility(pageIndex > 0 ? View.VISIBLE : View.GONE);
-        binding.btnNextPage.setVisibility(pageIndex < pagePaths.size() - 1 ? View.VISIBLE : View.GONE);
+        if (binding == null) return;
+        if (binding.btnPrevPage != null) {
+            binding.btnPrevPage.setVisibility(pageIndex > 0 ? View.VISIBLE : View.GONE);
+        }
+        if (binding.btnNextPage != null) {
+            binding.btnNextPage.setVisibility(pageIndex < pagePaths.size() - 1 ? View.VISIBLE : View.GONE);
+        }
     }
 
     /**
-     * Disable whole-document zoom and scrolling gestures while in an active editing state.
+     * Disable ViewPager2 horizontal swiping gestures while in an active crop or drawing state.
      */
     private void updateSwipeLock() {
+        if (binding == null || binding.viewPagerPages == null) return;
         boolean enabled = !isDrawingMode && !isCropMode;
-        binding.documentZoomLayout.setZoomEnabled(enabled);
-        binding.documentZoomLayout.setPanEnabled(enabled);
-        binding.recyclerViewDocumentPages.setNestedScrollingEnabled(enabled);
+        binding.viewPagerPages.setUserInputEnabled(enabled);
     }
 
     private void setupTopBar() {
@@ -480,14 +484,20 @@ public class UnifiedEditorActivity extends AppCompatActivity {
 
         binding.btnPrevPage.setOnClickListener(v -> {
             if (pageIndex > 0) {
-                if (isDrawingMode) commitCurrentAnnotations();
+                if (isDrawingMode) {
+                    commitCurrentAnnotations();
+                    exitDrawingMode();
+                }
                 scrollToPage(pageIndex - 1, true);
             }
         });
 
         binding.btnNextPage.setOnClickListener(v -> {
             if (pageIndex < pagePaths.size() - 1) {
-                if (isDrawingMode) commitCurrentAnnotations();
+                if (isDrawingMode) {
+                    commitCurrentAnnotations();
+                    exitDrawingMode();
+                }
                 scrollToPage(pageIndex + 1, true);
             }
         });
@@ -499,7 +509,7 @@ public class UnifiedEditorActivity extends AppCompatActivity {
                 redoStack.push(action);
                 updateUndoButtonState();
             } else if (isDrawingMode) {
-                PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.recyclerViewDocumentPages, pageIndex);
+                PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.viewPagerPages, pageIndex);
                 if (vh != null && vh.drawingOverlay.getActionCount() > 0) {
                     vh.drawingOverlay.undo();
                     updateUndoButtonState();
@@ -573,14 +583,14 @@ public class UnifiedEditorActivity extends AppCompatActivity {
         binding.tvCropLabel.setText(R.string.action_apply);
         binding.ivCropIcon.setImageResource(R.drawable.ic_check);
 
-        PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.recyclerViewDocumentPages, pageIndex);
+        PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.viewPagerPages, pageIndex);
         if (vh != null) {
             vh.ivPageImage.setScale(1.0f, false);
             vh.cropOverlay.setImageView(vh.ivPageImage);
             prepareCropForPage(pageIndex, vh);
         } else {
-            binding.recyclerViewDocumentPages.post(() -> {
-                PageEditorAdapter.PageViewHolder vhPost = PageEditorAdapter.getViewHolder(binding.recyclerViewDocumentPages, pageIndex);
+            binding.viewPagerPages.post(() -> {
+                PageEditorAdapter.PageViewHolder vhPost = PageEditorAdapter.getViewHolder(binding.viewPagerPages, pageIndex);
                 if (vhPost != null) {
                     vhPost.ivPageImage.setScale(1.0f, false);
                     vhPost.cropOverlay.setImageView(vhPost.ivPageImage);
@@ -629,7 +639,7 @@ public class UnifiedEditorActivity extends AppCompatActivity {
     }
 
     private void commitCrop(@Nullable Runnable onComplete) {
-        PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.recyclerViewDocumentPages, pageIndex);
+        PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.viewPagerPages, pageIndex);
         Point[] currentCorners = vh != null ? vh.cropOverlay.getCornerPoints() : null;
         if (currentCorners == null || currentCorners.length != 4) {
             currentCorners = savedCornersMap.get(pageIndex);
@@ -694,7 +704,7 @@ public class UnifiedEditorActivity extends AppCompatActivity {
 
     private void exitCropMode() {
         isCropMode = false;
-        PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.recyclerViewDocumentPages, pageIndex);
+        PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.viewPagerPages, pageIndex);
         if (vh != null) {
             vh.cropOverlay.resetCornerMoved();
             vh.cropOverlay.setVisibility(View.GONE);
@@ -727,7 +737,7 @@ public class UnifiedEditorActivity extends AppCompatActivity {
         binding.layoutAnnotationBar.setVisibility(View.VISIBLE);
         updateUndoButtonState();
 
-        PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.recyclerViewDocumentPages, pageIndex);
+        PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.viewPagerPages, pageIndex);
         if (vh != null) {
             vh.drawingOverlay.setVisibility(View.VISIBLE);
             vh.drawingOverlay.bindImageView(vh.ivPageImage);
@@ -763,7 +773,7 @@ public class UnifiedEditorActivity extends AppCompatActivity {
         updateSwipeLock();
         updateUndoButtonState();
 
-        PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.recyclerViewDocumentPages, pageIndex);
+        PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.viewPagerPages, pageIndex);
         if (vh != null) {
             vh.drawingOverlay.setVisibility(View.GONE);
             vh.drawingOverlay.setToolMode(AnnotationDrawingView.ToolMode.NONE);
@@ -774,7 +784,7 @@ public class UnifiedEditorActivity extends AppCompatActivity {
      * Requirement 4: Flatten applied annotations directly into the page's temporary image file.
      */
     private void commitCurrentAnnotations() {
-        PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.recyclerViewDocumentPages, pageIndex);
+        PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.viewPagerPages, pageIndex);
         if (vh == null || vh.drawingOverlay.isEmpty()) {
             return;
         }
@@ -814,7 +824,7 @@ public class UnifiedEditorActivity extends AppCompatActivity {
             currentToolMode = AnnotationDrawingView.ToolMode.PEN;
             binding.btnToolPen.setColorFilter(ContextCompat.getColor(this, R.color.accent_mint));
             binding.btnToolHighlighter.setColorFilter(ContextCompat.getColor(this, R.color.text_secondary));
-            PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.recyclerViewDocumentPages, pageIndex);
+            PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.viewPagerPages, pageIndex);
             if (vh != null) vh.drawingOverlay.setToolMode(currentToolMode);
         });
 
@@ -823,7 +833,7 @@ public class UnifiedEditorActivity extends AppCompatActivity {
             currentToolMode = AnnotationDrawingView.ToolMode.HIGHLIGHTER;
             binding.btnToolHighlighter.setColorFilter(ContextCompat.getColor(this, R.color.accent_mint));
             binding.btnToolPen.setColorFilter(ContextCompat.getColor(this, R.color.text_secondary));
-            PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.recyclerViewDocumentPages, pageIndex);
+            PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.viewPagerPages, pageIndex);
             if (vh != null) vh.drawingOverlay.setToolMode(currentToolMode);
         });
 
@@ -840,12 +850,12 @@ public class UnifiedEditorActivity extends AppCompatActivity {
                 currentStrokeWidth = 16f * density;
                 binding.btnStrokeWidth.setText(R.string.stroke_width_bold);
             }
-            PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.recyclerViewDocumentPages, pageIndex);
+            PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.viewPagerPages, pageIndex);
             if (vh != null) vh.drawingOverlay.setStrokeWidth(currentStrokeWidth);
         });
 
         binding.btnClearAnnotation.setOnClickListener(v -> {
-            PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.recyclerViewDocumentPages, pageIndex);
+            PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.viewPagerPages, pageIndex);
             if (vh != null) vh.drawingOverlay.clear();
         });
 
@@ -889,7 +899,7 @@ public class UnifiedEditorActivity extends AppCompatActivity {
         binding.ringYellow.setVisibility(color == Color.parseColor("#FACC15") ? View.VISIBLE : View.GONE);
         binding.ringBlue.setVisibility(color == Color.parseColor("#3B82F6") ? View.VISIBLE : View.GONE);
 
-        PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.recyclerViewDocumentPages, pageIndex);
+        PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.viewPagerPages, pageIndex);
         if (vh != null) vh.drawingOverlay.setStrokeColor(color);
     }
 
@@ -904,7 +914,7 @@ public class UnifiedEditorActivity extends AppCompatActivity {
                 .setTitle(R.string.action_text_sign)
                 .setItems(new CharSequence[]{getString(R.string.action_text), getString(R.string.action_signature)}, (dialog, which) -> {
                     if (which == 0) {
-                        PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.recyclerViewDocumentPages, pageIndex);
+                        PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.viewPagerPages, pageIndex);
                         AnnotationDrawingView.TextItem activeItem = vh != null ? vh.drawingOverlay.getSelectedTextItem() : null;
                         showTextCustomizationDialog(activeItem);
                     } else {
@@ -948,7 +958,7 @@ public class UnifiedEditorActivity extends AppCompatActivity {
             @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
                 if (existingItem != null) {
                     existingItem.text = s.toString();
-                    PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.recyclerViewDocumentPages, pageIndex);
+                    PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.viewPagerPages, pageIndex);
                     if (vh != null) {
                         vh.drawingOverlay.invalidate();
                     }
@@ -1002,7 +1012,7 @@ public class UnifiedEditorActivity extends AppCompatActivity {
                 // Update active text annotation directly and invalidate canvas immediately
                 if (existingItem != null) {
                     existingItem.setFontFamily(selectedFont[0]);
-                    PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.recyclerViewDocumentPages, pageIndex);
+                    PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.viewPagerPages, pageIndex);
                     if (vh != null) {
                         vh.drawingOverlay.invalidate();
                     }
@@ -1036,7 +1046,7 @@ public class UnifiedEditorActivity extends AppCompatActivity {
                 input.setTextSize(selectedSize[0]);
                 if (existingItem != null) {
                     existingItem.textSize = selectedSize[0] * density;
-                    PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.recyclerViewDocumentPages, pageIndex);
+                    PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.viewPagerPages, pageIndex);
                     if (vh != null) {
                         vh.drawingOverlay.invalidate();
                     }
@@ -1111,7 +1121,7 @@ public class UnifiedEditorActivity extends AppCompatActivity {
                 input.setTextColor(c);
                 if (existingItem != null) {
                     existingItem.color = c;
-                    PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.recyclerViewDocumentPages, pageIndex);
+                    PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.viewPagerPages, pageIndex);
                     if (vh != null) {
                         vh.drawingOverlay.invalidate();
                     }
@@ -1131,7 +1141,7 @@ public class UnifiedEditorActivity extends AppCompatActivity {
         switchBg.setOnCheckedChangeListener((btn, isChecked) -> {
             if (existingItem != null) {
                 existingItem.hasBackground = isChecked;
-                PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.recyclerViewDocumentPages, pageIndex);
+                PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.viewPagerPages, pageIndex);
                 if (vh != null) {
                     vh.drawingOverlay.invalidate();
                 }
@@ -1147,7 +1157,7 @@ public class UnifiedEditorActivity extends AppCompatActivity {
                     String text = input.getText().toString().trim();
                     if (!text.isEmpty()) {
                         enterDrawingMode();
-                        PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.recyclerViewDocumentPages, pageIndex);
+                        PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.viewPagerPages, pageIndex);
                         if (vh != null) {
                             if (existingItem != null) {
                                 existingItem.text = text;
@@ -1171,7 +1181,7 @@ public class UnifiedEditorActivity extends AppCompatActivity {
                         existingItem.textSize = origSize;
                         existingItem.color = origColor;
                         existingItem.hasBackground = origBg;
-                        PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.recyclerViewDocumentPages, pageIndex);
+                        PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.viewPagerPages, pageIndex);
                         if (vh != null) {
                             vh.drawingOverlay.invalidate();
                         }
@@ -1180,7 +1190,7 @@ public class UnifiedEditorActivity extends AppCompatActivity {
 
         if (existingItem != null) {
             builder.setNeutralButton(R.string.action_delete, (dialog, which) -> {
-                PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.recyclerViewDocumentPages, pageIndex);
+                PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.viewPagerPages, pageIndex);
                 if (vh != null) {
                     vh.drawingOverlay.deleteSelectedItem();
                 }
@@ -1296,7 +1306,7 @@ public class UnifiedEditorActivity extends AppCompatActivity {
                         sigCanvas.drawToCanvas(c, null, w, sigH);
 
                         enterDrawingMode();
-                        PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.recyclerViewDocumentPages, pageIndex);
+                        PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.viewPagerPages, pageIndex);
                         if (vh != null) {
                             vh.drawingOverlay.addSignatureAnnotation(sigBmp);
                             AnnotationDrawingView.SignatureItem sigItem = vh.drawingOverlay.getSelectedSignatureItem();
@@ -1477,7 +1487,7 @@ public class UnifiedEditorActivity extends AppCompatActivity {
                     return;
                 }
 
-                PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.recyclerViewDocumentPages, pageIndex);
+                PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.viewPagerPages, pageIndex);
                 RectF displayRect = vh != null ? vh.ivPageImage.getDisplayRect() : null;
                 binding.lensOverlay.setTargetRect(displayRect);
                 binding.lensOverlay.setVisionText(text, bmpW, bmpH);
@@ -1553,8 +1563,12 @@ public class UnifiedEditorActivity extends AppCompatActivity {
                     dialog.dismiss();
 
                     int targetIndex = targetPage - 1;
-                    if (isDrawingMode) commitCurrentAnnotations();
-                    else if (isCropMode) exitCropMode();
+                    if (isDrawingMode) {
+                        commitCurrentAnnotations();
+                        exitDrawingMode();
+                    } else if (isCropMode) {
+                        exitCropMode();
+                    }
                     scrollToPage(targetIndex, true);
                 } catch (NumberFormatException e) {
                     til.setError(getString(R.string.jump_to_page_error, totalPages));

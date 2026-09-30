@@ -172,8 +172,32 @@ public class CameraActivity extends AppCompatActivity {
             return;
         }
 
+        // Enable edge-to-edge: draw behind both status bar and navigation bar
+        androidx.core.view.WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+
         binding = ActivityCameraBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
+
+        // Apply system bar insets: pad the topBar for status bar, adView for navigation bar
+        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(binding.getRoot(), (v, windowInsets) -> {
+            androidx.core.graphics.Insets insets = windowInsets.getInsets(
+                    androidx.core.view.WindowInsetsCompat.Type.systemBars());
+
+            // Push topBar content below the status bar
+            binding.topBar.setPadding(
+                    binding.topBar.getPaddingLeft(),
+                    insets.top,
+                    binding.topBar.getPaddingRight(),
+                    binding.topBar.getPaddingBottom());
+
+            // Push the ad banner above the navigation bar
+            android.view.ViewGroup.MarginLayoutParams adParams =
+                    (android.view.ViewGroup.MarginLayoutParams) binding.adView.getLayoutParams();
+            adParams.bottomMargin = insets.bottom;
+            binding.adView.setLayoutParams(adParams);
+
+            return windowInsets;
+        });
 
         bgExecutor = Executors.newSingleThreadExecutor();
         analysisExecutor = Executors.newSingleThreadExecutor();

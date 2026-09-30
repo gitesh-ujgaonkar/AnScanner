@@ -64,7 +64,7 @@ public class PageEditorAdapter extends RecyclerView.Adapter<PageEditorAdapter.Pa
         holder.cropOverlay.setVisibility(View.GONE);
         holder.cropOverlay.resetCornerMoved();
         holder.drawingOverlay.setVisibility(View.GONE);
-        holder.ivPageImage.setZoomable(false); // Global whole-document zoom handled by DocumentZoomLayout
+        holder.ivPageImage.setZoomable(true);
         holder.ivPageImage.setScale(1.0f, false);
         holder.drawingOverlay.bindImageView(holder.ivPageImage);
 

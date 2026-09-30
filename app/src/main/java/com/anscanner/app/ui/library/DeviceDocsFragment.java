@@ -43,6 +43,7 @@ import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -269,17 +270,21 @@ public class DeviceDocsFragment extends Fragment implements DocumentListAdapter.
             Context context = getContext();
             if (context == null) return;
 
-            List<Uri> contentUris = new ArrayList<>();
+            Set<Uri> contentUris = new LinkedHashSet<>();
             // 1. Primary external files query (searches all external storage)
             contentUris.add(MediaStore.Files.getContentUri("external"));
 
-            // 2. Query Downloads collection on Android 10+ (API 29+) to discover downloaded PDFs
+            // 2. Query external_primary and Downloads collections on Android 10+ (API 29+) to discover downloaded & document PDFs
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                contentUris.add(MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY));
                 contentUris.add(MediaStore.Downloads.EXTERNAL_CONTENT_URI);
+                try {
+                    contentUris.add(MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY));
+                } catch (Exception ignored) {}
                 try {
                     Set<String> volumeNames = MediaStore.getExternalVolumeNames(context);
                     for (String volume : volumeNames) {
-                        if (!"external".equalsIgnoreCase(volume)) {
+                        if (volume != null && !volume.isEmpty()) {
                             contentUris.add(MediaStore.Files.getContentUri(volume));
                             contentUris.add(MediaStore.Downloads.getContentUri(volume));
                         }
@@ -300,9 +305,12 @@ public class DeviceDocsFragment extends Fragment implements DocumentListAdapter.
             };
 
             String selection = "(" + MediaStore.MediaColumns.MIME_TYPE + " = ? OR "
+                    + MediaStore.MediaColumns.MIME_TYPE + " = ? OR "
                     + MediaStore.MediaColumns.DISPLAY_NAME + " LIKE '%.pdf' OR "
-                    + MediaStore.MediaColumns.DATA + " LIKE '%.pdf')";
-            String[] selectionArgs = new String[]{"application/pdf"};
+                    + MediaStore.MediaColumns.DISPLAY_NAME + " LIKE '%.PDF' OR "
+                    + MediaStore.MediaColumns.DATA + " LIKE '%.pdf' OR "
+                    + MediaStore.MediaColumns.DATA + " LIKE '%.PDF')";
+            String[] selectionArgs = new String[]{"application/pdf", "application/x-pdf"};
             String sortOrder = MediaStore.MediaColumns.DATE_ADDED + " DESC";
 
             Set<String> seenPaths = new HashSet<>();
@@ -316,6 +324,7 @@ public class DeviceDocsFragment extends Fragment implements DocumentListAdapter.
                         int sizeCol = cursor.getColumnIndex(MediaStore.MediaColumns.SIZE);
                         int dateAddedCol = cursor.getColumnIndex(MediaStore.MediaColumns.DATE_ADDED);
                         int dateModifiedCol = cursor.getColumnIndex(MediaStore.MediaColumns.DATE_MODIFIED);
+                        int mimeCol = cursor.getColumnIndex(MediaStore.MediaColumns.MIME_TYPE);
 
                         while (cursor.moveToNext()) {
                             long id = cursor.getLong(idCol);
@@ -331,30 +340,33 @@ public class DeviceDocsFragment extends Fragment implements DocumentListAdapter.
                             Uri itemContentUri = ContentUris.withAppendedId(baseUri, id);
                             String uriKey = itemContentUri.toString();
 
-                            // Validate physical existence on storage
-                            boolean exists = false;
+                            // Validate that entry represents a PDF
+                            boolean isPdf = (name != null && name.toLowerCase(Locale.ROOT).endsWith(".pdf"))
+                                    || (data != null && data.toLowerCase(Locale.ROOT).endsWith(".pdf"));
+                            if (!isPdf && mimeCol != -1) {
+                                String mime = cursor.getString(mimeCol);
+                                if (mime != null && (mime.equalsIgnoreCase("application/pdf") || mime.equalsIgnoreCase("application/x-pdf"))) {
+                                    isPdf = true;
+                                }
+                            }
+                            if (!isPdf) {
+                                continue;
+                            }
+
+                            // If direct file path is available and exists on disk with 0 bytes, skip empty invalid file
                             if (data != null && !data.trim().isEmpty()) {
-                                File f = new File(data);
-                                if (f.exists() && f.length() > 0) {
-                                    exists = true;
-                                }
-                            }
-                            if (!exists) {
-                                try (ParcelFileDescriptor pfd = context.getContentResolver().openFileDescriptor(itemContentUri, "r")) {
-                                    exists = pfd != null && pfd.getStatSize() > 0;
-                                } catch (java.io.FileNotFoundException fnfe) {
-                                    exists = false; // File physically removed from storage
-                                } catch (Exception e) {
-                                    // Scoped Storage restriction; retain if MediaStore indexed with positive size
-                                    exists = size > 0;
-                                }
-                            }
-                            if (!exists) {
-                                continue; // File physically deleted; avoid ghost listing
+                                try {
+                                    File f = new File(data);
+                                    if (f.exists() && f.length() == 0) {
+                                        continue;
+                                    }
+                                } catch (Exception ignored) {}
                             }
 
                             // Deduplicate across volumes and downloads collections
-                            String dedupeKey = (data != null && !data.isEmpty()) ? data.toLowerCase(Locale.ROOT) : (name != null ? name.toLowerCase(Locale.ROOT) : "") + "_" + size;
+                            String dedupeKey = (data != null && !data.trim().isEmpty())
+                                    ? data.toLowerCase(Locale.ROOT)
+                                    : (name != null ? name.toLowerCase(Locale.ROOT) : "") + "_" + size;
                             if (seenPaths.contains(dedupeKey) || seenUris.contains(uriKey)) {
                                 continue;
                             }
@@ -362,15 +374,15 @@ public class DeviceDocsFragment extends Fragment implements DocumentListAdapter.
                             seenUris.add(uriKey);
 
                             DocumentEntity entity = new DocumentEntity();
-                            entity.id = -Math.abs(id); // Negative ID denotes external non-Room document
-                            entity.title = name != null ? name : (data != null ? new File(data).getName() : "PDF Document");
+                            entity.id = -Math.abs(id != 0 ? id : dedupeKey.hashCode());
+                            entity.title = (name != null && !name.trim().isEmpty()) ? name : (data != null ? new File(data).getName() : "PDF Document");
                             entity.format = "PDF";
                             entity.quality = "NORMAL";
                             entity.pageCount = 0;
                             entity.fileSizeBytes = size;
                             entity.fileUri = uriKey;
 
-                            File cachedThumb = new File(context.getCacheDir(), "thumb_device_" + Math.abs(id) + ".jpg");
+                            File cachedThumb = new File(context.getCacheDir(), "thumb_device_" + Math.abs(entity.id) + ".jpg");
                             if (cachedThumb.exists() && cachedThumb.length() > 0) {
                                 entity.thumbnailPath = cachedThumb.getAbsolutePath();
                             } else {
@@ -391,14 +403,50 @@ public class DeviceDocsFragment extends Fragment implements DocumentListAdapter.
                 }
             }
 
-            // Fallback direct storage directory scanning (Download/ and Documents/) on Android 10 and below
-            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
-                try {
-                    scanDirectoryForPdfs(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), seenPaths, pdfList, query, context);
-                    scanDirectoryForPdfs(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), seenPaths, pdfList, query, context);
-                } catch (Exception e) {
-                    Log.w(TAG, "Direct storage directory scan completed with warnings", e);
+            // Direct storage directory scanning across standard Documents and Download folders on all Android versions
+            try {
+                List<File> searchDirs = new ArrayList<>();
+                searchDirs.add(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS));
+                searchDirs.add(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS));
+
+                File extStorage = Environment.getExternalStorageDirectory();
+                if (extStorage != null) {
+                    searchDirs.add(new File(extStorage, "Documents"));
+                    searchDirs.add(new File(extStorage, "Download"));
+                    searchDirs.add(new File(extStorage, "Downloads"));
+                    searchDirs.add(new File(extStorage, "Documents/AnScanner"));
+                    searchDirs.add(new File(extStorage, "Download/AnScanner"));
                 }
+                searchDirs.add(new File("/storage/emulated/0/Documents"));
+                searchDirs.add(new File("/storage/emulated/0/Download"));
+                searchDirs.add(new File("/storage/emulated/0/Downloads"));
+                searchDirs.add(new File("/sdcard/Documents"));
+                searchDirs.add(new File("/sdcard/Download"));
+
+                File extDocs = context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS);
+                if (extDocs != null) searchDirs.add(extDocs);
+                File extDownloads = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
+                if (extDownloads != null) searchDirs.add(extDownloads);
+
+                File[] mediaDirs = context.getExternalMediaDirs();
+                if (mediaDirs != null) {
+                    for (File md : mediaDirs) {
+                        if (md != null) searchDirs.add(md);
+                    }
+                }
+
+                Set<String> scannedDirPaths = new HashSet<>();
+                for (File dir : searchDirs) {
+                    if (dir != null && dir.exists() && dir.isDirectory()) {
+                        String dirPath = dir.getAbsolutePath().toLowerCase(Locale.ROOT);
+                        if (!scannedDirPaths.contains(dirPath)) {
+                            scannedDirPaths.add(dirPath);
+                            scanDirectoryForPdfs(dir, seenPaths, pdfList, query, context, 0);
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                Log.w(TAG, "Direct storage directory scan completed with warnings", e);
             }
 
             // Sort aggregated list by date added/created descending
@@ -631,18 +679,21 @@ public class DeviceDocsFragment extends Fragment implements DocumentListAdapter.
         return null;
     }
 
-    private void scanDirectoryForPdfs(File dir, Set<String> seenPaths, List<DocumentEntity> pdfList, String query, Context context) {
-        if (dir == null || !dir.exists() || !dir.isDirectory()) return;
-        File[] files = dir.listFiles();
+    private void scanDirectoryForPdfs(File dir, Set<String> seenPaths, List<DocumentEntity> pdfList, String query, Context context, int depth) {
+        if (dir == null || !dir.exists() || !dir.isDirectory() || depth > 6) return;
+        String dirName = dir.getName();
+        if (dirName.startsWith(".") || "Android".equalsIgnoreCase(dirName)) return;
+
+        File[] files = null;
+        try {
+            files = dir.listFiles();
+        } catch (Exception ignored) {}
         if (files == null) return;
+
         for (File f : files) {
-            if (f != null && f.isDirectory()) {
-                File[] subFiles = f.listFiles();
-                if (subFiles != null) {
-                    for (File sub : subFiles) {
-                        addFileIfPdf(sub, seenPaths, pdfList, query, context);
-                    }
-                }
+            if (f == null) continue;
+            if (f.isDirectory()) {
+                scanDirectoryForPdfs(f, seenPaths, pdfList, query, context, depth + 1);
             } else {
                 addFileIfPdf(f, seenPaths, pdfList, query, context);
             }

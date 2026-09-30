@@ -15,6 +15,8 @@ import androidx.annotation.Nullable;
 import com.anscanner.app.service.CacheManager;
 
 import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.UUID;
 
@@ -77,12 +79,33 @@ public final class PdfRendererHelper {
 
         ArrayList<String> pagePaths = new ArrayList<>();
         ParcelFileDescriptor pfd = null;
+        File tempFile = null;
 
         try {
             if ("file".equalsIgnoreCase(pdfUri.getScheme()) && pdfUri.getPath() != null) {
-                pfd = ParcelFileDescriptor.open(new File(pdfUri.getPath()), ParcelFileDescriptor.MODE_READ_ONLY);
-            } else {
-                pfd = context.getContentResolver().openFileDescriptor(pdfUri, "r");
+                File file = new File(pdfUri.getPath());
+                if (file.exists() && file.canRead()) {
+                    try {
+                        pfd = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY);
+                    } catch (Exception ignored) {}
+                }
+            }
+
+            if (pfd == null) {
+                // Ensure a seekable file on disk for PdfRenderer across all Android versions & storage schemes
+                tempFile = new File(context.getCacheDir(), "extract_temp_" + UUID.randomUUID() + ".pdf");
+                try (InputStream in = context.getContentResolver().openInputStream(pdfUri);
+                     FileOutputStream out = new FileOutputStream(tempFile)) {
+                    if (in != null) {
+                        byte[] buffer = new byte[16384];
+                        int bytesRead;
+                        while ((bytesRead = in.read(buffer)) > 0) {
+                            out.write(buffer, 0, bytesRead);
+                        }
+                        out.flush();
+                        pfd = ParcelFileDescriptor.open(tempFile, ParcelFileDescriptor.MODE_READ_ONLY);
+                    }
+                }
             }
 
             if (pfd != null) {
@@ -94,12 +117,22 @@ public final class PdfRendererHelper {
                             int w = Math.min(1600, Math.max(page.getWidth() * 2, 720));
                             int h = Math.round((float) w * page.getHeight() / Math.max(1, page.getWidth()));
 
-                            Bitmap bmp = renderPageWithWhiteBackground(page, w, h, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
-                            String path = CacheManager.saveTempBitmap(context, bmp, "page_" + i + "_" + UUID.randomUUID());
-                            bmp.recycle();
+                            Bitmap bmp = null;
+                            try {
+                                bmp = renderPageWithWhiteBackground(page, w, h, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
+                            } catch (OutOfMemoryError oom) {
+                                try {
+                                    bmp = renderPageWithWhiteBackground(page, Math.max(1, w / 2), Math.max(1, h / 2), PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
+                                } catch (Throwable ignored) {}
+                            }
 
-                            if (path != null) {
-                                pagePaths.add(path);
+                            if (bmp != null) {
+                                String path = CacheManager.saveTempBitmap(context, bmp, "page_" + i + "_" + UUID.randomUUID());
+                                bmp.recycle();
+
+                                if (path != null) {
+                                    pagePaths.add(path);
+                                }
                             }
                         } finally {
                             page.close();
@@ -114,6 +147,9 @@ public final class PdfRendererHelper {
                 try {
                     pfd.close();
                 } catch (Exception ignored) {}
+            }
+            if (tempFile != null && tempFile.exists()) {
+                tempFile.delete();
             }
         }
 

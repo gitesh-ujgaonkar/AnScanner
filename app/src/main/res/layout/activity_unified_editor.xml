@@ -132,19 +132,10 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/topBar">
 
-        <com.anscanner.app.ui.view.DocumentZoomLayout
-            android:id="@+id/documentZoomLayout"
+        <androidx.viewpager2.widget.ViewPager2
+            android:id="@+id/viewPagerPages"
             android:layout_width="match_parent"
-            android:layout_height="match_parent">
-
-            <androidx.recyclerview.widget.RecyclerView
-                android:id="@+id/recyclerViewDocumentPages"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:clipToPadding="false"
-                android:orientation="vertical" />
-
-        </com.anscanner.app.ui.view.DocumentZoomLayout>
+            android:layout_height="match_parent" />
 
         <com.anscanner.app.ui.custom.LensOverlayView
             android:id="@+id/lensOverlay"
