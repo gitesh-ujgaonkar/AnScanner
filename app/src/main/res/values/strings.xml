@@ -35,6 +35,12 @@
     <string name="crop_filter_original">Original</string>
     <string name="crop_filter_magic_color">Magic Color</string>
     <string name="crop_filter_bw_clean">B\u0026W Clean</string>
+    <string name="crop_filter_grayscale">Grayscale</string>
+    <string name="crop_filter_sharpen">Sharpen</string>
+    <string name="crop_filter_scan_enhance">Scan Enhance</string>
+    <string name="filter_apply_to_all">Apply to all</string>
+    <string name="filter_applied_all">Filter applied to all %1$d pages</string>
+    <string name="filter_applied_single">%1$s filter applied</string>
     <string name="crop_processing">Processing…</string>
     <string name="crop_auto_detected">Document edges auto-detected</string>
     <string name="crop_manual_adjust">Drag corners to adjust</string>

@@ -115,10 +115,20 @@ public class UnifiedEditorActivity extends AppCompatActivity {
     // Editing states
     private boolean isDrawingMode = false;
     private boolean isCropMode = false;
+    private boolean isFilterMode = false;
     private AnnotationDrawingView.ToolMode currentToolMode = AnnotationDrawingView.ToolMode.PEN;
     private int currentDrawingColor = Color.parseColor("#48BB78"); // Mint Green
     private float currentStrokeWidth = 8f; // 8dp
     private int strokeWidthPreset = 1; // 0=Fine(4dp), 1=Medium(8dp), 2=Bold(16dp)
+
+    public enum DocumentFilter {
+        ORIGINAL,
+        MAGIC,
+        BW,
+        GRAYSCALE,
+        SHARPEN,
+        SCAN_ENHANCE
+    }
 
     private final Map<Integer, Point[]> savedCornersMap = new HashMap<>();
     private ExecutorService executor;
@@ -354,6 +364,7 @@ public class UnifiedEditorActivity extends AppCompatActivity {
         setupTopBar();
         setupBottomToolbar();
         setupAnnotationBar();
+        setupFilterBar();
         updateTitle();
         updateNavigationButtons();
         updateSwipeLock();
@@ -423,6 +434,8 @@ public class UnifiedEditorActivity extends AppCompatActivity {
                     exitDrawingMode();
                 } else if (isCropMode) {
                     exitCropMode();
+                } else if (isFilterMode) {
+                    exitFilterMode();
                 }
                 scrollToPage(position, true);
             }
@@ -434,12 +447,14 @@ public class UnifiedEditorActivity extends AppCompatActivity {
     private void onPageSwitched(int newPosition) {
         if (newPosition < 0 || newPosition >= pagePaths.size()) return;
 
-        // Auto-commit any active drawing before switching and dismiss annotation menu
+        // Auto-commit any active drawing before switching and dismiss annotation/filter menu
         if (isDrawingMode) {
             commitCurrentAnnotations();
             exitDrawingMode();
         } else if (isCropMode) {
             exitCropMode();
+        } else if (isFilterMode) {
+            exitFilterMode();
         }
 
         pageIndex = newPosition;
@@ -487,6 +502,10 @@ public class UnifiedEditorActivity extends AppCompatActivity {
                 if (isDrawingMode) {
                     commitCurrentAnnotations();
                     exitDrawingMode();
+                } else if (isCropMode) {
+                    exitCropMode();
+                } else if (isFilterMode) {
+                    exitFilterMode();
                 }
                 scrollToPage(pageIndex - 1, true);
             }
@@ -497,6 +516,10 @@ public class UnifiedEditorActivity extends AppCompatActivity {
                 if (isDrawingMode) {
                     commitCurrentAnnotations();
                     exitDrawingMode();
+                } else if (isCropMode) {
+                    exitCropMode();
+                } else if (isFilterMode) {
+                    exitFilterMode();
                 }
                 scrollToPage(pageIndex + 1, true);
             }
@@ -522,6 +545,9 @@ public class UnifiedEditorActivity extends AppCompatActivity {
 
         binding.btnSaveDocument.setOnClickListener(v -> {
             if (isBusy) return;
+            if (isFilterMode) {
+                exitFilterMode();
+            }
             if (isDrawingMode) {
                 commitCurrentAnnotations();
             } else if (isCropMode) {
@@ -536,6 +562,8 @@ public class UnifiedEditorActivity extends AppCompatActivity {
             public void handleOnBackPressed() {
                 if (binding.lensOverlay.getVisibility() == View.VISIBLE) {
                     dismissLensOverlay();
+                } else if (isFilterMode) {
+                    exitFilterMode();
                 } else if (isDrawingMode) {
                     commitCurrentAnnotations();
                     exitDrawingMode();
@@ -550,6 +578,7 @@ public class UnifiedEditorActivity extends AppCompatActivity {
 
     private void setupBottomToolbar() {
         binding.btnCrop.setOnClickListener(v -> onCropClicked());
+        binding.btnFilter.setOnClickListener(v -> onFilterClicked());
         binding.btnAnnotate.setOnClickListener(v -> onAnnotateClicked());
         binding.btnTextSign.setOnClickListener(v -> showTextOrSignatureChooser());
         binding.btnRotate.setOnClickListener(v -> rotateCurrentPage());
@@ -573,6 +602,9 @@ public class UnifiedEditorActivity extends AppCompatActivity {
     private void enterCropMode() {
         if (isBusy || isCropMode) return;
 
+        if (isFilterMode) {
+            exitFilterMode();
+        }
         if (isDrawingMode) {
             commitCurrentAnnotations();
             exitDrawingMode();
@@ -728,6 +760,9 @@ public class UnifiedEditorActivity extends AppCompatActivity {
     }
 
     private void enterDrawingMode() {
+        if (isFilterMode) {
+            exitFilterMode();
+        }
         if (isCropMode) {
             exitCropMode();
         }
@@ -901,6 +936,214 @@ public class UnifiedEditorActivity extends AppCompatActivity {
 
         PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.viewPagerPages, pageIndex);
         if (vh != null) vh.drawingOverlay.setStrokeColor(color);
+    }
+
+    // ── Filter Mode ──────────────────────────────────────────────────────
+
+    private void onFilterClicked() {
+        if (isBusy) return;
+
+        if (!isFilterMode) {
+            enterFilterMode();
+        } else {
+            exitFilterMode();
+        }
+    }
+
+    private void enterFilterMode() {
+        if (isDrawingMode) {
+            commitCurrentAnnotations();
+            exitDrawingMode();
+        }
+        if (isCropMode) {
+            exitCropMode();
+        }
+        isFilterMode = true;
+        binding.layoutFilterBar.setVisibility(View.VISIBLE);
+        binding.ivFilterIcon.setColorFilter(ContextCompat.getColor(this, R.color.accent_mint));
+        binding.tvFilterLabel.setTextColor(ContextCompat.getColor(this, R.color.accent_mint));
+    }
+
+    private void exitFilterMode() {
+        isFilterMode = false;
+        if (binding != null && binding.layoutFilterBar != null) {
+            binding.layoutFilterBar.setVisibility(View.GONE);
+            binding.ivFilterIcon.setColorFilter(ContextCompat.getColor(this, android.R.color.white));
+            binding.tvFilterLabel.setTextColor(ContextCompat.getColor(this, android.R.color.white));
+        }
+    }
+
+    private void setupFilterBar() {
+        binding.btnCloseFilter.setOnClickListener(v -> exitFilterMode());
+        binding.btnFilterOriginal.setOnClickListener(v -> applyFilter(DocumentFilter.ORIGINAL));
+        binding.btnFilterMagic.setOnClickListener(v -> applyFilter(DocumentFilter.MAGIC));
+        binding.btnFilterBW.setOnClickListener(v -> applyFilter(DocumentFilter.BW));
+        binding.btnFilterGrayscale.setOnClickListener(v -> applyFilter(DocumentFilter.GRAYSCALE));
+        binding.btnFilterSharpen.setOnClickListener(v -> applyFilter(DocumentFilter.SHARPEN));
+        binding.btnFilterScanEnhance.setOnClickListener(v -> applyFilter(DocumentFilter.SCAN_ENHANCE));
+    }
+
+    private void applyFilter(DocumentFilter filter) {
+        if (isBusy) return;
+        boolean applyToAll = binding.cbFilterApplyToAll != null && binding.cbFilterApplyToAll.isChecked();
+
+        if (applyToAll) {
+            applyFilterToAllPages(filter);
+        } else {
+            applyFilterToSinglePage(filter, pageIndex);
+        }
+    }
+
+    private void applyFilterToSinglePage(DocumentFilter filter, int targetIndex) {
+        if (targetIndex < 0 || targetIndex >= pagePaths.size()) return;
+        isBusy = true;
+
+        final String preFilterPath = pagePaths.get(targetIndex);
+        final String backupPath = backupFile(preFilterPath, "backup_filter_page_" + targetIndex);
+        final Point[] prevCorners = savedCornersMap.get(targetIndex);
+
+        executor.execute(() -> {
+            Bitmap base = getBaseBitmapForPage(targetIndex);
+            if (base == null) {
+                base = CacheManager.loadBitmap(preFilterPath);
+            }
+            if (base == null) {
+                runOnUiThread(() -> isBusy = false);
+                return;
+            }
+
+            Bitmap filtered = runFilterAlgorithm(filter, base);
+            base.recycle();
+
+            if (filtered == null) {
+                runOnUiThread(() -> isBusy = false);
+                return;
+            }
+
+            String newPath = CacheManager.saveTempBitmap(
+                    UnifiedEditorActivity.this, filtered, "page_" + targetIndex + "_filter_" + UUID.randomUUID().toString());
+            filtered.recycle();
+
+            runOnUiThread(() -> {
+                isBusy = false;
+                if (newPath != null) {
+                    pagePaths.set(targetIndex, newPath);
+                    pageAdapter.notifyItemChanged(targetIndex);
+                    thumbAdapter.notifyItemChanged(targetIndex);
+
+                    undoStack.push(new ImageTransformAction(targetIndex, backupPath, newPath, prevCorners, prevCorners));
+                    redoStack.clear();
+                    updateUndoButtonState();
+
+                    String filterName = getFilterName(filter);
+                    Toast.makeText(UnifiedEditorActivity.this, getString(R.string.filter_applied_single, filterName), Toast.LENGTH_SHORT).show();
+                }
+            });
+        });
+    }
+
+    private void applyFilterToAllPages(DocumentFilter filter) {
+        if (pagePaths.isEmpty()) return;
+        isBusy = true;
+
+        View progressView = getLayoutInflater().inflate(R.layout.dialog_progress, null);
+        TextView tvProgressMessage = progressView.findViewById(R.id.tvProgressMessage);
+        if (tvProgressMessage != null) {
+            tvProgressMessage.setText(R.string.crop_processing);
+        }
+
+        AlertDialog progressDialog = new MaterialAlertDialogBuilder(this)
+                .setView(progressView)
+                .setCancelable(false)
+                .show();
+
+        executor.execute(() -> {
+            for (int i = 0; i < pagePaths.size(); i++) {
+                Bitmap base = getBaseBitmapForPage(i);
+                if (base == null) {
+                    base = CacheManager.loadBitmap(pagePaths.get(i));
+                }
+                if (base != null) {
+                    Bitmap filtered = runFilterAlgorithm(filter, base);
+                    base.recycle();
+                    if (filtered != null) {
+                        String newPath = CacheManager.saveTempBitmap(
+                                UnifiedEditorActivity.this, filtered, "page_" + i + "_filter_" + UUID.randomUUID().toString());
+                        filtered.recycle();
+                        if (newPath != null) {
+                            pagePaths.set(i, newPath);
+                        }
+                    }
+                }
+            }
+
+            runOnUiThread(() -> {
+                isBusy = false;
+                if (progressDialog.isShowing()) {
+                    progressDialog.dismiss();
+                }
+                pageAdapter.notifyDataSetChanged();
+                thumbAdapter.notifyDataSetChanged();
+                Toast.makeText(UnifiedEditorActivity.this, getString(R.string.filter_applied_all, pagePaths.size()), Toast.LENGTH_SHORT).show();
+            });
+        });
+    }
+
+    private Bitmap runFilterAlgorithm(DocumentFilter filter, Bitmap src) {
+        if (src == null || src.isRecycled()) return null;
+        switch (filter) {
+            case MAGIC:
+                return ImageProcessor.applyCLAHE(src);
+            case BW:
+                return ImageProcessor.applyOtsuBW(src);
+            case GRAYSCALE:
+                return ImageProcessor.applyGrayscale(src);
+            case SHARPEN:
+                return ImageProcessor.applySharpen(src);
+            case SCAN_ENHANCE:
+                return ImageProcessor.applyScanEnhance(src);
+            case ORIGINAL:
+            default:
+                return ImageProcessor.applyOriginalFilter(src);
+        }
+    }
+
+    private Bitmap getBaseBitmapForPage(int targetIndex) {
+        if (targetIndex < 0 || targetIndex >= pagePaths.size()) return null;
+        String origPath = (targetIndex < originalPagePaths.size())
+                ? originalPagePaths.get(targetIndex) : pagePaths.get(targetIndex);
+        Bitmap base = CacheManager.loadBitmap(origPath);
+        if (base == null) {
+            base = CacheManager.loadBitmap(pagePaths.get(targetIndex));
+        }
+        if (base == null) return null;
+
+        Point[] corners = savedCornersMap.get(targetIndex);
+        if (corners != null && corners.length == 4) {
+            org.opencv.core.Point[] opencvCorners = CropPreviewActivity.toOpenCvPoints(corners);
+            Bitmap cropped = ImageProcessor.perspectiveWarp(base, opencvCorners);
+            base.recycle();
+            return cropped;
+        }
+        return base;
+    }
+
+    private String getFilterName(DocumentFilter filter) {
+        switch (filter) {
+            case MAGIC:
+                return getString(R.string.crop_filter_magic_color);
+            case BW:
+                return getString(R.string.crop_filter_bw_clean);
+            case GRAYSCALE:
+                return getString(R.string.crop_filter_grayscale);
+            case SHARPEN:
+                return getString(R.string.crop_filter_sharpen);
+            case SCAN_ENHANCE:
+                return getString(R.string.crop_filter_scan_enhance);
+            case ORIGINAL:
+            default:
+                return getString(R.string.crop_filter_original);
+        }
     }
 
     // ── Text & Signature Dialogs ─────────────────────────────────────────
@@ -1326,6 +1569,7 @@ public class UnifiedEditorActivity extends AppCompatActivity {
 
     private void rotateCurrentPage() {
         if (isBusy) return;
+        if (isFilterMode) exitFilterMode();
         if (isDrawingMode) commitCurrentAnnotations();
         if (isCropMode) exitCropMode();
 
@@ -1367,6 +1611,7 @@ public class UnifiedEditorActivity extends AppCompatActivity {
     }
 
     private void showDeleteConfirmation() {
+        if (isFilterMode) exitFilterMode();
         if (pagePaths.size() <= 1) {
             new MaterialAlertDialogBuilder(this)
                     .setTitle(R.string.review_delete_page_confirm)
@@ -1400,6 +1645,9 @@ public class UnifiedEditorActivity extends AppCompatActivity {
     // â”€â”€ OCR Extraction â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private void extractTextFromCurrentScan() {
+        if (isFilterMode) {
+            exitFilterMode();
+        }
         if (binding.lensOverlay.getVisibility() == View.VISIBLE) {
             dismissLensOverlay();
             return;
@@ -1568,6 +1816,8 @@ public class UnifiedEditorActivity extends AppCompatActivity {
                         exitDrawingMode();
                     } else if (isCropMode) {
                         exitCropMode();
+                    } else if (isFilterMode) {
+                        exitFilterMode();
                     }
                     scrollToPage(targetIndex, true);
                 } catch (NumberFormatException e) {

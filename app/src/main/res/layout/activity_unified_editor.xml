@@ -410,6 +410,165 @@
             </LinearLayout>
         </LinearLayout>
 
+        <!-- ── Filter Sub-Toolbar (Visible during filter mode) ─────────── -->
+        <LinearLayout
+            android:id="@+id/layoutFilterBar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginHorizontal="12dp"
+            android:layout_marginBottom="6dp"
+            android:background="@drawable/bg_annotation_bar"
+            android:elevation="6dp"
+            android:orientation="vertical"
+            android:paddingHorizontal="10dp"
+            android:paddingVertical="8dp"
+            android:visibility="gone">
+
+            <!-- Filter Header with Apply to All Checkbox and Done Button -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingBottom="4dp">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="FILTERS"
+                    android:textAppearance="@style/TextAppearance.AnScanner.SectionHeader"
+                    android:textColor="@color/text_muted"
+                    android:textSize="11sp" />
+
+                <com.google.android.material.checkbox.MaterialCheckBox
+                    android:id="@+id/cbFilterApplyToAll"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:minHeight="0dp"
+                    android:minWidth="0dp"
+                    android:text="@string/filter_apply_to_all"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="11sp"
+                    app:buttonTint="@color/accent_mint" />
+
+                <ImageButton
+                    android:id="@+id/btnCloseFilter"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
+                    android:layout_marginStart="4dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/cd_close"
+                    android:src="@drawable/ic_close"
+                    app:tint="@android:color/white" />
+            </LinearLayout>
+
+            <!-- Horizontal Filter Buttons Row -->
+            <HorizontalScrollView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:clipToPadding="false"
+                android:paddingVertical="2dp"
+                android:scrollbars="none">
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnFilterOriginal"
+                        style="@style/Widget.Material3.Button.TonalButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:minHeight="40dp"
+                        android:layout_marginEnd="@dimen/spacing_sm"
+                        android:insetTop="0dp"
+                        android:insetBottom="0dp"
+                        android:text="@string/crop_filter_original"
+                        android:textColor="@color/text_primary"
+                        android:textSize="12sp"
+                        app:backgroundTint="@color/surface_elevated"
+                        app:cornerRadius="16dp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnFilterMagic"
+                        style="@style/Widget.Material3.Button.TonalButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:minHeight="40dp"
+                        android:layout_marginEnd="@dimen/spacing_sm"
+                        android:insetTop="0dp"
+                        android:insetBottom="0dp"
+                        android:text="@string/crop_filter_magic_color"
+                        android:textColor="@color/text_primary"
+                        android:textSize="12sp"
+                        app:backgroundTint="@color/surface_elevated"
+                        app:cornerRadius="16dp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnFilterBW"
+                        style="@style/Widget.Material3.Button.TonalButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:minHeight="40dp"
+                        android:layout_marginEnd="@dimen/spacing_sm"
+                        android:insetTop="0dp"
+                        android:insetBottom="0dp"
+                        android:text="@string/crop_filter_bw_clean"
+                        android:textColor="@color/text_primary"
+                        android:textSize="12sp"
+                        app:backgroundTint="@color/surface_elevated"
+                        app:cornerRadius="16dp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnFilterGrayscale"
+                        style="@style/Widget.Material3.Button.TonalButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:minHeight="40dp"
+                        android:layout_marginEnd="@dimen/spacing_sm"
+                        android:insetTop="0dp"
+                        android:insetBottom="0dp"
+                        android:text="@string/crop_filter_grayscale"
+                        android:textColor="@color/text_primary"
+                        android:textSize="12sp"
+                        app:backgroundTint="@color/surface_elevated"
+                        app:cornerRadius="16dp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnFilterSharpen"
+                        style="@style/Widget.Material3.Button.TonalButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:minHeight="40dp"
+                        android:layout_marginEnd="@dimen/spacing_sm"
+                        android:insetTop="0dp"
+                        android:insetBottom="0dp"
+                        android:text="@string/crop_filter_sharpen"
+                        android:textColor="@color/text_primary"
+                        android:textSize="12sp"
+                        app:backgroundTint="@color/surface_elevated"
+                        app:cornerRadius="16dp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnFilterScanEnhance"
+                        style="@style/Widget.Material3.Button.TonalButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:minHeight="40dp"
+                        android:insetTop="0dp"
+                        android:insetBottom="0dp"
+                        android:text="@string/crop_filter_scan_enhance"
+                        android:textColor="@color/text_primary"
+                        android:textSize="12sp"
+                        app:backgroundTint="@color/surface_elevated"
+                        app:cornerRadius="16dp" />
+                </LinearLayout>
+            </HorizontalScrollView>
+        </LinearLayout>
+
         <!-- ── Horizontal Thumbnail Strip (Batch Scan / Multi-Page) ────── -->
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/rvThumbnails"
@@ -470,6 +629,39 @@
                         android:layout_height="wrap_content"
                         android:layout_marginTop="2dp"
                         android:text="@string/crop_action_crop"
+                        android:textAppearance="@style/TextAppearance.AnScanner.Label"
+                        android:textColor="@android:color/white"
+                        android:textSize="11sp" />
+                </LinearLayout>
+
+                <!-- 2. Filter Button -->
+                <LinearLayout
+                    android:id="@+id/btnFilter"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:background="?attr/selectableItemBackground"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:contentDescription="@string/crop_action_filter"
+                    android:gravity="center"
+                    android:orientation="vertical"
+                    android:paddingVertical="4dp">
+
+                    <ImageView
+                        android:id="@+id/ivFilterIcon"
+                        android:layout_width="@dimen/icon_md"
+                        android:layout_height="@dimen/icon_md"
+                        android:importantForAccessibility="no"
+                        android:src="@drawable/ic_filter"
+                        app:tint="@android:color/white" />
+
+                    <TextView
+                        android:id="@+id/tvFilterLabel"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:text="@string/crop_action_filter"
                         android:textAppearance="@style/TextAppearance.AnScanner.Label"
                         android:textColor="@android:color/white"
                         android:textSize="11sp" />
