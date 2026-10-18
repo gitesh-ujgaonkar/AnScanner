@@ -1,10 +1,8 @@
 package com.anscanner.app.ui.library;
 
-import android.Manifest;
 import android.content.ContentUris;
 import android.content.Context;
 import android.content.Intent;
-import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.pdf.PdfRenderer;
@@ -14,7 +12,6 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.os.ParcelFileDescriptor;
 import android.provider.MediaStore;
-import android.provider.Settings;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -63,26 +60,6 @@ public class DeviceDocsFragment extends Fragment implements DocumentListAdapter.
     private ExecutorService executor;
     private String currentSearchQuery = "";
 
-    private final ActivityResultLauncher<String[]> permissionLauncher =
-            registerForActivityResult(new ActivityResultContracts.RequestMultiplePermissions(), result -> {
-                if (hasStoragePermission()) {
-                    loadDevicePdfs(currentSearchQuery);
-                } else {
-                    boolean anyRationale = false;
-                    for (String perm : getRequiredPermissions()) {
-                        if (shouldShowRequestPermissionRationale(perm)) {
-                            anyRationale = true;
-                            break;
-                        }
-                    }
-                    if (anyRationale) {
-                        showPermissionRationaleDialog();
-                    } else {
-                        showSettingsDialog();
-                    }
-                }
-            });
-
     private final ActivityResultLauncher<String[]> openDocumentLauncher =
             registerForActivityResult(new ActivityResultContracts.OpenDocument(), uri -> {
                 if (uri != null && isAdded()) {
@@ -119,34 +96,21 @@ public class DeviceDocsFragment extends Fragment implements DocumentListAdapter.
         binding.swipeRefreshLayout.setProgressBackgroundColorSchemeColor(
                 ContextCompat.getColor(requireContext(), R.color.surface_card));
         binding.swipeRefreshLayout.setOnRefreshListener(() -> {
-            if (hasStoragePermission()) {
-                loadDevicePdfs(currentSearchQuery);
-            } else {
-                binding.swipeRefreshLayout.setRefreshing(false);
-                checkAndRequestStoragePermission();
-            }
+            loadDevicePdfs(currentSearchQuery);
         });
 
-        if (!hasStoragePermission()) {
-            checkAndRequestStoragePermission();
-        } else {
-            loadDevicePdfs(currentSearchQuery);
-        }
+        loadDevicePdfs(currentSearchQuery);
     }
 
     @Override
     public void onResume() {
         super.onResume();
-        if (hasStoragePermission()) {
-            loadDevicePdfs(currentSearchQuery);
-        } else {
-            showPermissionRequiredUi();
-        }
+        loadDevicePdfs(currentSearchQuery);
     }
 
     public void setFilterQuery(String query) {
         this.currentSearchQuery = query != null ? query : "";
-        if (isAdded() && hasStoragePermission()) {
+        if (isAdded()) {
             loadDevicePdfs(currentSearchQuery);
         }
     }
@@ -158,89 +122,7 @@ public class DeviceDocsFragment extends Fragment implements DocumentListAdapter.
     }
 
     public boolean hasStoragePermission() {
-        Context context = getContext();
-        if (context == null) return false;
-
-        // On Android 13+ (API 33+), public files can be queried via MediaStore.Files without broad storage permissions.
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            return true;
-        } else {
-            return ContextCompat.checkSelfPermission(context, Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED;
-        }
-    }
-
-    public String[] getRequiredPermissions() {
-        return new String[]{Manifest.permission.READ_EXTERNAL_STORAGE};
-    }
-
-    private void checkAndRequestStoragePermission() {
-        if (hasStoragePermission()) {
-            loadDevicePdfs(currentSearchQuery);
-            return;
-        }
-
-        boolean shouldShowRationale = false;
-        for (String perm : getRequiredPermissions()) {
-            if (shouldShowRequestPermissionRationale(perm)) {
-                shouldShowRationale = true;
-                break;
-            }
-        }
-
-        if (shouldShowRationale) {
-            showPermissionRationaleDialog();
-        } else {
-            permissionLauncher.launch(getRequiredPermissions());
-        }
-    }
-
-    private void showPermissionRationaleDialog() {
-        if (!isAdded()) return;
-
-        new MaterialAlertDialogBuilder(requireContext())
-                .setTitle(R.string.permission_storage_rationale_title)
-                .setMessage(R.string.permission_storage_rationale_message)
-                .setPositiveButton(R.string.permission_grant, (dialog, which) -> {
-                    permissionLauncher.launch(getRequiredPermissions());
-                })
-                .setNegativeButton(R.string.action_cancel, (dialog, which) -> {
-                    showPermissionRequiredUi();
-                })
-                .show();
-    }
-
-    private void showSettingsDialog() {
-        if (!isAdded()) return;
-
-        new MaterialAlertDialogBuilder(requireContext())
-                .setTitle(R.string.permission_storage_rationale_title)
-                .setMessage(R.string.permission_storage_rationale_message)
-                .setPositiveButton(R.string.permission_open_settings, (dialog, which) -> {
-                    try {
-                        Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
-                        Uri uri = Uri.fromParts("package", requireContext().getPackageName(), null);
-                        intent.setData(uri);
-                        startActivity(intent);
-                    } catch (Exception ex) {
-                        Log.e(TAG, "Failed to launch app details settings", ex);
-                    }
-                })
-                .setNegativeButton(R.string.action_cancel, (dialog, which) -> {
-                    showPermissionRequiredUi();
-                })
-                .show();
-    }
-
-    private void showPermissionRequiredUi() {
-        if (binding == null) return;
-        adapter.updateItems(new ArrayList<>());
-        binding.tvEmptyTitle.setText(R.string.permission_storage_title);
-        binding.tvEmptySubtitle.setText(R.string.permission_storage_desc);
-        binding.btnEmptyAction.setText(R.string.permission_grant);
-        binding.btnEmptyAction.setVisibility(View.VISIBLE);
-        binding.btnEmptyAction.setOnClickListener(v -> checkAndRequestStoragePermission());
-        binding.emptyState.setVisibility(View.VISIBLE);
-        binding.rvDocuments.setVisibility(View.GONE);
+        return true;
     }
 
     private void openDocumentPicker() {
@@ -253,11 +135,6 @@ public class DeviceDocsFragment extends Fragment implements DocumentListAdapter.
     }
 
     private void loadDevicePdfs(String query) {
-        if (!hasStoragePermission()) {
-            showPermissionRequiredUi();
-            return;
-        }
-
         if (executor == null || executor.isShutdown()) return;
 
         executor.execute(() -> {
@@ -512,9 +389,12 @@ public class DeviceDocsFragment extends Fragment implements DocumentListAdapter.
                     binding.btnEmptyAction.setOnClickListener(v -> openDocumentPicker());
                     binding.emptyState.setVisibility(View.VISIBLE);
                     binding.rvDocuments.setVisibility(View.GONE);
+                    binding.btnBrowseBottom.setVisibility(View.GONE);
                 } else {
                     binding.emptyState.setVisibility(View.GONE);
                     binding.rvDocuments.setVisibility(View.VISIBLE);
+                    binding.btnBrowseBottom.setVisibility(View.VISIBLE);
+                    binding.btnBrowseBottom.setOnClickListener(v -> openDocumentPicker());
                 }
             });
 
@@ -562,6 +442,15 @@ public class DeviceDocsFragment extends Fragment implements DocumentListAdapter.
         Uri uri = document.fileUri != null ? Uri.parse(document.fileUri) : null;
         Intent shareIntent = StorageHelper.createShareIntent(uri, "application/pdf", document.title);
         startActivity(Intent.createChooser(shareIntent, "Share " + document.title));
+    }
+
+    @Override
+    public void onDocumentExportImages(DocumentEntity document) {
+        if (document == null || document.fileUri == null) return;
+        Uri uri = Uri.parse(document.fileUri);
+        com.anscanner.app.ui.export.ExportImagesBottomSheet sheet =
+                com.anscanner.app.ui.export.ExportImagesBottomSheet.newInstance(uri, document.title);
+        sheet.show(getChildFragmentManager(), "ExportImagesBottomSheet");
     }
 
     @Override
@@ -615,6 +504,7 @@ public class DeviceDocsFragment extends Fragment implements DocumentListAdapter.
                     binding.btnEmptyAction.setOnClickListener(v -> openDocumentPicker());
                     binding.emptyState.setVisibility(View.VISIBLE);
                     binding.rvDocuments.setVisibility(View.GONE);
+                    binding.btnBrowseBottom.setVisibility(View.GONE);
                 }
                 Toast.makeText(requireContext(), R.string.library_deleted_permanently, Toast.LENGTH_SHORT).show();
             });

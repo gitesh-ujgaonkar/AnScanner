@@ -76,12 +76,12 @@ public class ThumbnailStripAdapter extends RecyclerView.Adapter<ThumbnailStripAd
         });
 
         String path = pagePaths.get(position);
-        final int targetPos = position;
+        holder.itemView.setTag(path);
         executor.execute(() -> {
             Bitmap bmp = CacheManager.loadBitmap(path);
             if (bmp != null) {
                 mainHandler.post(() -> {
-                    if (holder.getBindingAdapterPosition() == targetPos) {
+                    if (path.equals(holder.itemView.getTag())) {
                         holder.binding.ivThumbnail.setImageBitmap(bmp);
                     }
                 });

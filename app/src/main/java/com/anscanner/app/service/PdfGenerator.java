@@ -5,9 +5,11 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Paint;
+import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.pdf.PdfDocument;
 import android.graphics.pdf.PdfRenderer;
+import android.media.ExifInterface;
 import android.net.Uri;
 import android.os.ParcelFileDescriptor;
 import android.util.Log;
@@ -37,23 +39,66 @@ public final class PdfGenerator {
 
     private static final String TAG = "PdfGenerator";
 
-    /** A4 page dimensions in PDF points (72 points per inch). */
+    /** Standard A4 page dimensions in PDF points (72 points per inch). */
     public static final int PAGE_WIDTH_A4 = 595;
     public static final int PAGE_HEIGHT_A4 = 842;
 
-    /** Margin in PDF points around each page. */
-    private static final float PAGE_MARGIN = 20f;
+    /** Standard US Letter page dimensions in PDF points (72 points per inch). */
+    public static final int PAGE_WIDTH_LETTER = 612;
+    public static final int PAGE_HEIGHT_LETTER = 792;
+
+    /** Default fallback DPI for images when EXIF metadata is missing or non-positive. */
+    public static final float DEFAULT_DPI = 72.0f;
+
+    /** Margin in PDF points around each page (used when explicit margins are desired). */
+    public static final float PAGE_MARGIN = 20f;
+
+    /**
+     * Page format specification for PDF generation.
+     */
+    public enum PageFormat {
+        /** Matches each page's dimensions to the input image's native aspect ratio and dimensions (zero pillarboxing/letterboxing). */
+        FIT_IMAGE,
+        /** Standard ISO A4 dimensions (595 x 842 pt). */
+        A4,
+        /** Standard US Letter dimensions (612 x 792 pt). */
+        LETTER
+    }
+
+    /**
+     * Fit mode when a fixed page format (such as A4 or LETTER) is chosen.
+     */
+    public enum PageFitMode {
+        /** Proportional scale with centering within page bounds (may have side bars if aspect ratios differ). */
+        FIT_PAGE,
+        /** Proportional scale covering the full page bounds (crop to fill, zero white side bars). */
+        FILL_PAGE
+    }
+
+    /**
+     * Calculated layout dimensions and render bounds for a PDF page.
+     */
+    public static final class PageLayout {
+        public final int pageWidth;
+        public final int pageHeight;
+        public final Rect srcRect;   // null if entire source bitmap is drawn
+        public final RectF destRect;
+
+        public PageLayout(int pageWidth, int pageHeight, Rect srcRect, RectF destRect) {
+            this.pageWidth = pageWidth;
+            this.pageHeight = pageHeight;
+            this.srcRect = srcRect;
+            this.destRect = destRect;
+        }
+    }
 
     private PdfGenerator() {
         // Static utility class
     }
 
     /**
-     * Creates a multi-page PDF from a list of page image file paths with the specified JPEG quality.
-     *
-     * <p>When drawing the image to the canvas, the bitmap is first compressed to JPEG at the specified
-     * quality, decoded back to a temporary Bitmap, drawn to the canvas, and both bitmaps are strictly
-     * recycled immediately after drawing.</p>
+     * Creates a multi-page PDF from a list of page image file paths using the default
+     * {@link PageFormat#FIT_IMAGE} mode (zero pillarboxing/letterboxing) and standard fit.
      *
      * @param pagePaths  Ordered list of absolute file paths to page JPEG images.
      * @param outputFile Destination file for the PDF.
@@ -64,8 +109,60 @@ public final class PdfGenerator {
     public static long createPdfFromPages(List<String> pagePaths,
                                           File outputFile,
                                           int quality) throws IOException {
+        return createPdfFromPages(pagePaths, outputFile, quality, PageFormat.FIT_IMAGE, PageFitMode.FIT_PAGE);
+    }
+
+    /**
+     * Backward-compatible overload for boolean highQuality using {@link PageFormat#FIT_IMAGE}.
+     */
+    public static long createPdfFromPages(List<String> pagePaths,
+                                          File outputFile,
+                                          boolean highQuality) throws IOException {
+        return createPdfFromPages(pagePaths, outputFile, highQuality ? 100 : 60, PageFormat.FIT_IMAGE, PageFitMode.FIT_PAGE);
+    }
+
+    /**
+     * Creates a multi-page PDF with a specific {@link PageFormat} using default {@link PageFitMode#FIT_PAGE}.
+     */
+    public static long createPdfFromPages(List<String> pagePaths,
+                                          File outputFile,
+                                          int quality,
+                                          PageFormat pageFormat) throws IOException {
+        return createPdfFromPages(pagePaths, outputFile, quality, pageFormat, PageFitMode.FIT_PAGE);
+    }
+
+    /**
+     * Creates a multi-page PDF from a list of page image file paths with configurable page format and fit mode.
+     *
+     * <p>When {@link PageFormat#FIT_IMAGE} is used, each page dynamically sizes its PDF canvas bounds
+     * to match the source image's aspect ratio and dimensions:
+     * <pre>
+     *   page_width  = image_width  * (72 / dpi)
+     *   page_height = image_height * (72 / dpi)
+     * </pre>
+     * and renders edge-to-edge with 0 margin padding, avoiding any white pillarboxing or letterboxing.</p>
+     *
+     * @param pagePaths   Ordered list of absolute file paths to page JPEG images.
+     * @param outputFile  Destination file for the PDF.
+     * @param quality     Compression quality (1-100), e.g. 100 for High, 60 for Medium, 30 for Low.
+     * @param pageFormat  Page layout format (FIT_IMAGE, A4, LETTER).
+     * @param pageFitMode Fitting mode for fixed formats (FIT_PAGE, FILL_PAGE).
+     * @return The file size in bytes, or -1 on failure.
+     * @throws IOException If file writing fails.
+     */
+    public static long createPdfFromPages(List<String> pagePaths,
+                                          File outputFile,
+                                          int quality,
+                                          PageFormat pageFormat,
+                                          PageFitMode pageFitMode) throws IOException {
         if (pagePaths == null || pagePaths.isEmpty()) {
             throw new IllegalArgumentException("Page paths list cannot be empty");
+        }
+        if (pageFormat == null) {
+            pageFormat = PageFormat.FIT_IMAGE;
+        }
+        if (pageFitMode == null) {
+            pageFitMode = PageFitMode.FIT_PAGE;
         }
 
         PdfDocument document = new PdfDocument();
@@ -85,20 +182,16 @@ public final class PdfGenerator {
 
                 Bitmap tempBitmap = null;
                 try {
-                    // Configure page
+                    float dpi = getImageDpi(pagePath);
+                    PageLayout layout = computePageLayout(bitmap.getWidth(), bitmap.getHeight(), dpi, pageFormat, pageFitMode);
+
+                    // Configure page with per-page independent dynamic dimensions
                     PdfDocument.PageInfo pageInfo = new PdfDocument.PageInfo.Builder(
-                            PAGE_WIDTH_A4, PAGE_HEIGHT_A4, pageNumber
+                            layout.pageWidth, layout.pageHeight, pageNumber
                     ).create();
 
                     PdfDocument.Page page = document.startPage(pageInfo);
                     Canvas canvas = page.getCanvas();
-
-                    // Calculate aspect-ratio-fit rectangle with margins
-                    RectF destRect = calculateFitRect(
-                            bitmap.getWidth(), bitmap.getHeight(),
-                            PAGE_WIDTH_A4, PAGE_HEIGHT_A4,
-                            PAGE_MARGIN
-                    );
 
                     // 1. First compress the Bitmap: bitmap.compress(Bitmap.CompressFormat.JPEG, quality, outputStream)
                     ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
@@ -111,12 +204,14 @@ public final class PdfGenerator {
                     decodeOpts.inDither = true;
                     tempBitmap = BitmapFactory.decodeByteArray(compressedBytes, 0, compressedBytes.length, decodeOpts);
 
-                    // 3. Draw it to the PDF canvas
-                    if (tempBitmap != null) {
-                        canvas.drawBitmap(tempBitmap, null, destRect, paint);
-                    } else {
-                        canvas.drawBitmap(bitmap, null, destRect, paint);
+                    Bitmap drawBitmap = (tempBitmap != null) ? tempBitmap : bitmap;
+                    Rect srcRect = layout.srcRect;
+                    if (srcRect != null && (drawBitmap.getWidth() != bitmap.getWidth() || drawBitmap.getHeight() != bitmap.getHeight())) {
+                        srcRect = calculateFillSrcRect(drawBitmap.getWidth(), drawBitmap.getHeight(), layout.pageWidth, layout.pageHeight);
                     }
+
+                    // 3. Draw it to the PDF canvas (edge-to-edge for FIT_IMAGE and FILL_PAGE)
+                    canvas.drawBitmap(drawBitmap, srcRect, layout.destRect, paint);
 
                     document.finishPage(page);
                     pageNumber++;
@@ -140,21 +235,13 @@ public final class PdfGenerator {
 
             long fileSize = outputFile.length();
             Log.i(TAG, "PDF generated: " + outputFile.getAbsolutePath() +
-                    " (" + (pageNumber - 1) + " pages, " + fileSize + " bytes, quality=" + quality + ")");
+                    " (" + (pageNumber - 1) + " pages, " + fileSize + " bytes, quality=" + quality +
+                    ", format=" + pageFormat + ", fitMode=" + pageFitMode + ")");
             return fileSize;
 
         } finally {
             document.close();
         }
-    }
-
-    /**
-     * Backward-compatible overload for boolean highQuality.
-     */
-    public static long createPdfFromPages(List<String> pagePaths,
-                                          File outputFile,
-                                          boolean highQuality) throws IOException {
-        return createPdfFromPages(pagePaths, outputFile, highQuality ? 100 : 60);
     }
 
     /**
@@ -203,13 +290,31 @@ public final class PdfGenerator {
 
     /**
      * Creates a PDF from page image paths using an iterative binary search loop to match
-     * the requested target file size.
+     * the requested target file size, defaulting to {@link PageFormat#FIT_IMAGE}.
      */
     public static long createPdfToTargetSize(List<String> pagePaths,
                                              File outputFile,
                                              long targetSizeBytes) throws IOException {
+        return createPdfToTargetSize(pagePaths, outputFile, targetSizeBytes, PageFormat.FIT_IMAGE, PageFitMode.FIT_PAGE);
+    }
+
+    /**
+     * Creates a PDF from page image paths using an iterative binary search loop to match
+     * the requested target file size with configurable {@link PageFormat} and {@link PageFitMode}.
+     */
+    public static long createPdfToTargetSize(List<String> pagePaths,
+                                             File outputFile,
+                                             long targetSizeBytes,
+                                             PageFormat pageFormat,
+                                             PageFitMode pageFitMode) throws IOException {
         if (pagePaths == null || pagePaths.isEmpty()) {
             throw new IllegalArgumentException("Page paths list cannot be empty");
+        }
+        if (pageFormat == null) {
+            pageFormat = PageFormat.FIT_IMAGE;
+        }
+        if (pageFitMode == null) {
+            pageFitMode = PageFitMode.FIT_PAGE;
         }
 
         PdfDocument document = new PdfDocument();
@@ -230,18 +335,15 @@ public final class PdfGenerator {
 
                 Bitmap tempBitmap = null;
                 try {
+                    float dpi = getImageDpi(pagePath);
+                    PageLayout layout = computePageLayout(bitmap.getWidth(), bitmap.getHeight(), dpi, pageFormat, pageFitMode);
+
                     PdfDocument.PageInfo pageInfo = new PdfDocument.PageInfo.Builder(
-                            PAGE_WIDTH_A4, PAGE_HEIGHT_A4, pageNumber
+                            layout.pageWidth, layout.pageHeight, pageNumber
                     ).create();
 
                     PdfDocument.Page page = document.startPage(pageInfo);
                     Canvas canvas = page.getCanvas();
-
-                    RectF destRect = calculateFitRect(
-                            bitmap.getWidth(), bitmap.getHeight(),
-                            PAGE_WIDTH_A4, PAGE_HEIGHT_A4,
-                            PAGE_MARGIN
-                    );
 
                     // Iterative binary search loop
                     int low = 5;
@@ -282,11 +384,13 @@ public final class PdfGenerator {
                         tempBitmap = BitmapFactory.decodeByteArray(bestBytes, 0, bestBytes.length, decodeOpts);
                     }
 
-                    if (tempBitmap != null) {
-                        canvas.drawBitmap(tempBitmap, null, destRect, paint);
-                    } else {
-                        canvas.drawBitmap(bitmap, null, destRect, paint);
+                    Bitmap drawBitmap = (tempBitmap != null) ? tempBitmap : bitmap;
+                    Rect srcRect = layout.srcRect;
+                    if (srcRect != null && (drawBitmap.getWidth() != bitmap.getWidth() || drawBitmap.getHeight() != bitmap.getHeight())) {
+                        srcRect = calculateFillSrcRect(drawBitmap.getWidth(), drawBitmap.getHeight(), layout.pageWidth, layout.pageHeight);
                     }
+
+                    canvas.drawBitmap(drawBitmap, srcRect, layout.destRect, paint);
 
                     document.finishPage(page);
                     pageNumber++;
@@ -371,14 +475,152 @@ public final class PdfGenerator {
     }
 
     /**
+     * Computes the page dimensions, source crop rectangle, and destination canvas rectangle
+     * for an individual image according to the selected {@link PageFormat} and {@link PageFitMode}.
+     *
+     * @param imgWidth  Width of the source image in pixels.
+     * @param imgHeight Height of the source image in pixels.
+     * @param dpi       DPI of the source image (or fallback DPI).
+     * @param format    Page format (defaults to {@link PageFormat#FIT_IMAGE}).
+     * @param fitMode   Fit mode (defaults to {@link PageFitMode#FIT_PAGE}).
+     * @return Computed {@link PageLayout}.
+     */
+    public static PageLayout computePageLayout(int imgWidth, int imgHeight,
+                                               float dpi,
+                                               PageFormat format,
+                                               PageFitMode fitMode) {
+        if (format == null) {
+            format = PageFormat.FIT_IMAGE;
+        }
+        if (fitMode == null) {
+            fitMode = PageFitMode.FIT_PAGE;
+        }
+
+        if (format == PageFormat.FIT_IMAGE) {
+            if (dpi <= 0) {
+                dpi = DEFAULT_DPI;
+            }
+            float scale = 72.0f / dpi;
+            int pageWidth = Math.max(1, Math.round(imgWidth * scale));
+            int pageHeight = Math.max(1, Math.round(imgHeight * scale));
+            RectF destRect = new RectF(0, 0, pageWidth, pageHeight);
+            return new PageLayout(pageWidth, pageHeight, null, destRect);
+        }
+
+        // Standard fixed formats (A4 or LETTER)
+        int stdW = (format == PageFormat.LETTER) ? PAGE_WIDTH_LETTER : PAGE_WIDTH_A4;
+        int stdH = (format == PageFormat.LETTER) ? PAGE_HEIGHT_LETTER : PAGE_HEIGHT_A4;
+
+        // Auto-orient page to match image aspect ratio
+        boolean isLandscape = imgWidth > imgHeight;
+        int pageWidth = isLandscape ? stdH : stdW;
+        int pageHeight = isLandscape ? stdW : stdH;
+
+        if (fitMode == PageFitMode.FILL_PAGE) {
+            Rect srcRect = calculateFillSrcRect(imgWidth, imgHeight, pageWidth, pageHeight);
+            RectF destRect = new RectF(0, 0, pageWidth, pageHeight);
+            return new PageLayout(pageWidth, pageHeight, srcRect, destRect);
+        } else {
+            // FIT_PAGE: Proportional scale with centering, zero margin
+            RectF destRect = calculateFitRect(imgWidth, imgHeight, pageWidth, pageHeight, 0f);
+            return new PageLayout(pageWidth, pageHeight, null, destRect);
+        }
+    }
+
+    /**
+     * Calculates the center-crop bounding box [left, top, right, bottom] on the input image
+     * to fill the target aspect ratio without distortion or side bars.
+     *
+     * @return An integer array containing [left, top, right, bottom].
+     */
+    public static int[] calculateFillCropBounds(int srcWidth, int srcHeight, int targetWidth, int targetHeight) {
+        if (srcWidth <= 0 || srcHeight <= 0 || targetWidth <= 0 || targetHeight <= 0) {
+            return new int[]{0, 0, Math.max(1, srcWidth), Math.max(1, srcHeight)};
+        }
+        float srcAspect = (float) srcWidth / (float) srcHeight;
+        float targetAspect = (float) targetWidth / (float) targetHeight;
+
+        if (srcAspect > targetAspect) {
+            // Source is wider than target aspect -> crop left and right
+            int cropWidth = Math.max(1, Math.round(srcHeight * targetAspect));
+            int left = Math.max(0, (srcWidth - cropWidth) / 2);
+            return new int[]{left, 0, Math.min(srcWidth, left + cropWidth), srcHeight};
+        } else {
+            // Source is taller than target aspect -> crop top and bottom
+            int cropHeight = Math.max(1, Math.round(srcWidth / targetAspect));
+            int top = Math.max(0, (srcHeight - cropHeight) / 2);
+            return new int[]{0, top, srcWidth, Math.min(srcHeight, top + cropHeight)};
+        }
+    }
+
+    /**
+     * Calculates the center-crop source rectangle on the input image to fill the target
+     * aspect ratio without distortion or side bars.
+     */
+    public static Rect calculateFillSrcRect(int srcWidth, int srcHeight, int targetWidth, int targetHeight) {
+        int[] b = calculateFillCropBounds(srcWidth, srcHeight, targetWidth, targetHeight);
+        return new Rect(b[0], b[1], b[2], b[3]);
+    }
+
+    /**
+     * Safely extracts horizontal DPI from image EXIF metadata, falling back to {@link #DEFAULT_DPI} (72 DPI)
+     * if EXIF metadata is missing, non-positive, or unreadable.
+     *
+     * @param imagePath Absolute path to the image file.
+     * @return DPI in dots-per-inch, or 72.0f if not present or invalid.
+     */
+    public static float getImageDpi(String imagePath) {
+        if (imagePath == null) {
+            return DEFAULT_DPI;
+        }
+        try {
+            ExifInterface exif = new ExifInterface(imagePath);
+            double xRes = exif.getAttributeDouble(ExifInterface.TAG_X_RESOLUTION, 0.0);
+            if (xRes <= 0.0) {
+                String xResStr = exif.getAttribute(ExifInterface.TAG_X_RESOLUTION);
+                if (xResStr != null && !xResStr.trim().isEmpty()) {
+                    xRes = parseRational(xResStr);
+                }
+            }
+            if (xRes > 0.0) {
+                int unit = exif.getAttributeInt(ExifInterface.TAG_RESOLUTION_UNIT, 2); // 2 = inches, 3 = cm
+                if (unit == 3) {
+                    xRes = xRes * 2.54; // Convert dots/cm to dots/inch
+                }
+                return (float) xRes;
+            }
+        } catch (Throwable t) {
+            Log.w(TAG, "Could not extract EXIF DPI from " + imagePath + ", using fallback " + DEFAULT_DPI + ": " + t.getMessage());
+        }
+        return DEFAULT_DPI;
+    }
+
+    private static double parseRational(String rationalStr) {
+        try {
+            int slashIndex = rationalStr.indexOf('/');
+            if (slashIndex > 0) {
+                double num = Double.parseDouble(rationalStr.substring(0, slashIndex).trim());
+                double den = Double.parseDouble(rationalStr.substring(slashIndex + 1).trim());
+                if (den != 0) {
+                    return num / den;
+                }
+            } else {
+                return Double.parseDouble(rationalStr.trim());
+            }
+        } catch (Exception ignored) {
+        }
+        return 0.0;
+    }
+
+    /**
      * Calculates a destination rectangle that preserves the source aspect ratio
      * within the page dimensions minus margins.
      */
-    private static RectF calculateFitRect(int srcWidth, int srcHeight,
-                                           int pageWidth, int pageHeight,
-                                           float margin) {
-        float availableWidth = pageWidth - (2 * margin);
-        float availableHeight = pageHeight - (2 * margin);
+    public static RectF calculateFitRect(int srcWidth, int srcHeight,
+                                          int pageWidth, int pageHeight,
+                                          float margin) {
+        float availableWidth = Math.max(1f, pageWidth - (2 * margin));
+        float availableHeight = Math.max(1f, pageHeight - (2 * margin));
 
         float srcAspect = (float) srcWidth / srcHeight;
         float destAspect = availableWidth / availableHeight;

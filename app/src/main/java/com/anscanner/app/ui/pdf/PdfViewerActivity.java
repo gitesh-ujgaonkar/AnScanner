@@ -6,6 +6,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.res.ColorStateList;
+import android.content.res.Configuration;
 import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -14,15 +15,22 @@ import android.graphics.RectF;
 import android.graphics.pdf.PdfRenderer;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.ParcelFileDescriptor;
 import android.print.PrintAttributes;
 import android.print.PrintManager;
 import android.provider.OpenableColumns;
 import android.text.InputType;
+import android.graphics.drawable.Drawable;
+import android.graphics.drawable.InsetDrawable;
 import android.util.Log;
+import android.util.TypedValue;
+import android.view.Gravity;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
+import android.view.ViewPropertyAnimator;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
 import android.widget.FrameLayout;
@@ -33,26 +41,36 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.widget.PopupMenu;
 import androidx.core.content.ContextCompat;
+import androidx.core.graphics.drawable.DrawableCompat;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
 import androidx.print.PrintHelper;
 
 import com.anscanner.app.R;
 import com.anscanner.app.databinding.ActivityPdfViewerBinding;
+import com.anscanner.app.model.ocr.OcrPage;
 import com.anscanner.app.service.CacheManager;
 import com.anscanner.app.service.OcrHelper;
+import com.anscanner.app.service.StorageHelper;
 import com.anscanner.app.ui.crop.CropPreviewActivity;
 import com.anscanner.app.ui.custom.OcrTextOverlayView;
 import com.anscanner.app.ui.editor.UnifiedEditorActivity;
+import com.anscanner.app.util.InsetsHelper;
 import com.anscanner.app.util.PdfRendererHelper;
 import com.github.barteksc.pdfviewer.PDFView;
 import com.github.barteksc.pdfviewer.scroll.DefaultScrollHandle;
 import com.github.barteksc.pdfviewer.util.FitPolicy;
+import com.github.chrisbanes.photoview.PhotoView;
 import com.google.android.gms.ads.AdRequest;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
-import com.google.android.material.slider.Slider;
 import com.google.android.material.textfield.TextInputEditText;
 import com.google.android.material.textfield.TextInputLayout;
 import com.google.mlkit.vision.text.Text;
+import com.tom_roush.pdfbox.android.PDFBoxResourceLoader;
+import com.tom_roush.pdfbox.pdmodel.PDDocument;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -71,7 +89,7 @@ import java.util.UUID;
  *   <li>Production standard PDFium-backed continuous document viewport with global zoom and pan.</li>
  *   <li>Seamless toggle support between Continuous Vertical and Continuous Horizontal flow.</li>
  *   <li>Interactive in-place OCR text overlay with direct word selection & copy bar.</li>
- *   <li>Native {@link com.github.chrisbanes.photoview.PhotoView} pinch-to-zoom for JPG scans.</li>
+ *   <li>Native {@link PhotoView} pinch-to-zoom for JPG scans.</li>
  *   <li>Seamless launch of {@link UnifiedEditorActivity} for multi-page editing and annotations.</li>
  *   <li>Native system printing via {@link PrintManager} or {@link PrintHelper}.</li>
  * </ul>
@@ -107,14 +125,17 @@ public class PdfViewerActivity extends AppCompatActivity {
     private int currentOcrPageIndex = 0;
     private Bitmap currentOcrBitmap;
 
-    // Scrubber slider state
-    private boolean isScrubbing = false;
+    // Floating page indicator state & auto-hide controller
+    private static final long INDICATOR_HIDE_DELAY_MS = 1500L;
+    private final Handler indicatorHandler = new Handler(Looper.getMainLooper());
+    private final Runnable hideIndicatorRunnable = this::fadeOutPageIndicator;
+    private ViewPropertyAnimator indicatorAnimator = null;
 
     // Landscape fullscreen optimization state
     private boolean isLandscapeFullscreen = false;
 
     private boolean isLandscape() {
-        return getResources().getConfiguration().orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE;
+        return getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE;
     }
 
     private void toggleLandscapeFullscreen() {
@@ -128,33 +149,27 @@ public class PdfViewerActivity extends AppCompatActivity {
         if (fullscreen && isLandscape()) {
             binding.topBar.setVisibility(View.GONE);
             binding.topBarDivider.setVisibility(View.GONE);
-            if (binding.layoutPageScrubber != null) {
-                binding.layoutPageScrubber.setVisibility(View.GONE);
-            }
-            androidx.core.view.WindowInsetsControllerCompat controller =
-                    androidx.core.view.WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
+            WindowInsetsControllerCompat controller =
+                    WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
             if (controller != null) {
-                controller.setSystemBarsBehavior(androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
-                controller.hide(androidx.core.view.WindowInsetsCompat.Type.systemBars());
+                controller.setSystemBarsBehavior(WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+                controller.hide(WindowInsetsCompat.Type.systemBars());
             }
         } else {
             binding.topBar.setVisibility(View.VISIBLE);
             binding.topBarDivider.setVisibility(View.VISIBLE);
-            if (pageCount > 1 && !isAnnotationMode && !isOcrActive() && binding.layoutPageScrubber != null) {
-                binding.layoutPageScrubber.setVisibility(View.VISIBLE);
-            }
-            androidx.core.view.WindowInsetsControllerCompat controller =
-                    androidx.core.view.WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
+            WindowInsetsControllerCompat controller =
+                    WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
             if (controller != null) {
-                controller.show(androidx.core.view.WindowInsetsCompat.Type.systemBars());
+                controller.show(WindowInsetsCompat.Type.systemBars());
             }
         }
     }
 
     @Override
-    public void onConfigurationChanged(@NonNull android.content.res.Configuration newConfig) {
+    public void onConfigurationChanged(@NonNull Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
-        boolean isLandscape = newConfig.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE;
+        boolean isLandscape = newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE;
         if (isLandscape) {
             if (binding.pdfView != null && binding.pdfView.getVisibility() == View.VISIBLE && pageCount > 0) {
                 binding.pdfView.post(() -> {
@@ -181,24 +196,64 @@ public class PdfViewerActivity extends AppCompatActivity {
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
+        InsetsHelper.applyEdgeToEdge(this);
         super.onCreate(savedInstanceState);
         binding = ActivityPdfViewerBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
+        InsetsHelper.handleSystemBars(binding.getRoot(), binding.topBar, binding.bottomAdContainer);
 
         setupToolbar();
         setupOcrControls();
         setupAnnotationControls();
         setupAds();
         loadPdfDocument();
+
+        restoreOcrState(savedInstanceState);
+    }
+
+    @Override
+    protected void onSaveInstanceState(@NonNull Bundle outState) {
+        super.onSaveInstanceState(outState);
+        if (binding != null && isOcrActive()) {
+            outState.putBoolean("KEY_OCR_ACTIVE", true);
+            outState.putInt("KEY_OCR_PAGE_INDEX", currentOcrPageIndex);
+            OcrPage ocrPage = binding.ocrOverlay.getOcrPage();
+            if (ocrPage != null) {
+                outState.putParcelable("KEY_OCR_PAGE", ocrPage);
+                outState.putInt("KEY_OCR_SEL_START", binding.ocrOverlay.getSelectionStart());
+                outState.putInt("KEY_OCR_SEL_END", binding.ocrOverlay.getSelectionEnd());
+            }
+        }
+    }
+
+    private void restoreOcrState(@Nullable Bundle savedInstanceState) {
+        if (savedInstanceState == null || !savedInstanceState.getBoolean("KEY_OCR_ACTIVE", false)) {
+            return;
+        }
+        currentOcrPageIndex = savedInstanceState.getInt("KEY_OCR_PAGE_INDEX", 0);
+        OcrPage savedPage = savedInstanceState.getParcelable("KEY_OCR_PAGE");
+        int selStart = savedInstanceState.getInt("KEY_OCR_SEL_START", -1);
+        int selEnd = savedInstanceState.getInt("KEY_OCR_SEL_END", -1);
+
+        if (savedPage != null) {
+            binding.ocrOverlay.post(() -> {
+                if (isFinishing() || isDestroyed()) return;
+                RectF displayRect = binding.photoView.getDisplayRect();
+                binding.ocrOverlay.setTargetRect(displayRect);
+                binding.ocrOverlay.setOcrPage(savedPage);
+                if (selStart >= 0 && selEnd >= 0) {
+                    binding.ocrOverlay.setSelection(selStart, selEnd);
+                }
+                binding.ocrOverlay.setVisibility(View.VISIBLE);
+                binding.layoutOcrBar.setVisibility(View.VISIBLE);
+                hidePageIndicatorImmediately();
+            });
+        }
     }
 
     private void setupToolbar() {
         binding.btnBack.setOnClickListener(v -> finish());
-        binding.btnPrint.setOnClickListener(v -> printDocument());
-        binding.btnToggleOrientation.setOnClickListener(v -> togglePageOrientation());
-        binding.btnExtractText.setOnClickListener(v -> onExtractTextClicked());
-        binding.btnAnnotate.setOnClickListener(v -> toggleAnnotationMode());
-        binding.btnEdit.setOnClickListener(v -> editCurrentPage());
+        binding.btnMore.setOnClickListener(this::showActionsMenu);
         binding.tvPageIndicator.setOnClickListener(v -> showJumpToPageDialog());
 
         updateOrientationButtonState();
@@ -221,14 +276,74 @@ public class PdfViewerActivity extends AppCompatActivity {
     }
 
     private void updateOrientationButtonState() {
-        if (binding == null || binding.btnToggleOrientation == null) return;
-        if (isSwipeHorizontal) {
-            binding.btnToggleOrientation.setImageResource(R.drawable.ic_view_agenda);
-            binding.btnToggleOrientation.setContentDescription(getString(R.string.pdf_view_mode_vertical));
-        } else {
-            binding.btnToggleOrientation.setImageResource(R.drawable.ic_view_carousel);
-            binding.btnToggleOrientation.setContentDescription(getString(R.string.pdf_view_mode_horizontal));
+        // Mode is reflected dynamically in the actions menu
+    }
+
+    private void showActionsMenu(View anchor) {
+        PopupMenu popup = new PopupMenu(this, anchor, Gravity.END);
+        popup.getMenuInflater().inflate(R.menu.menu_pdf_viewer, popup.getMenu());
+        popup.setForceShowIcon(true);
+
+        Menu menu = popup.getMenu();
+
+        // 1. Dynamic Orientation item state
+        MenuItem orientationItem = menu.findItem(R.id.action_toggle_orientation);
+        if (orientationItem != null) {
+            if (isImageDocument()) {
+                orientationItem.setVisible(false);
+            } else {
+                orientationItem.setVisible(true);
+                if (isSwipeHorizontal) {
+                    orientationItem.setTitle(R.string.pdf_view_mode_vertical);
+                    orientationItem.setIcon(R.drawable.ic_view_agenda);
+                } else {
+                    orientationItem.setTitle(R.string.pdf_view_mode_horizontal);
+                    orientationItem.setIcon(R.drawable.ic_view_carousel);
+                }
+            }
         }
+
+        // 2. Tint icons with text_primary and apply subtle inset for a refined, modern look
+        int primaryColor = ContextCompat.getColor(this, R.color.text_primary);
+        int inset = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 2, getResources().getDisplayMetrics());
+        for (int i = 0; i < menu.size(); i++) {
+            MenuItem item = menu.getItem(i);
+            Drawable icon = item.getIcon();
+            if (icon != null) {
+                Drawable tinted = DrawableCompat.wrap(icon.mutate());
+                DrawableCompat.setTint(tinted, primaryColor);
+                item.setIcon(new InsetDrawable(tinted, inset));
+            }
+        }
+
+        popup.setOnMenuItemClickListener(item -> {
+            int id = item.getItemId();
+            if (id == R.id.action_share) {
+                shareDocument();
+                return true;
+            } else if (id == R.id.action_export_images) {
+                showExportImagesDialog();
+                return true;
+            } else if (id == R.id.action_ocr) {
+                onExtractTextClicked();
+                return true;
+            } else if (id == R.id.action_annotate) {
+                toggleAnnotationMode();
+                return true;
+            } else if (id == R.id.action_edit) {
+                editCurrentPage();
+                return true;
+            } else if (id == R.id.action_toggle_orientation) {
+                togglePageOrientation();
+                return true;
+            } else if (id == R.id.action_print) {
+                printDocument();
+                return true;
+            }
+            return false;
+        });
+
+        popup.show();
     }
 
     private void togglePageOrientation() {
@@ -342,12 +457,9 @@ public class PdfViewerActivity extends AppCompatActivity {
 
         // 3. Check for JPG / Image document
         if (isImageDocument()) {
-            binding.btnToggleOrientation.setVisibility(View.GONE);
             loadImageDocument();
             return;
         }
-
-        binding.btnToggleOrientation.setVisibility(View.VISIBLE);
 
         // 4. Load PDF with PDFView engine
         loadPdfWithEngine(0);
@@ -388,25 +500,25 @@ public class PdfViewerActivity extends AppCompatActivity {
                     if (isLandscape() && !isLandscapeFullscreen && !isAnnotationMode && !isOcrActive()) {
                         setLandscapeFullscreen(true);
                     }
+                    if (pageCount > 1 && !isAnnotationMode && !isOcrActive()) {
+                        showPageIndicator(page + 1);
+                    }
                 })
                 .onPageChange((page, pageCountTotal) -> {
                     pageCount = pageCountTotal;
-                    updatePageIndicator(page + 1);
-                    if (!isScrubbing && binding.sliderPageScrubber != null && pageCount > 1) {
-                        float val = (float) (page + 1);
-                        if (val >= binding.sliderPageScrubber.getValueFrom() && val <= binding.sliderPageScrubber.getValueTo()) {
-                            if (binding.sliderPageScrubber.getValue() != val) {
-                                binding.sliderPageScrubber.setValue(val);
-                            }
-                        }
+                    if (pageCount > 1 && !isAnnotationMode && !isOcrActive()) {
+                        showPageIndicator(page + 1);
                     }
                 })
                 .onLoad(nbPages -> {
                     pageCount = nbPages;
                     binding.pbLoading.setVisibility(View.GONE);
                     int current = binding.pdfView.getCurrentPage();
-                    updatePageIndicator(current + 1);
-                    setupPageScrubber();
+                    if (pageCount > 1) {
+                        showPageIndicator(current + 1);
+                    } else {
+                        hidePageIndicatorImmediately();
+                    }
                 })
                 .onError(t -> {
                     binding.pbLoading.setVisibility(View.GONE);
@@ -480,8 +592,8 @@ public class PdfViewerActivity extends AppCompatActivity {
                     }
                 }
 
-                com.tom_roush.pdfbox.android.PDFBoxResourceLoader.init(getApplicationContext());
-                try (com.tom_roush.pdfbox.pdmodel.PDDocument doc = com.tom_roush.pdfbox.pdmodel.PDDocument.load(tempLocked, password)) {
+                PDFBoxResourceLoader.init(getApplicationContext());
+                try (PDDocument doc = PDDocument.load(tempLocked, password)) {
                     doc.setAllSecurityToBeRemoved(true);
                     File unlockedFile = new File(getCacheDir(), "unlocked_" + System.currentTimeMillis() + ".pdf");
                     doc.save(unlockedFile);
@@ -549,10 +661,8 @@ public class PdfViewerActivity extends AppCompatActivity {
                             toggleLandscapeFullscreen();
                         }
                     });
-                    binding.tvPageIndicator.setText("1 of 1");
-                    if (binding.layoutPageScrubber != null) {
-                        binding.layoutPageScrubber.setVisibility(View.GONE);
-                    }
+                    pageCount = 1;
+                    hidePageIndicatorImmediately();
                     binding.pbLoading.setVisibility(View.GONE);
                 });
 
@@ -564,7 +674,77 @@ public class PdfViewerActivity extends AppCompatActivity {
     }
 
     private void updatePageIndicator(int currentPage) {
-        binding.tvPageIndicator.setText(getString(R.string.pdf_page_indicator, currentPage, pageCount));
+        showPageIndicator(currentPage);
+    }
+
+    /**
+     * Shows the floating page indicator in "X / Y" format, smoothly fades it in,
+     * and resets the auto-hide timer to 1.5 seconds.
+     */
+    private void showPageIndicator(int currentPage) {
+        if (pageCount <= 1 || isAnnotationMode || isOcrActive()) {
+            hidePageIndicatorImmediately();
+            return;
+        }
+
+        indicatorHandler.removeCallbacks(hideIndicatorRunnable);
+
+        if (indicatorAnimator != null) {
+            indicatorAnimator.cancel();
+            indicatorAnimator = null;
+        }
+
+        if (binding != null && binding.tvPageIndicator != null) {
+            binding.tvPageIndicator.setText(currentPage + " / " + pageCount);
+
+            if (binding.tvPageIndicator.getVisibility() != View.VISIBLE) {
+                binding.tvPageIndicator.setAlpha(0f);
+                binding.tvPageIndicator.setVisibility(View.VISIBLE);
+            }
+
+            if (binding.tvPageIndicator.getAlpha() < 1.0f) {
+                indicatorAnimator = binding.tvPageIndicator.animate()
+                        .alpha(1.0f)
+                        .setDuration(150);
+                indicatorAnimator.start();
+            }
+
+            indicatorHandler.postDelayed(hideIndicatorRunnable, INDICATOR_HIDE_DELAY_MS);
+        }
+    }
+
+    /**
+     * Smoothly fades out the floating page indicator and sets its visibility to GONE.
+     */
+    private void fadeOutPageIndicator() {
+        if (binding == null || binding.tvPageIndicator == null) return;
+        if (binding.tvPageIndicator.getVisibility() != View.VISIBLE) return;
+
+        indicatorAnimator = binding.tvPageIndicator.animate()
+                .alpha(0.0f)
+                .setDuration(250)
+                .withEndAction(() -> {
+                    if (binding != null && binding.tvPageIndicator != null) {
+                        binding.tvPageIndicator.setVisibility(View.GONE);
+                    }
+                });
+        indicatorAnimator.start();
+    }
+
+    /**
+     * Immediately cancels animators and hides the floating page indicator.
+     */
+    private void hidePageIndicatorImmediately() {
+        if (indicatorHandler != null) {
+            indicatorHandler.removeCallbacks(hideIndicatorRunnable);
+        }
+        if (indicatorAnimator != null) {
+            indicatorAnimator.cancel();
+            indicatorAnimator = null;
+        }
+        if (binding != null && binding.tvPageIndicator != null) {
+            binding.tvPageIndicator.setVisibility(View.GONE);
+        }
     }
 
     private void showError() {
@@ -667,36 +847,16 @@ public class PdfViewerActivity extends AppCompatActivity {
         binding.btnCloseOcr.setOnClickListener(v -> dismissOcrOverlay());
 
         binding.btnCopySelected.setOnClickListener(v -> {
-            String selected = binding.ocrOverlay.getSelectedText();
-            if (selected != null && !selected.trim().isEmpty()) {
-                copyTextToClipboard(selected.trim());
-                Toast.makeText(this, R.string.ocr_copied, Toast.LENGTH_SHORT).show();
-            } else {
-                Toast.makeText(this, R.string.ocr_nothing_selected, Toast.LENGTH_SHORT).show();
-            }
+            binding.ocrOverlay.copySelectedTextToClipboard();
         });
 
         binding.btnCopyAllText.setOnClickListener(v -> {
-            String allText = binding.ocrOverlay.getAllText();
-            if (!allText.isEmpty()) {
-                copyTextToClipboard(allText);
-                Toast.makeText(this, R.string.ocr_copied, Toast.LENGTH_SHORT).show();
-            } else {
-                Toast.makeText(this, R.string.ocr_empty, Toast.LENGTH_SHORT).show();
-            }
+            binding.ocrOverlay.showFullTextBottomSheet();
         });
 
-        binding.ocrOverlay.setOnTextSelectedListener(new OcrTextOverlayView.OnTextSelectedListener() {
-            @Override
-            public void onBlockSelected(@NonNull Text.TextBlock block, @NonNull String text) {
-                binding.btnCopySelected.setEnabled(true);
-                binding.btnCopySelected.setAlpha(1.0f);
-            }
-
-            @Override
-            public void onSelectionCleared() {
-                // Keep buttons accessible
-            }
+        binding.ocrOverlay.setOnSelectionChangeListener((selectedText, hasSelection) -> {
+            binding.btnCopySelected.setEnabled(hasSelection);
+            binding.btnCopySelected.setAlpha(hasSelection ? 1.0f : 0.5f);
         });
     }
 
@@ -721,10 +881,7 @@ public class PdfViewerActivity extends AppCompatActivity {
             binding.photoView.setVisibility(View.GONE);
             if (currentOcrPageIndex >= 0 && currentOcrPageIndex < pageCount) {
                 binding.pdfView.jumpTo(currentOcrPageIndex);
-                updatePageIndicator(currentOcrPageIndex + 1);
-            }
-            if (pageCount > 1 && binding.layoutPageScrubber != null) {
-                binding.layoutPageScrubber.setVisibility(View.VISIBLE);
+                showPageIndicator(currentOcrPageIndex + 1);
             }
         }
     }
@@ -831,47 +988,6 @@ public class PdfViewerActivity extends AppCompatActivity {
         }
     }
 
-    private void setupPageScrubber() {
-        if (binding.sliderPageScrubber == null || binding.layoutPageScrubber == null) return;
-        if (pageCount > 1) {
-            binding.sliderPageScrubber.setValueFrom(1.0f);
-            binding.sliderPageScrubber.setValueTo((float) pageCount);
-            binding.sliderPageScrubber.setStepSize(1.0f);
-            int current = binding.pdfView.getCurrentPage();
-            binding.sliderPageScrubber.setValue((float) Math.max(1, Math.min(pageCount, current + 1)));
-            binding.sliderPageScrubber.setLabelFormatter(value -> "Page " + (int) value);
-
-            binding.sliderPageScrubber.clearOnChangeListeners();
-            binding.sliderPageScrubber.clearOnSliderTouchListeners();
-
-            binding.sliderPageScrubber.addOnSliderTouchListener(new Slider.OnSliderTouchListener() {
-                @Override
-                public void onStartTrackingTouch(@NonNull Slider slider) {
-                    isScrubbing = true;
-                }
-
-                @Override
-                public void onStopTrackingTouch(@NonNull Slider slider) {
-                    isScrubbing = false;
-                }
-            });
-
-            binding.sliderPageScrubber.addOnChangeListener((slider, value, fromUser) -> {
-                if (fromUser && binding.pdfView != null) {
-                    int targetPage = (int) value - 1;
-                    if (targetPage >= 0 && targetPage < pageCount) {
-                        binding.pdfView.jumpTo(targetPage);
-                        updatePageIndicator(targetPage + 1);
-                    }
-                }
-            });
-
-            binding.layoutPageScrubber.setVisibility(View.VISIBLE);
-        } else {
-            binding.layoutPageScrubber.setVisibility(View.GONE);
-        }
-    }
-
     private void showJumpToPageDialog() {
         if (pageCount <= 1) return;
 
@@ -931,10 +1047,7 @@ public class PdfViewerActivity extends AppCompatActivity {
                     int targetIndex = targetPage - 1;
                     if (binding.pdfView != null) {
                         binding.pdfView.jumpTo(targetIndex);
-                        updatePageIndicator(targetPage);
-                    }
-                    if (binding.sliderPageScrubber != null && pageCount > 1) {
-                        binding.sliderPageScrubber.setValue((float) targetPage);
+                        showPageIndicator(targetPage);
                     }
                 } catch (NumberFormatException e) {
                     til.setError(getString(R.string.jump_to_page_error, pageCount));
@@ -1043,9 +1156,7 @@ public class PdfViewerActivity extends AppCompatActivity {
                     binding.ocrOverlay.setVisionText(visionText, bitmap.getWidth(), bitmap.getHeight());
                     binding.ocrOverlay.setVisibility(View.VISIBLE);
                     binding.layoutOcrBar.setVisibility(View.VISIBLE);
-                    if (binding.layoutPageScrubber != null) {
-                        binding.layoutPageScrubber.setVisibility(View.GONE);
-                    }
+                    hidePageIndicatorImmediately();
                     Toast.makeText(PdfViewerActivity.this, R.string.ocr_lens_hint, Toast.LENGTH_SHORT).show();
                 });
             }
@@ -1077,7 +1188,10 @@ public class PdfViewerActivity extends AppCompatActivity {
     @Override
     public boolean onOptionsItemSelected(@NonNull MenuItem item) {
         int id = item.getItemId();
-        if (id == R.id.action_toggle_orientation) {
+        if (id == R.id.action_share) {
+            shareDocument();
+            return true;
+        } else if (id == R.id.action_toggle_orientation) {
             togglePageOrientation();
             return true;
         } else if (id == R.id.action_ocr) {
@@ -1089,11 +1203,52 @@ public class PdfViewerActivity extends AppCompatActivity {
         } else if (id == R.id.action_edit) {
             editCurrentPage();
             return true;
+        } else if (id == R.id.action_export_images) {
+            showExportImagesDialog();
+            return true;
         } else if (id == R.id.action_print) {
             printDocument();
             return true;
         }
         return super.onOptionsItemSelected(item);
+    }
+
+    private void shareDocument() {
+        Uri targetUri = resolvedUri != null ? resolvedUri : (resolvedFile != null ? Uri.fromFile(resolvedFile) : null);
+        if (targetUri == null) {
+            Toast.makeText(this, R.string.pdf_load_error, Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        try {
+            Uri shareUri = targetUri;
+            if ("file".equalsIgnoreCase(targetUri.getScheme()) && targetUri.getPath() != null) {
+                shareUri = androidx.core.content.FileProvider.getUriForFile(
+                        this, getPackageName() + ".provider", new File(targetUri.getPath()));
+            } else if (resolvedFile != null && ("file".equalsIgnoreCase(targetUri.getScheme()) || targetUri.getScheme() == null)) {
+                shareUri = androidx.core.content.FileProvider.getUriForFile(
+                        this, getPackageName() + ".provider", resolvedFile);
+            }
+
+            String mimeType = isImageDocument() ? "image/jpeg" : "application/pdf";
+            String title = documentTitle != null ? documentTitle : getString(R.string.app_name);
+            Intent shareIntent = StorageHelper.createShareIntent(shareUri, mimeType, title);
+            startActivity(shareIntent);
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to share document", e);
+            Toast.makeText(this, R.string.error_generic, Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void showExportImagesDialog() {
+        Uri targetUri = resolvedUri != null ? resolvedUri : (resolvedFile != null ? Uri.fromFile(resolvedFile) : null);
+        if (targetUri == null) {
+            Toast.makeText(this, R.string.pdf_load_error, Toast.LENGTH_SHORT).show();
+            return;
+        }
+        com.anscanner.app.ui.export.ExportImagesBottomSheet sheet =
+                com.anscanner.app.ui.export.ExportImagesBottomSheet.newInstance(targetUri, documentTitle);
+        sheet.show(getSupportFragmentManager(), "ExportImagesBottomSheet");
     }
 
     // ── Flattened Annotation Engine (Sign/Draw) ──────────────────────────
@@ -1158,9 +1313,6 @@ public class PdfViewerActivity extends AppCompatActivity {
 
         if (binding.pdfView.getVisibility() == View.VISIBLE) {
             binding.photoView.setVisibility(View.GONE);
-            if (pageCount > 1 && binding.layoutPageScrubber != null) {
-                binding.layoutPageScrubber.setVisibility(View.VISIBLE);
-            }
         }
     }
 
@@ -1206,7 +1358,26 @@ public class PdfViewerActivity extends AppCompatActivity {
     }
 
     @Override
+    protected void onStop() {
+        super.onStop();
+        if (indicatorHandler != null) {
+            indicatorHandler.removeCallbacks(hideIndicatorRunnable);
+        }
+        if (indicatorAnimator != null) {
+            indicatorAnimator.cancel();
+            indicatorAnimator = null;
+        }
+    }
+
+    @Override
     protected void onDestroy() {
+        if (indicatorHandler != null) {
+            indicatorHandler.removeCallbacksAndMessages(null);
+        }
+        if (indicatorAnimator != null) {
+            indicatorAnimator.cancel();
+            indicatorAnimator = null;
+        }
         if (binding != null && binding.adView != null) {
             binding.adView.destroy();
         }

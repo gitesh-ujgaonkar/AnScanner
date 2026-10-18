@@ -75,8 +75,8 @@
          ══════════════════════════════════════════════════════════════════ -->
     <style name="Theme.AnScanner.Camera" parent="Theme.AnScanner">
         <item name="android:statusBarColor">@android:color/transparent</item>
-        <item name="android:navigationBarColor">#FF121212</item>
-        <item name="android:windowBackground">#FF121212</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowBackground">@color/background_primary</item>
         <item name="android:windowLightStatusBar">false</item>
         <item name="android:windowLightNavigationBar">false</item>
         <item name="android:windowTranslucentStatus">false</item>
@@ -87,10 +87,24 @@
          Crop Preview Activity Theme (Dark canvas)
          ══════════════════════════════════════════════════════════════════ -->
     <style name="Theme.AnScanner.CropPreview" parent="Theme.AnScanner">
-        <item name="android:statusBarColor">#FF1A1A1A</item>
-        <item name="android:windowBackground">#FF1A1A1A</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowBackground">@color/background_primary</item>
         <item name="android:windowLightStatusBar">false</item>
         <item name="android:windowLightNavigationBar">false</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+    </style>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         Splash Screen Activity Theme (Dark / Night)
+         ══════════════════════════════════════════════════════════════════ -->
+    <style name="Theme.AnScanner.Splash" parent="Theme.AnScanner">
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowBackground">@color/background_primary</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
     </style>
 
 </resources>

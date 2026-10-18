@@ -5,6 +5,7 @@ import android.content.res.AssetFileDescriptor;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.PointF;
 import android.util.Log;
 
 import org.opencv.android.Utils;
@@ -55,6 +56,7 @@ public class DocumentDetector {
     private int inputHeight = 256;
     private boolean isNCHW = false;
     private int[] outputShape;
+    private float[][][] cachedOutputArray;
 
     public static DocumentDetector getInstance(Context context) {
         if (instance == null) {
@@ -87,6 +89,9 @@ public class DocumentDetector {
                 }
             }
             outputShape = interpreter.getOutputTensor(0).shape();
+            if (outputShape != null && outputShape.length == 3) {
+                cachedOutputArray = new float[1][outputShape[1]][outputShape[2]];
+            }
             this.isModelLoaded = true;
             Log.i(TAG, "TFLite Document Corner Detector initialized with " + MODEL_FILE_NAME +
                     ", input: [" + inputWidth + "x" + inputHeight + (isNCHW ? ", NCHW]" : ", NHWC]"));
@@ -97,38 +102,52 @@ public class DocumentDetector {
     }
 
     /**
-     * Detects 4 document corners from an input bitmap.
+     * Detects 4 document corners from an input bitmap with strict validation.
      *
      * @param src Source bitmap (not mutated).
-     * @return 4 ordered corner points [TL, TR, BR, BL], or null if no valid document is detected.
+     * @param useFallback If true, falls back to 5% inset margin when no valid convex quad is found.
+     * @return 4 ordered corner points [TL, TR, BR, BL], or null if useFallback is false and no document detected.
      */
-    public Point[] detectCorners(Bitmap src) {
+    public Point[] detectCorners(Bitmap src, boolean useFallback) {
         if (src == null || src.isRecycled()) {
-            return null;
+            return (useFallback && src != null) ? getDefaultCorners(src.getWidth(), src.getHeight()) : null;
         }
 
         try {
-            // 1. Tier 1: On-Device TFLite Model Inference (if available & valid)
+            // 1. Tier 1: On-Device Deep Learning TFLite Model Inference (Primary)
             if (isModelLoaded && interpreter != null) {
                 Point[] modelCorners = runTFLiteInference(src);
                 if (modelCorners != null && modelCorners.length == 4) {
-                    return modelCorners;
+                    Point[] orderedModel = orderCorners(modelCorners);
+                    if (isValidDocumentGeometry(orderedModel, src.getWidth(), src.getHeight())) {
+                        return orderedModel;
+                    }
                 }
             }
 
-            // 2. Tier 2: OpenCV Contour Detection with relaxed geometry
+            // 2. Tier 2: OpenCV Canny edge + morphological contour detection fallback
             Point[] openCvCorners = detectCornersOpenCv(src);
             if (openCvCorners != null && openCvCorners.length == 4) {
-                return openCvCorners;
+                Point[] orderedOpenCv = orderCorners(openCvCorners);
+                if (isValidDocumentGeometry(orderedOpenCv, src.getWidth(), src.getHeight())) {
+                    return orderedOpenCv;
+                }
             }
 
-            // 3. Fallback: return null so live camera overlay smoothly clears
-            return null;
+            // 3. Fallback: Safe 5% inset full-frame crop
+            return useFallback ? getDefaultCorners(src.getWidth(), src.getHeight()) : null;
 
         } catch (Exception e) {
             Log.w(TAG, "Document detection exception caught", e);
-            return null;
+            return useFallback ? getDefaultCorners(src.getWidth(), src.getHeight()) : null;
         }
+    }
+
+    /**
+     * Detects 4 document corners from an input bitmap, falling back to 5% inset margin by default.
+     */
+    public Point[] detectCorners(Bitmap src) {
+        return detectCorners(src, true);
     }
 
     /**
@@ -196,15 +215,19 @@ public class DocumentDetector {
             } else if (outputShape != null && outputShape.length == 3 && (outputShape[1] == 17 || outputShape[2] == 17)) {
                 int dim1 = outputShape[1];
                 int dim2 = outputShape[2];
-                float[][][] outputArray = new float[1][dim1][dim2];
+                float[][][] out = (cachedOutputArray != null && cachedOutputArray[0].length == dim1 && cachedOutputArray[0][0].length == dim2)
+                        ? cachedOutputArray : new float[1][dim1][dim2];
                 synchronized (this) {
-                    interpreter.run(inputBuffer, outputArray);
+                    interpreter.run(inputBuffer, out);
                 }
-                detectedCorners = parseYoloPoseOutput(outputArray[0], dim1, dim2, origWidth, origHeight, scale, padX, padY);
+                detectedCorners = parseYoloPoseOutput(out[0], dim1, dim2, origWidth, origHeight, scale, padX, padY);
             }
 
-            if (detectedCorners != null && isValidDocumentGeometry(detectedCorners, origWidth, origHeight)) {
-                return orderCorners(detectedCorners);
+            if (detectedCorners != null) {
+                Point[] ordered = orderCorners(detectedCorners);
+                if (isValidDocumentGeometry(ordered, origWidth, origHeight)) {
+                    return ordered;
+                }
             }
 
             return null;
@@ -245,8 +268,10 @@ public class DocumentDetector {
                     float kptX = output[xRow][bestAnchor];
                     float kptY = output[yRow][bestAnchor];
 
-                    if (kptX <= 1.0f && kptY <= 1.0f) {
+                    if (kptX <= 1.5f) {
                         kptX *= inputWidth;
+                    }
+                    if (kptY <= 1.5f) {
                         kptY *= inputHeight;
                     }
 
@@ -269,12 +294,10 @@ public class DocumentDetector {
                 float w = output[2][bestAnchor];
                 float h = output[3][bestAnchor];
 
-                if (cx <= 1.0f && cy <= 1.0f) {
-                    cx *= inputWidth;
-                    cy *= inputHeight;
-                    w *= inputWidth;
-                    h *= inputHeight;
-                }
+                if (cx <= 1.5f) cx *= inputWidth;
+                if (cy <= 1.5f) cy *= inputHeight;
+                if (w <= 1.5f) w *= inputWidth;
+                if (h <= 1.5f) h *= inputHeight;
 
                 float modelLeft = cx - w / 2f;
                 float modelTop = cy - h / 2f;
@@ -331,40 +354,38 @@ public class DocumentDetector {
     }
 
     /**
-     * Validates document geometry:
-     * - Minimum area &gt; 5% of total image area.
-     * - Bounding box aspect ratio &lt; 2.5f (anti-strip safeguard).
-     * - No convexity requirement (paper curls/folds allowed).
+     * Calculates the polygon area using the Shoelace formula.
+     */
+    public static double getPolygonArea(Point[] corners) {
+        if (corners == null || corners.length != 4) return 0;
+        return 0.5 * Math.abs(
+                (corners[0].x * corners[1].y - corners[1].x * corners[0].y) +
+                (corners[1].x * corners[2].y - corners[2].x * corners[1].y) +
+                (corners[2].x * corners[3].y - corners[2].x * corners[3].y) +
+                (corners[3].x * corners[0].y - corners[0].x * corners[3].y)
+        );
+    }
+
+    /**
+     * Strictly validates document geometry:
+     * - Must be a convex quadrilateral.
+     * - Must occupy at least 20% and no more than 95% of total frame area.
      */
     public static boolean isValidDocumentGeometry(Point[] corners, int width, int height) {
         if (corners == null || corners.length != 4) return false;
 
-        // Shoelace formula for area
-        double area = 0.5 * Math.abs(
-                (corners[0].x * corners[1].y - corners[1].x * corners[0].y) +
-                (corners[1].x * corners[2].y - corners[2].x * corners[1].y) +
-                (corners[2].x * corners[3].y - corners[3].x * corners[2].y) +
-                (corners[3].x * corners[0].y - corners[0].x * corners[3].y)
-        );
-
-        // Lower Minimum Area to 5%
-        double totalArea = (double) width * height;
-        if (area <= totalArea * 0.05) {
+        // 1. Strict Convexity Check using OpenCV
+        MatOfPoint mop = new MatOfPoint(corners);
+        boolean isConvex = Imgproc.isContourConvex(mop);
+        mop.release();
+        if (!isConvex) {
             return false;
         }
 
-        // Bounding box aspect ratio < 2.5
-        double minX = Math.min(Math.min(corners[0].x, corners[1].x), Math.min(corners[2].x, corners[3].x));
-        double maxX = Math.max(Math.max(corners[0].x, corners[1].x), Math.max(corners[2].x, corners[3].x));
-        double minY = Math.min(Math.min(corners[0].y, corners[1].y), Math.min(corners[2].y, corners[3].y));
-        double maxY = Math.max(Math.max(corners[0].y, corners[1].y), Math.max(corners[2].y, corners[3].y));
-
-        double boxW = maxX - minX;
-        double boxH = maxY - minY;
-        if (boxW <= 0 || boxH <= 0) return false;
-
-        double aspectRatio = Math.max(boxW, boxH) / Math.min(boxW, boxH);
-        if (aspectRatio >= 2.5) {
+        // 2. Strict Area Validation (5% to 95% of total image area)
+        double area = getPolygonArea(corners);
+        double totalArea = (double) width * height;
+        if (area < totalArea * 0.05 || area > totalArea * 0.95) {
             return false;
         }
 
@@ -372,83 +393,126 @@ public class DocumentDetector {
     }
 
     /**
-     * OpenCV Canny edge + morphological closing + contour detection with relaxed geometry:
-     * - Morphological closing (5x5 kernel) bridges broken edges.
-     * - Dilate (3x3 kernel) solidifies boundary lines.
-     * - Lower Minimum Area: &gt;= 5% of total frame area.
-     * - Keep Aspect Ratio: &lt; 2.5 (rejects thin strips, lines, cords).
-     * - Ensure 4 Points: exactly 4 points from approxPolyDP (epsilon = 0.02 * perimeter).
-     * - Remove Convexity: NO convexity check (natural paper bending allowed).
-     * - Fallback UI: returns null when no valid contour matches.
+     * OpenCV Canny edge + morphological closing + contour detection on downscaled grayscale frame:
+     * - Downscales frame to standard processing dimension (max 800px) for speed and noise reduction.
+     * - Applies Gaussian blur, Canny edge detection, and morphological operations.
+     * - Finds contours and sorts by area descending.
+     * - Finds the largest closed convex quadrilateral with 4 vertices.
+     * - Strictly validates 5% to 95% area and convexity.
+     * - Returns null if no valid quadrilateral meets the criteria.
      */
     public static Point[] detectCornersOpenCv(Bitmap src) {
         if (src == null || src.isRecycled()) return null;
+
+        int origW = src.getWidth();
+        int origH = src.getHeight();
+        if (origW <= 0 || origH <= 0) return null;
+
+        // Downscale frame to max dimension 800 for robust, noise-free edge detection
+        int maxDim = 800;
+        float scale = 1.0f;
+        Bitmap procBmp = src;
+        boolean needRecycle = false;
+        if (Math.max(origW, origH) > maxDim) {
+            scale = (float) maxDim / Math.max(origW, origH);
+            int targetW = Math.max(1, Math.round(origW * scale));
+            int targetH = Math.max(1, Math.round(origH * scale));
+            procBmp = Bitmap.createScaledBitmap(src, targetW, targetH, true);
+            needRecycle = (procBmp != src);
+        }
 
         Mat rgba = new Mat();
         Mat gray = new Mat();
         Mat blurred = new Mat();
         Mat edges = new Mat();
+        Mat closeKernel = null;
+        Mat dilateKernel = null;
         Mat hierarchy = new Mat();
         List<MatOfPoint> contours = new ArrayList<>();
 
         try {
-            Utils.bitmapToMat(src, rgba);
+            Utils.bitmapToMat(procBmp, rgba);
             Imgproc.cvtColor(rgba, gray, Imgproc.COLOR_RGBA2GRAY);
             Imgproc.GaussianBlur(gray, blurred, new Size(5, 5), 0);
             Imgproc.Canny(blurred, edges, 75, 200);
 
-            // 1. Add Morphological Closing to Bridge Broken Edges:
-            Mat closeKernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(5, 5));
+            // Morphological closing to bridge broken document edges
+            closeKernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(5, 5));
             Imgproc.morphologyEx(edges, edges, Imgproc.MORPH_CLOSE, closeKernel);
-            closeKernel.release();
 
-            // Follow with dilate to ensure boundary lines are solid and fully enclosed
-            Mat dilateKernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(3, 3));
+            // Morphological dilation to solidify boundary lines
+            dilateKernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(3, 3));
             Imgproc.dilate(edges, edges, dilateKernel);
-            dilateKernel.release();
 
             Imgproc.findContours(edges, contours, hierarchy,
                     Imgproc.RETR_LIST, Imgproc.CHAIN_APPROX_SIMPLE);
 
-            int imgWidth = src.getWidth();
-            int imgHeight = src.getHeight();
-            double totalArea = (double) imgWidth * imgHeight;
-            double minArea = totalArea * 0.05; // 5% minimum area
-            double bestArea = 0;
-            Point[] bestCorners = null;
+            double totalOrigArea = (double) origW * origH;
+            double procArea = (double) procBmp.getWidth() * procBmp.getHeight();
+            double minProcArea = procArea * 0.05; // At least 5%
+            double maxProcArea = procArea * 0.95; // At most 95%
 
             Collections.sort(contours, (a, b) -> Double.compare(Imgproc.contourArea(b), Imgproc.contourArea(a)));
 
+            Point[] bestCorners = null;
+            double bestArea = 0;
+
             for (MatOfPoint contour : contours) {
-                double area = Imgproc.contourArea(contour);
-
-                // Lower Minimum Area: 5%
-                if (area <= minArea) {
+                double cArea = Imgproc.contourArea(contour);
+                if (cArea < minProcArea || cArea > maxProcArea) {
                     continue;
-                }
-
-                // Keep Aspect Ratio: Retain anti-strip safeguard: aspectRatio < 2.5f
-                Rect bounds = Imgproc.boundingRect(contour);
-                if (bounds.width <= 0 || bounds.height <= 0) {
-                    continue;
-                }
-                float aspectRatio = (float) Math.max(bounds.width, bounds.height) / (float) Math.min(bounds.width, bounds.height);
-                if (aspectRatio >= 2.5f) {
-                    continue; // Reject strips, lines, and cords
                 }
 
                 MatOfPoint2f contour2f = new MatOfPoint2f(contour.toArray());
                 double peri = Imgproc.arcLength(contour2f, true);
                 MatOfPoint2f approx = new MatOfPoint2f();
-                Imgproc.approxPolyDP(contour2f, approx, 0.02 * peri, true);
 
+                // Standard epsilon 0.02 * perimeter
+                Imgproc.approxPolyDP(contour2f, approx, 0.02 * peri, true);
                 Point[] points = approx.toArray();
 
-                // Ensure 4 Points: approxCurve.total() == 4
-                // Remove Convexity: NO convexity check
-                if (points.length == 4 && area > bestArea) {
-                    bestArea = area;
-                    bestCorners = orderCorners(points);
+                // If not 4 points, test adaptive epsilons (0.015 and 0.03)
+                if (points.length != 4) {
+                    approx.release();
+                    approx = new MatOfPoint2f();
+                    Imgproc.approxPolyDP(contour2f, approx, 0.015 * peri, true);
+                    points = approx.toArray();
+                    if (points.length != 4) {
+                        approx.release();
+                        approx = new MatOfPoint2f();
+                        Imgproc.approxPolyDP(contour2f, approx, 0.03 * peri, true);
+                        points = approx.toArray();
+                    }
+                }
+
+                if (points.length == 4) {
+                    // Strict Convexity Check
+                    MatOfPoint approxMat = new MatOfPoint(points);
+                    boolean isConvex = Imgproc.isContourConvex(approxMat);
+                    approxMat.release();
+
+                    if (isConvex) {
+                        // Map points back to original image space
+                        Point[] mappedPoints = new Point[4];
+                        for (int i = 0; i < 4; i++) {
+                            mappedPoints[i] = new Point(
+                                    Math.max(0, Math.min(origW, points[i].x / scale)),
+                                    Math.max(0, Math.min(origH, points[i].y / scale))
+                            );
+                        }
+
+                        // Order corners consistently [TL, TR, BR, BL]
+                        Point[] ordered = orderCorners(mappedPoints);
+                        double quadArea = getPolygonArea(ordered);
+
+                        // Strict Area Validation: 5% to 95% of total frame area
+                        if (quadArea >= totalOrigArea * 0.05 && quadArea <= totalOrigArea * 0.95) {
+                            if (quadArea > bestArea) {
+                                bestArea = quadArea;
+                                bestCorners = ordered;
+                            }
+                        }
+                    }
                 }
 
                 contour2f.release();
@@ -461,10 +525,15 @@ public class DocumentDetector {
             Log.e(TAG, "OpenCV contour detection failed", e);
             return null;
         } finally {
+            if (needRecycle && procBmp != null && !procBmp.isRecycled()) {
+                procBmp.recycle();
+            }
             rgba.release();
             gray.release();
             blurred.release();
             edges.release();
+            if (closeKernel != null) closeKernel.release();
+            if (dilateKernel != null) dilateKernel.release();
             hierarchy.release();
             for (MatOfPoint c : contours) {
                 c.release();
@@ -473,46 +542,129 @@ public class DocumentDetector {
     }
 
     /**
-     * Orders 4 corner points in consistent order:
-     * [top-left, top-right, bottom-right, bottom-left].
+     * Orders 4 corner points in consistent clockwise order starting from Top-Left:
+     * [Top-Left, Top-Right, Bottom-Right, Bottom-Left].
+     *
+     * <p>Uses centroid-angle sorting and origin proximity to guarantee 4 unique,
+     * non-inverted vertices without duplicate corner collisions.</p>
      */
     public static Point[] orderCorners(Point[] pts) {
         if (pts == null || pts.length != 4) {
             throw new IllegalArgumentException("Exactly 4 points required, got " + (pts != null ? pts.length : 0));
         }
 
-        Point[] ordered = new Point[4];
-        double[] sums = new double[4];
-        double[] diffs = new double[4];
+        // 1. Calculate centroid
+        double cx = 0;
+        double cy = 0;
+        for (Point p : pts) {
+            cx += p.x;
+            cy += p.y;
+        }
+        cx /= 4.0;
+        cy /= 4.0;
+
+        // 2. Sort points in clockwise order around centroid
+        List<Point> pointList = new ArrayList<>(4);
+        for (Point p : pts) {
+            pointList.add(p);
+        }
+        final double centerX = cx;
+        final double centerY = cy;
+        Collections.sort(pointList, (p1, p2) -> {
+            double a1 = Math.atan2(p1.y - centerY, p1.x - centerX);
+            double a2 = Math.atan2(p2.y - centerY, p2.x - centerX);
+            return Double.compare(a1, a2);
+        });
+
+        // 3. Find the top-left point (closest to origin: min x + y)
+        int tlIndex = 0;
+        double minSum = Double.MAX_VALUE;
         for (int i = 0; i < 4; i++) {
-            sums[i] = pts[i].x + pts[i].y;
-            diffs[i] = pts[i].y - pts[i].x;
+            double sum = pointList.get(i).x + pointList.get(i).y;
+            if (sum < minSum) {
+                minSum = sum;
+                tlIndex = i;
+            }
         }
 
-        // Top-left has smallest sum (closest to origin)
-        ordered[0] = pts[indexOfMin(sums)];
-        // Bottom-right has largest sum (farthest from origin)
-        ordered[2] = pts[indexOfMax(sums)];
-        // Top-right has smallest difference (y - x is most negative)
-        ordered[1] = pts[indexOfMin(diffs)];
-        // Bottom-left has largest difference (y - x is most positive)
-        ordered[3] = pts[indexOfMax(diffs)];
+        // 4. Return in clockwise order starting from Top-Left: [TL, TR, BR, BL]
+        Point[] ordered = new Point[4];
+        for (int i = 0; i < 4; i++) {
+            ordered[i] = pointList.get((tlIndex + i) % 4);
+        }
 
         return ordered;
     }
 
     /**
-     * Returns default corner points representing the full image with a 5% margin.
-     * Used as manual crop handle fallback in CropPreviewActivity.
+     * Orders 4 normalized corner points in consistent clockwise order [TL, TR, BR, BL].
+     */
+    public static PointF[] orderNormalizedCorners(PointF[] pts) {
+        if (pts == null || pts.length != 4) {
+            return getDefaultNormalizedCorners();
+        }
+        double cx = 0;
+        double cy = 0;
+        for (PointF p : pts) {
+            cx += p.x;
+            cy += p.y;
+        }
+        cx /= 4.0;
+        cy /= 4.0;
+
+        List<PointF> pointList = new ArrayList<>(4);
+        for (PointF p : pts) {
+            pointList.add(p);
+        }
+        final double centerX = cx;
+        final double centerY = cy;
+        Collections.sort(pointList, (p1, p2) -> {
+            double a1 = Math.atan2(p1.y - centerY, p1.x - centerX);
+            double a2 = Math.atan2(p2.y - centerY, p2.x - centerX);
+            return Double.compare(a1, a2);
+        });
+
+        int tlIndex = 0;
+        float minSum = Float.MAX_VALUE;
+        for (int i = 0; i < 4; i++) {
+            float sum = pointList.get(i).x + pointList.get(i).y;
+            if (sum < minSum) {
+                minSum = sum;
+                tlIndex = i;
+            }
+        }
+
+        PointF[] ordered = new PointF[4];
+        for (int i = 0; i < 4; i++) {
+            ordered[i] = pointList.get((tlIndex + i) % 4);
+        }
+
+        return ordered;
+    }
+
+    /**
+     * Returns default corner points representing a full-frame crop with a safe 5% inset margin.
+     * [TL, TR, BR, BL].
      */
     public static Point[] getDefaultCorners(int width, int height) {
-        double marginX = width * 0.05;
-        double marginY = height * 0.05;
         return new Point[]{
-                new Point(marginX, marginY),
-                new Point(width - marginX, marginY),
-                new Point(width - marginX, height - marginY),
-                new Point(marginX, height - marginY)
+                new Point(0.05 * width, 0.05 * height),
+                new Point(0.95 * width, 0.05 * height),
+                new Point(0.95 * width, 0.95 * height),
+                new Point(0.05 * width, 0.95 * height)
+        };
+    }
+
+    /**
+     * Returns default normalized corners [0.0..1.0] with a safe 5% inset margin:
+     * [ (0.05, 0.05), (0.95, 0.05), (0.95, 0.95), (0.05, 0.95) ].
+     */
+    public static PointF[] getDefaultNormalizedCorners() {
+        return new PointF[]{
+                new PointF(0.05f, 0.05f),
+                new PointF(0.95f, 0.05f),
+                new PointF(0.95f, 0.95f),
+                new PointF(0.05f, 0.95f)
         };
     }
 

@@ -259,7 +259,6 @@ public class AnnotationDrawingView extends View {
         highlighterPaint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.SRC_OVER));
 
         textPaint.setTextSize(getResources().getDisplayMetrics().density * 18f);
-        textPaint.setFakeBoldText(true);
 
         textBackgroundPaint.setStyle(Paint.Style.FILL);
         textBackgroundPaint.setColor(Color.parseColor("#B3000000"));
@@ -381,6 +380,7 @@ public class AnnotationDrawingView extends View {
         item.isSelected = true;
         textPaint.setTextSize(textSizePx);
         textPaint.setTypeface(getTypefaceForFont(getContext(), item.fontFamily));
+        textPaint.setFakeBoldText("sans".equalsIgnoreCase(item.fontFamily));
         textPaint.getTextBounds(text, 0, text.length(), item.bounds);
 
         textItems.add(item);
@@ -395,6 +395,7 @@ public class AnnotationDrawingView extends View {
             sel.setFontFamily(fontFamily);
             textPaint.setTextSize(sel.textSize);
             textPaint.setTypeface(getTypefaceForFont(getContext(), sel.fontFamily));
+            textPaint.setFakeBoldText("sans".equalsIgnoreCase(sel.fontFamily));
             textPaint.getTextBounds(sel.text, 0, sel.text.length(), sel.bounds);
             invalidate();
         }
@@ -824,6 +825,7 @@ public class AnnotationDrawingView extends View {
         for (TextItem txt : textItems) {
             textPaint.setTextSize(txt.textSize);
             textPaint.setTypeface(getTypefaceForFont(getContext(), txt.fontFamily));
+            textPaint.setFakeBoldText("sans".equalsIgnoreCase(txt.fontFamily));
             textPaint.getTextBounds(txt.text, 0, txt.text.length(), txt.bounds);
 
             RectF pillRect = txt.getBoundingBox(density);
@@ -902,7 +904,6 @@ public class AnnotationDrawingView extends View {
         // 3. Flatten text annotations
         float density = getResources().getDisplayMetrics().density;
         Paint flatTextPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        flatTextPaint.setFakeBoldText(true);
 
         Paint flatBgPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         flatBgPaint.setStyle(Paint.Style.FILL);
@@ -910,6 +911,7 @@ public class AnnotationDrawingView extends View {
         for (TextItem txt : textItems) {
             flatTextPaint.setTextSize(txt.textSize);
             flatTextPaint.setTypeface(getTypefaceForFont(getContext(), txt.fontFamily));
+            flatTextPaint.setFakeBoldText("sans".equalsIgnoreCase(txt.fontFamily));
             flatTextPaint.setColor(txt.color);
 
             Rect bounds = new Rect();

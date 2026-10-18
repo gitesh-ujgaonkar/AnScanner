@@ -149,6 +149,14 @@ public class DocumentOverlayView extends View {
         this.analysisHeight = height;
     }
 
+    public int getAnalysisWidth() {
+        return analysisWidth;
+    }
+
+    public int getAnalysisHeight() {
+        return analysisHeight;
+    }
+
     /**
      * Sets the detected document corners from the OpenCV analysis pipeline.
      * Coordinates are in analysis-image space and will be mapped to screen
@@ -172,14 +180,18 @@ public class DocumentOverlayView extends View {
             return;
         }
 
-        float scaleX = (float) viewW / analysisWidth;
-        float scaleY = (float) viewH / analysisHeight;
+        // CameraX PreviewView with ScaleType.FILL_CENTER scales uniformly with center-crop
+        float scale = Math.max((float) viewW / analysisWidth, (float) viewH / analysisHeight);
+        float scaledW = analysisWidth * scale;
+        float scaledH = analysisHeight * scale;
+        float offsetX = (viewW - scaledW) / 2f;
+        float offsetY = (viewH - scaledH) / 2f;
 
         targetCorners = new PointF[4];
         for (int i = 0; i < 4; i++) {
             targetCorners[i] = new PointF(
-                    (float) corners[i].x * scaleX,
-                    (float) corners[i].y * scaleY
+                    (float) corners[i].x * scale + offsetX,
+                    (float) corners[i].y * scale + offsetY
             );
         }
 
@@ -228,16 +240,24 @@ public class DocumentOverlayView extends View {
 
         int viewW = getWidth();
         int viewH = getHeight();
-        if (viewW == 0 || viewH == 0) return null;
+        if (viewW == 0 || viewH == 0 || analysisWidth == 0 || analysisHeight == 0) return null;
 
-        float scaleX = (float) capturedWidth / viewW;
-        float scaleY = (float) capturedHeight / viewH;
+        float scale = Math.max((float) viewW / analysisWidth, (float) viewH / analysisHeight);
+        float scaledW = analysisWidth * scale;
+        float scaledH = analysisHeight * scale;
+        float offsetX = (viewW - scaledW) / 2f;
+        float offsetY = (viewH - scaledH) / 2f;
+
+        float captureScaleX = (float) capturedWidth / analysisWidth;
+        float captureScaleY = (float) capturedHeight / analysisHeight;
 
         org.opencv.core.Point[] pts = new org.opencv.core.Point[4];
         for (int i = 0; i < 4; i++) {
+            float analysisX = (currentCorners[i].x - offsetX) / scale;
+            float analysisY = (currentCorners[i].y - offsetY) / scale;
             pts[i] = new org.opencv.core.Point(
-                    currentCorners[i].x * scaleX,
-                    currentCorners[i].y * scaleY
+                    Math.max(0, Math.min(capturedWidth, analysisX * captureScaleX)),
+                    Math.max(0, Math.min(capturedHeight, analysisY * captureScaleY))
             );
         }
         return pts;
@@ -389,21 +409,6 @@ public class DocumentOverlayView extends View {
         canvas.drawLine(left + bracketLen, bottom, left + cardRadius, bottom, idGuideBracketPaint);
         canvas.drawLine(left, bottom - cardRadius, left, bottom - bracketLen, idGuideBracketPaint);
 
-        // 4. Draw Step Badge inside/above card
-        String label = (idCardStep == ID_STEP_FRONT) ? "ALIGN FRONT OF ID" : "ALIGN BACK OF ID";
-        float badgePaddingH = 14f * density;
-        float badgePaddingV = 6f * density;
-        float textW = idBadgeTextPaint.measureText(label);
-        float badgeW = textW + (badgePaddingH * 2);
-        float badgeH = (14f * density) + (badgePaddingV * 2);
-        float badgeLeft = (w - badgeW) / 2f;
-        float badgeTop = top + (16f * density);
-        android.graphics.RectF badgeRect = new android.graphics.RectF(
-                badgeLeft, badgeTop, badgeLeft + badgeW, badgeTop + badgeH);
-        canvas.drawRoundRect(badgeRect, 8f * density, 8f * density, idBadgeBgPaint);
 
-        Paint.FontMetrics fm = idBadgeTextPaint.getFontMetrics();
-        float textBaseline = badgeTop + (badgeH / 2f) - ((fm.ascent + fm.descent) / 2f);
-        canvas.drawText(label, w / 2f, textBaseline, idBadgeTextPaint);
     }
 }

@@ -93,4 +93,20 @@ public final class ThemeHelper {
         activity.startActivity(intent);
         activity.overridePendingTransition(R.anim.fade_in, R.anim.fade_out);
     }
+
+    /**
+     * Determines whether dark mode is currently active.
+     */
+    public static boolean isDarkMode(Context context) {
+        if (context == null) return false;
+        String theme = getThemePreference(context);
+        if (THEME_LIGHT.equalsIgnoreCase(theme)) {
+            return false;
+        } else if (THEME_DARK.equalsIgnoreCase(theme)) {
+            return true;
+        } else {
+            int nightMode = context.getResources().getConfiguration().uiMode & android.content.res.Configuration.UI_MODE_NIGHT_MASK;
+            return nightMode == android.content.res.Configuration.UI_MODE_NIGHT_YES;
+        }
+    }
 }

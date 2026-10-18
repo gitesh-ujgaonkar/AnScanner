@@ -234,6 +234,7 @@ public class SaveScanBottomSheet extends BottomSheetDialogFragment {
 
                     // Clear temporary scan cache files after thumbnail and doc are committed
                     CacheManager.clearScanCache(appContext);
+                    com.anscanner.app.model.draft.DraftManager.clearDraft(appContext);
 
                     final Uri finalUri = savedUri;
                     mainHandler.post(() -> {
@@ -242,9 +243,9 @@ public class SaveScanBottomSheet extends BottomSheetDialogFragment {
                         Intent shareIntent = StorageHelper.createShareIntent(finalUri, isPdf ? "application/pdf" : "image/jpeg", fileName);
                         startActivity(Intent.createChooser(shareIntent, "Share via"));
 
-                        // Trigger Google Play In-App Review prompt (prompts on 1st scan, then every 3rd scan: 4, 7, 10...)
+                        // Trigger Google Play In-App Review prompt using policy-compliant ReviewPromptManager
                         if (getActivity() != null) {
-                            com.anscanner.app.service.InAppReviewHelper.onScanCompleted(getActivity());
+                            new com.anscanner.app.review.ReviewPromptManager(getActivity()).onExportCompleted(getActivity());
                         }
 
                         Intent intent = new Intent(appContext, com.anscanner.app.ui.library.LibraryActivity.class);

@@ -10,7 +10,8 @@
     <LinearLayout
         android:id="@+id/topBar"
         android:layout_width="match_parent"
-        android:layout_height="56dp"
+        android:layout_height="wrap_content"
+        android:minHeight="56dp"
         android:background="@color/background_secondary"
         android:gravity="center_vertical"
         android:orientation="horizontal"
@@ -27,82 +28,29 @@
             android:src="@drawable/ic_back_arrow"
             app:tint="@color/text_primary" />
 
-        <LinearLayout
+        <TextView
+            android:id="@+id/tvTitle"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginStart="8dp"
+            android:layout_marginEnd="4dp"
             android:layout_weight="1"
-            android:orientation="vertical">
-
-            <TextView
-                android:id="@+id/tvTitle"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:ellipsize="end"
-                android:singleLine="true"
-                android:textAppearance="@style/TextAppearance.AnScanner.Title"
-                tools:text="Document Title.pdf" />
-
-            <TextView
-                android:id="@+id/tvPageIndicator"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:textAppearance="@style/TextAppearance.AnScanner.Subtitle"
-                android:textColor="@color/accent_mint"
-                android:textSize="12sp"
-                tools:text="Page 1 of 5" />
-        </LinearLayout>
+            android:ellipsize="end"
+            android:singleLine="true"
+            android:textAppearance="@style/TextAppearance.AnScanner.Title"
+            tools:text="Document Title.pdf" />
 
         <ImageButton
-            android:id="@+id/btnPrint"
+            android:id="@+id/btnMore"
             android:layout_width="48dp"
             android:layout_height="48dp"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="@string/cd_print"
+            android:contentDescription="@string/cd_more_options"
             android:scaleType="centerInside"
-            android:src="@drawable/ic_print"
+            android:src="@drawable/ic_more_vert"
             app:tint="@color/text_primary" />
 
-        <ImageButton
-            android:id="@+id/btnToggleOrientation"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="@string/cd_toggle_orientation"
-            android:scaleType="centerInside"
-            android:src="@drawable/ic_view_carousel"
-            android:visibility="visible"
-            app:tint="@color/text_primary" />
 
-        <ImageButton
-            android:id="@+id/btnExtractText"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="@string/cd_extract_text"
-            android:scaleType="centerInside"
-            android:src="@drawable/ic_ocr_text"
-            app:tint="@color/text_primary" />
-
-        <ImageButton
-            android:id="@+id/btnAnnotate"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="@string/cd_annotate"
-            android:scaleType="centerInside"
-            android:src="@drawable/ic_draw"
-            app:tint="@color/text_primary" />
-
-        <ImageButton
-            android:id="@+id/btnEdit"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="@string/cd_edit_page"
-            android:scaleType="centerInside"
-            android:src="@drawable/ic_edit"
-            app:tint="@color/accent_mint" />
 
     </LinearLayout>
 
@@ -119,7 +67,7 @@
         android:layout_width="0dp"
         android:layout_height="0dp"
         app:layout_constraintTop_toBottomOf="@id/topBarDivider"
-        app:layout_constraintBottom_toTopOf="@+id/layoutPageScrubber"
+        app:layout_constraintBottom_toTopOf="@id/bottomAdContainer"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
@@ -172,7 +120,7 @@
         android:orientation="horizontal"
         android:paddingHorizontal="10dp"
         android:visibility="gone"
-        app:layout_constraintBottom_toTopOf="@+id/adView"
+        app:layout_constraintBottom_toTopOf="@id/bottomAdContainer"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
@@ -277,7 +225,7 @@
         android:orientation="horizontal"
         android:paddingHorizontal="10dp"
         android:visibility="gone"
-        app:layout_constraintBottom_toTopOf="@+id/adView"
+        app:layout_constraintBottom_toTopOf="@id/bottomAdContainer"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
@@ -330,42 +278,48 @@
     </LinearLayout>
 
 
-    <!-- ── Fast-Scrubber Page Slider ──────────────────────────────────── -->
-    <FrameLayout
-        android:id="@+id/layoutPageScrubber"
-        android:layout_width="0dp"
+    <!-- ── Modern Floating Page Indicator Pill (Auto-hiding pill) ────── -->
+    <TextView
+        android:id="@+id/tvPageIndicator"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:paddingHorizontal="16dp"
-        android:paddingVertical="4dp"
+        android:layout_marginBottom="20dp"
+        android:background="@drawable/bg_floating_page_indicator"
+        android:clickable="true"
+        android:focusable="true"
+        android:gravity="center"
+        android:minWidth="60dp"
+        android:paddingHorizontal="14dp"
+        android:paddingVertical="7dp"
+        android:textColor="#FFFFFF"
+        android:textSize="13sp"
+        android:fontFamily="sans-serif-medium"
+        android:elevation="8dp"
         android:visibility="gone"
-        app:layout_constraintBottom_toTopOf="@id/adView"
+        app:layout_constraintBottom_toTopOf="@id/bottomAdContainer"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent">
+        app:layout_constraintEnd_toEndOf="parent"
+        tools:text="3 / 10"
+        tools:visibility="visible" />
 
-        <com.google.android.material.slider.Slider
-            android:id="@+id/sliderPageScrubber"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:valueFrom="1.0"
-            android:valueTo="1.0"
-            android:stepSize="1.0"
-            app:thumbColor="@color/accent_mint"
-            app:trackColorActive="@color/accent_mint"
-            app:trackColorInactive="@color/divider"
-            app:haloColor="@color/accent_mint_ripple"
-            app:thumbElevation="4dp" />
-    </FrameLayout>
-
-    <!-- ── Policy-Compliant Bottom AdMob Banner (Floating outside scrollable pages) ── -->
-    <com.google.android.gms.ads.AdView
-        android:id="@+id/adView"
+    <!-- ── Policy-Compliant Bottom AdMob Banner Container ── -->
+    <FrameLayout
+        android:id="@+id/bottomAdContainer"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        app:adSize="BANNER"
-        app:adUnitId="@string/admob_banner_ad_unit_id"
+        android:background="@color/background_primary"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent" />
+        app:layout_constraintStart_toStartOf="parent">
+
+        <com.google.android.gms.ads.AdView
+            android:id="@+id/adView"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            app:adSize="BANNER"
+            app:adUnitId="@string/admob_banner_ad_unit_id" />
+    </FrameLayout>
 
     <!-- ── Loading Indicator ──────────────────────────────────────────── -->
     <ProgressBar

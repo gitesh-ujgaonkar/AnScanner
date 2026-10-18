@@ -223,6 +223,15 @@ public class ScannedDocsFragment extends Fragment implements DocumentListAdapter
     }
 
     @Override
+    public void onDocumentExportImages(DocumentEntity document) {
+        if (document == null || document.fileUri == null) return;
+        Uri uri = Uri.parse(document.fileUri);
+        com.anscanner.app.ui.export.ExportImagesBottomSheet sheet =
+                com.anscanner.app.ui.export.ExportImagesBottomSheet.newInstance(uri, document.title);
+        sheet.show(getChildFragmentManager(), "ExportImagesBottomSheet");
+    }
+
+    @Override
     public void onDocumentProperties(DocumentEntity document) {
         FilePropertiesHelper.showPropertiesDialog(requireContext(), document);
     }

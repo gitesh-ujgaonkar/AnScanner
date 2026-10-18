@@ -17,9 +17,11 @@ public class SettingsActivity extends AppCompatActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        com.anscanner.app.util.InsetsHelper.applyEdgeToEdge(this);
         super.onCreate(savedInstanceState);
         binding = ActivitySettingsBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
+        com.anscanner.app.util.InsetsHelper.handleSystemBars(binding.getRoot(), binding.settingsContainer, binding.bottomAdContainer);
 
         if (savedInstanceState == null) {
             getSupportFragmentManager().beginTransaction()
@@ -60,5 +62,16 @@ public class SettingsActivity extends AppCompatActivity {
         }
         super.onDestroy();
         binding = null;
+    }
+
+    /**
+     * Triggers an app update check via the hosted SettingsFragment.
+     */
+    public void checkAppUpdate() {
+        androidx.fragment.app.Fragment fragment =
+                getSupportFragmentManager().findFragmentById(R.id.settings_container);
+        if (fragment instanceof SettingsFragment) {
+            ((SettingsFragment) fragment).checkAndLaunchUpdate();
+        }
     }
 }

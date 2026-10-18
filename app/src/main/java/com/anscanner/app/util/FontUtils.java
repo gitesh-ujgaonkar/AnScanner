@@ -44,6 +44,7 @@ public final class FontUtils {
             return Typeface.SANS_SERIF;
         }
 
+        Context ctx = context != null ? context : com.anscanner.app.AnScannerApp.getInstance();
         String key = fontKey.trim();
         String cacheKey = key.toLowerCase(Locale.US);
 
@@ -52,7 +53,7 @@ public final class FontUtils {
             return cached;
         }
 
-        Typeface resolved = resolveTypeface(context, key, cacheKey);
+        Typeface resolved = resolveTypeface(ctx, key, cacheKey);
         if (resolved == null) {
             resolved = Typeface.SANS_SERIF;
         }
@@ -71,6 +72,8 @@ public final class FontUtils {
 
     @Nullable
     private static Typeface resolveTypeface(@Nullable Context context, @NonNull String rawKey, @NonNull String lowerKey) {
+        Context ctx = context != null ? context : com.anscanner.app.AnScannerApp.getInstance();
+
         // 1. Standard Font Family Aliases
         switch (lowerKey) {
             case "sans":
@@ -83,36 +86,38 @@ public final class FontUtils {
             case "serif":
             case "times":
             case "times new roman":
+            case "playfair":
+                if (ctx != null) {
+                    try {
+                        Typeface tf = Typeface.createFromAsset(ctx.getAssets(), "fonts/playfair.ttf");
+                        if (tf != null) return tf;
+                    } catch (Exception ignored) {}
+                }
                 return Typeface.SERIF;
 
             case "mono":
             case "monospace":
             case "courier":
             case "courier new":
+            case "spacemono":
+                if (ctx != null) {
+                    try {
+                        Typeface tf = Typeface.createFromAsset(ctx.getAssets(), "fonts/spacemono.ttf");
+                        if (tf != null) return tf;
+                    } catch (Exception ignored) {}
+                }
                 return Typeface.MONOSPACE;
 
             case "cursive":
             case "script":
             case "handwriting":
-                // First try standard "cursive" font family
-                try {
-                    Typeface cursive = Typeface.create("cursive", Typeface.NORMAL);
-                    if (cursive != null && !cursive.equals(Typeface.DEFAULT) && !cursive.equals(Typeface.SANS_SERIF)) {
-                        return cursive;
-                    }
-                } catch (Exception ignored) {
+            case "caveat":
+                if (ctx != null) {
+                    try {
+                        Typeface tf = Typeface.createFromAsset(ctx.getAssets(), "fonts/caveat.ttf");
+                        if (tf != null) return tf;
+                    } catch (Exception ignored) {}
                 }
-
-                // If cursive is unavailable, try "casual" (standard Coming Soon in Android AOSP)
-                try {
-                    Typeface casual = Typeface.create("casual", Typeface.NORMAL);
-                    if (casual != null && !casual.equals(Typeface.DEFAULT) && !casual.equals(Typeface.SANS_SERIF)) {
-                        return casual;
-                    }
-                } catch (Exception ignored) {
-                }
-
-                // Visually distinct script-like fallback: Italic Serif
                 return Typeface.create(Typeface.SERIF, Typeface.ITALIC);
 
             default:

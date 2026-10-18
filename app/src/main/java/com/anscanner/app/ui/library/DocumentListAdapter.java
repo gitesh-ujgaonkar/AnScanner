@@ -38,6 +38,7 @@ public class DocumentListAdapter extends RecyclerView.Adapter<RecyclerView.ViewH
     public interface DocumentClickListener {
         void onDocumentClick(DocumentEntity document);
         void onDocumentShare(DocumentEntity document);
+        void onDocumentExportImages(DocumentEntity document);
         void onDocumentProperties(DocumentEntity document);
         void onDocumentRemoveAppOnly(DocumentEntity document);
         void onDocumentDeletePermanently(DocumentEntity document);
@@ -183,6 +184,10 @@ public class DocumentListAdapter extends RecyclerView.Adapter<RecyclerView.ViewH
             android.widget.PopupMenu popup = new android.widget.PopupMenu(anchor.getContext(), anchor);
             popup.getMenuInflater().inflate(R.menu.menu_document_item, popup.getMenu());
 
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                popup.setForceShowIcon(true);
+            }
+
             // Make "Delete Permanently" item look destructive using colorError
             android.view.MenuItem deleteItem = popup.getMenu().findItem(R.id.action_delete_permanently);
             if (deleteItem != null) {
@@ -209,6 +214,9 @@ public class DocumentListAdapter extends RecyclerView.Adapter<RecyclerView.ViewH
                     return true;
                 } else if (id == R.id.action_share) {
                     listener.onDocumentShare(document);
+                    return true;
+                } else if (id == R.id.action_export_images) {
+                    listener.onDocumentExportImages(document);
                     return true;
                 } else if (id == R.id.action_properties) {
                     listener.onDocumentProperties(document);

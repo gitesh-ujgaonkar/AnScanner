@@ -99,11 +99,19 @@ public class ReviewScanActivity extends AppCompatActivity implements PageGridAda
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        com.anscanner.app.util.InsetsHelper.applyEdgeToEdge(this);
         super.onCreate(savedInstanceState);
         binding = ActivityReviewScanBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
+        com.anscanner.app.util.InsetsHelper.handleSystemBars(binding.getRoot(), binding.topBar, binding.bottomBar);
 
-        pagePaths = getIntent().getStringArrayListExtra(EXTRA_PAGE_PATHS);
+        if (savedInstanceState != null) {
+            pagePaths = savedInstanceState.getStringArrayList(EXTRA_PAGE_PATHS);
+            originalPagePaths = savedInstanceState.getStringArrayList(EXTRA_ORIGINAL_PAGE_PATHS);
+        }
+        if (pagePaths == null) {
+            pagePaths = getIntent().getStringArrayListExtra(EXTRA_PAGE_PATHS);
+        }
         if (pagePaths == null || pagePaths.isEmpty()) {
             Uri pdfUri = getIntent().getData();
             if (pdfUri == null && getIntent().hasExtra("extra_pdf_uri")) {
@@ -125,7 +133,9 @@ public class ReviewScanActivity extends AppCompatActivity implements PageGridAda
             pagePaths.add(singleImage);
         }
 
-        originalPagePaths = getIntent().getStringArrayListExtra(EXTRA_ORIGINAL_PAGE_PATHS);
+        if (originalPagePaths == null) {
+            originalPagePaths = getIntent().getStringArrayListExtra(EXTRA_ORIGINAL_PAGE_PATHS);
+        }
         if (originalPagePaths == null || originalPagePaths.size() != pagePaths.size()) {
             originalPagePaths = new ArrayList<>(pagePaths);
         }
@@ -135,9 +145,16 @@ public class ReviewScanActivity extends AppCompatActivity implements PageGridAda
         updatePageCount();
     }
 
+    @Override
+    protected void onSaveInstanceState(@NonNull Bundle outState) {
+        super.onSaveInstanceState(outState);
+        outState.putStringArrayList(EXTRA_PAGE_PATHS, pagePaths);
+        outState.putStringArrayList(EXTRA_ORIGINAL_PAGE_PATHS, originalPagePaths);
+    }
+
     private void setupRecyclerView() {
-        adapter = new PageGridAdapter(pagePaths, this);
-        binding.rvPages.setLayoutManager(new GridLayoutManager(this, 2));
+        int spanCount = getResources().getInteger(R.integer.review_grid_columns);
+        binding.rvPages.setLayoutManager(new GridLayoutManager(this, spanCount));
         binding.rvPages.setAdapter(adapter);
 
         ItemTouchHelper.SimpleCallback simpleCallback = new ItemTouchHelper.SimpleCallback(

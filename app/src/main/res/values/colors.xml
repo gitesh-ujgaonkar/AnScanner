@@ -4,7 +4,7 @@
     <!-- ── Primary Backgrounds (Light) ────────────────────────────────── -->
     <color name="background_primary">#FFF8F9FA</color>
     <color name="background_secondary">#FFF1F3F5</color>
-    <color name="camera_background">#FF121212</color>
+    <color name="camera_background">#FFF8F9FA</color>
 
     <!-- ── Surfaces & Cards (Light) ───────────────────────────────────── -->
     <color name="surface_card">#FFFFFFFF</color>

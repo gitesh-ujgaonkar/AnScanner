@@ -9,7 +9,8 @@
     <LinearLayout
         android:id="@+id/topBar"
         android:layout_width="match_parent"
-        android:layout_height="@dimen/top_bar_height"
+        android:layout_height="wrap_content"
+        android:minHeight="@dimen/top_bar_height"
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:paddingHorizontal="@dimen/spacing_sm"
@@ -25,7 +26,7 @@
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="@string/cd_close"
             android:src="@drawable/ic_close"
-            app:tint="@android:color/white" />
+            app:tint="@color/text_primary" />
 
         <!-- Center: Dedicated Page Navigation (< Page X of Y >) -->
         <LinearLayout
@@ -43,7 +44,7 @@
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:contentDescription="@string/cd_prev_page"
                 android:src="@drawable/ic_chevron_left"
-                app:tint="@android:color/white" />
+                app:tint="@color/text_primary" />
 
             <TextView
                 android:id="@+id/tvTitle"
@@ -59,7 +60,7 @@
                 android:singleLine="true"
                 android:text="Page 1 of 1"
                 android:textAppearance="@style/TextAppearance.AnScanner.Title"
-                android:textColor="@android:color/white"
+                android:textColor="@color/text_primary"
                 android:textSize="12sp" />
 
             <ImageButton
@@ -69,7 +70,7 @@
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:contentDescription="@string/cd_next_page"
                 android:src="@drawable/ic_chevron_right"
-                app:tint="@android:color/white" />
+                app:tint="@color/text_primary" />
         </LinearLayout>
 
         <!-- Right: Actions (Undo, OCR, Save) -->
@@ -89,7 +90,18 @@
                 android:enabled="false"
                 android:alpha="0.3"
                 android:src="@drawable/ic_undo"
-                app:tint="@android:color/white" />
+                app:tint="@color/text_primary" />
+
+            <ImageButton
+                android:id="@+id/btnRedo"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/cd_redo"
+                android:enabled="false"
+                android:alpha="0.3"
+                android:src="@drawable/ic_redo"
+                app:tint="@color/text_primary" />
 
             <ImageButton
                 android:id="@+id/btnExtractText"
@@ -98,7 +110,7 @@
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:contentDescription="@string/cd_extract_text"
                 android:src="@drawable/ic_ocr_text"
-                app:tint="@android:color/white" />
+                app:tint="@color/text_primary" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnSaveDocument"
@@ -113,7 +125,7 @@
                 android:paddingHorizontal="12dp"
                 android:text="@string/crop_confirm_save"
                 android:textAppearance="@style/TextAppearance.AnScanner.Button"
-                android:textColor="@color/background_primary"
+                android:textColor="@color/text_on_accent"
                 android:textSize="12sp"
                 app:cornerRadius="18dp" />
         </LinearLayout>
@@ -269,7 +281,7 @@
                     android:insetBottom="0dp"
                     android:paddingHorizontal="12dp"
                     android:text="@string/action_done"
-                    android:textColor="@color/background_primary"
+                    android:textColor="@color/text_on_accent"
                     android:textSize="12sp"
                     app:cornerRadius="16dp" />
             </LinearLayout>
@@ -441,6 +453,16 @@
                     android:textColor="@color/text_muted"
                     android:textSize="11sp" />
 
+                <!-- Subtle loading indicator when applying filter to main viewport -->
+                <ProgressBar
+                    android:id="@+id/pbFilterApplying"
+                    android:layout_width="16dp"
+                    android:layout_height="16dp"
+                    android:layout_marginEnd="8dp"
+                    android:indeterminate="true"
+                    android:indeterminateTint="@color/accent_mint"
+                    android:visibility="gone" />
+
                 <com.google.android.material.checkbox.MaterialCheckBox
                     android:id="@+id/cbFilterApplyToAll"
                     android:layout_width="wrap_content"
@@ -460,113 +482,19 @@
                     android:background="?attr/selectableItemBackgroundBorderless"
                     android:contentDescription="@string/cd_close"
                     android:src="@drawable/ic_close"
-                    app:tint="@android:color/white" />
+                    app:tint="@color/text_primary" />
             </LinearLayout>
 
-            <!-- Horizontal Filter Buttons Row -->
-            <HorizontalScrollView
+            <!-- Horizontal Filter Thumbnail Carousel -->
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/rvFilters"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:clipToPadding="false"
-                android:paddingVertical="2dp"
-                android:scrollbars="none">
-
-                <LinearLayout
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal">
-
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btnFilterOriginal"
-                        style="@style/Widget.Material3.Button.TonalButton"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:minHeight="40dp"
-                        android:layout_marginEnd="@dimen/spacing_sm"
-                        android:insetTop="0dp"
-                        android:insetBottom="0dp"
-                        android:text="@string/crop_filter_original"
-                        android:textColor="@color/text_primary"
-                        android:textSize="12sp"
-                        app:backgroundTint="@color/surface_elevated"
-                        app:cornerRadius="16dp" />
-
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btnFilterMagic"
-                        style="@style/Widget.Material3.Button.TonalButton"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:minHeight="40dp"
-                        android:layout_marginEnd="@dimen/spacing_sm"
-                        android:insetTop="0dp"
-                        android:insetBottom="0dp"
-                        android:text="@string/crop_filter_magic_color"
-                        android:textColor="@color/text_primary"
-                        android:textSize="12sp"
-                        app:backgroundTint="@color/surface_elevated"
-                        app:cornerRadius="16dp" />
-
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btnFilterBW"
-                        style="@style/Widget.Material3.Button.TonalButton"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:minHeight="40dp"
-                        android:layout_marginEnd="@dimen/spacing_sm"
-                        android:insetTop="0dp"
-                        android:insetBottom="0dp"
-                        android:text="@string/crop_filter_bw_clean"
-                        android:textColor="@color/text_primary"
-                        android:textSize="12sp"
-                        app:backgroundTint="@color/surface_elevated"
-                        app:cornerRadius="16dp" />
-
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btnFilterGrayscale"
-                        style="@style/Widget.Material3.Button.TonalButton"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:minHeight="40dp"
-                        android:layout_marginEnd="@dimen/spacing_sm"
-                        android:insetTop="0dp"
-                        android:insetBottom="0dp"
-                        android:text="@string/crop_filter_grayscale"
-                        android:textColor="@color/text_primary"
-                        android:textSize="12sp"
-                        app:backgroundTint="@color/surface_elevated"
-                        app:cornerRadius="16dp" />
-
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btnFilterSharpen"
-                        style="@style/Widget.Material3.Button.TonalButton"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:minHeight="40dp"
-                        android:layout_marginEnd="@dimen/spacing_sm"
-                        android:insetTop="0dp"
-                        android:insetBottom="0dp"
-                        android:text="@string/crop_filter_sharpen"
-                        android:textColor="@color/text_primary"
-                        android:textSize="12sp"
-                        app:backgroundTint="@color/surface_elevated"
-                        app:cornerRadius="16dp" />
-
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btnFilterScanEnhance"
-                        style="@style/Widget.Material3.Button.TonalButton"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:minHeight="40dp"
-                        android:insetTop="0dp"
-                        android:insetBottom="0dp"
-                        android:text="@string/crop_filter_scan_enhance"
-                        android:textColor="@color/text_primary"
-                        android:textSize="12sp"
-                        app:backgroundTint="@color/surface_elevated"
-                        app:cornerRadius="16dp" />
-                </LinearLayout>
-            </HorizontalScrollView>
+                android:orientation="horizontal"
+                android:paddingHorizontal="4dp"
+                android:paddingVertical="4dp"
+                android:scrollbars="none" />
         </LinearLayout>
 
         <!-- ── Horizontal Thumbnail Strip (Batch Scan / Multi-Page) ────── -->
@@ -621,7 +549,7 @@
                         android:layout_height="@dimen/icon_md"
                         android:importantForAccessibility="no"
                         android:src="@drawable/ic_crop"
-                        app:tint="@android:color/white" />
+                        app:tint="@color/text_primary" />
 
                     <TextView
                         android:id="@+id/tvCropLabel"
@@ -630,7 +558,7 @@
                         android:layout_marginTop="2dp"
                         android:text="@string/crop_action_crop"
                         android:textAppearance="@style/TextAppearance.AnScanner.Label"
-                        android:textColor="@android:color/white"
+                        android:textColor="@color/text_primary"
                         android:textSize="11sp" />
                 </LinearLayout>
 
@@ -654,7 +582,7 @@
                         android:layout_height="@dimen/icon_md"
                         android:importantForAccessibility="no"
                         android:src="@drawable/ic_filter"
-                        app:tint="@android:color/white" />
+                        app:tint="@color/text_primary" />
 
                     <TextView
                         android:id="@+id/tvFilterLabel"
@@ -663,7 +591,7 @@
                         android:layout_marginTop="2dp"
                         android:text="@string/crop_action_filter"
                         android:textAppearance="@style/TextAppearance.AnScanner.Label"
-                        android:textColor="@android:color/white"
+                        android:textColor="@color/text_primary"
                         android:textSize="11sp" />
                 </LinearLayout>
 
@@ -687,7 +615,7 @@
                         android:layout_height="@dimen/icon_md"
                         android:importantForAccessibility="no"
                         android:src="@drawable/ic_edit"
-                        app:tint="@android:color/white" />
+                        app:tint="@color/text_primary" />
 
                     <TextView
                         android:id="@+id/tvAnnotateLabel"
@@ -696,7 +624,7 @@
                         android:layout_marginTop="2dp"
                         android:text="@string/action_annotate"
                         android:textAppearance="@style/TextAppearance.AnScanner.Label"
-                        android:textColor="@android:color/white"
+                        android:textColor="@color/text_primary"
                         android:textSize="11sp" />
                 </LinearLayout>
 
@@ -720,7 +648,7 @@
                         android:layout_height="@dimen/icon_md"
                         android:importantForAccessibility="no"
                         android:src="@drawable/ic_signature"
-                        app:tint="@android:color/white" />
+                        app:tint="@color/text_primary" />
 
                     <TextView
                         android:id="@+id/tvTextSignLabel"
@@ -729,7 +657,7 @@
                         android:layout_marginTop="2dp"
                         android:text="@string/action_text_sign"
                         android:textAppearance="@style/TextAppearance.AnScanner.Label"
-                        android:textColor="@android:color/white"
+                        android:textColor="@color/text_primary"
                         android:textSize="11sp" />
                 </LinearLayout>
 
@@ -753,7 +681,7 @@
                         android:layout_height="@dimen/icon_md"
                         android:importantForAccessibility="no"
                         android:src="@drawable/ic_rotate"
-                        app:tint="@android:color/white" />
+                        app:tint="@color/text_primary" />
 
                     <TextView
                         android:id="@+id/tvRotateLabel"
@@ -762,7 +690,7 @@
                         android:layout_marginTop="2dp"
                         android:text="@string/crop_action_rotate"
                         android:textAppearance="@style/TextAppearance.AnScanner.Label"
-                        android:textColor="@android:color/white"
+                        android:textColor="@color/text_primary"
                         android:textSize="11sp" />
                 </LinearLayout>
 
@@ -786,7 +714,7 @@
                         android:layout_height="@dimen/icon_md"
                         android:importantForAccessibility="no"
                         android:src="@drawable/ic_delete"
-                        app:tint="@android:color/white" />
+                        app:tint="@color/text_primary" />
 
                     <TextView
                         android:id="@+id/tvDeleteLabel"
@@ -795,7 +723,7 @@
                         android:layout_marginTop="2dp"
                         android:text="@string/crop_action_delete"
                         android:textAppearance="@style/TextAppearance.AnScanner.Label"
-                        android:textColor="@android:color/white"
+                        android:textColor="@color/text_primary"
                         android:textSize="11sp" />
                 </LinearLayout>
             </LinearLayout>

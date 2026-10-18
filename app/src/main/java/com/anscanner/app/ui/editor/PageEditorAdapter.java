@@ -38,14 +38,32 @@ public class PageEditorAdapter extends RecyclerView.Adapter<PageEditorAdapter.Pa
         Bitmap provideBitmap(int position, String path);
     }
 
+    public interface OnViewHolderBoundListener {
+        void onViewHolderBound(PageViewHolder holder, int position);
+    }
+
+    public interface OnBitmapLoadedListener {
+        void onBitmapLoaded(PageViewHolder holder, int position, Bitmap bitmap);
+    }
+
     private final ArrayList<String> pagePaths;
     private final PageBitmapProvider bitmapProvider;
     private final ExecutorService executor = Executors.newFixedThreadPool(2);
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    private OnViewHolderBoundListener onViewHolderBoundListener;
+    private OnBitmapLoadedListener onBitmapLoadedListener;
 
     public PageEditorAdapter(@NonNull ArrayList<String> pagePaths, @Nullable PageBitmapProvider bitmapProvider) {
         this.pagePaths = pagePaths;
         this.bitmapProvider = bitmapProvider;
+    }
+
+    public void setOnViewHolderBoundListener(OnViewHolderBoundListener listener) {
+        this.onViewHolderBoundListener = listener;
+    }
+
+    public void setOnBitmapLoadedListener(OnBitmapLoadedListener listener) {
+        this.onBitmapLoadedListener = listener;
     }
 
     @NonNull
@@ -66,26 +84,40 @@ public class PageEditorAdapter extends RecyclerView.Adapter<PageEditorAdapter.Pa
         holder.drawingOverlay.setVisibility(View.GONE);
         holder.ivPageImage.setZoomable(true);
         holder.ivPageImage.setScale(1.0f, false);
+        holder.cropOverlay.setImageView(holder.ivPageImage);
         holder.drawingOverlay.bindImageView(holder.ivPageImage);
+
+        holder.itemView.setTag(path);
+
+        if (onViewHolderBoundListener != null) {
+            onViewHolderBoundListener.onViewHolderBound(holder, position);
+        }
 
         if (bitmapProvider != null) {
             Bitmap bmp = bitmapProvider.provideBitmap(position, path);
             if (bmp != null) {
                 holder.ivPageImage.setImageBitmap(bmp);
+                holder.cropOverlay.setImageView(holder.ivPageImage);
                 holder.drawingOverlay.setDocumentDimensions(bmp.getWidth(), bmp.getHeight());
+                if (onBitmapLoadedListener != null) {
+                    onBitmapLoadedListener.onBitmapLoaded(holder, position, bmp);
+                }
                 return;
             }
         }
 
         // Asynchronously decode bitmap to keep swiping fluid
-        final int targetPos = position;
         executor.execute(() -> {
             Bitmap bmp = CacheManager.loadBitmap(path);
             if (bmp != null) {
                 mainHandler.post(() -> {
-                    if (holder.getBindingAdapterPosition() == targetPos) {
+                    if (path.equals(holder.itemView.getTag())) {
                         holder.ivPageImage.setImageBitmap(bmp);
+                        holder.cropOverlay.setImageView(holder.ivPageImage);
                         holder.drawingOverlay.setDocumentDimensions(bmp.getWidth(), bmp.getHeight());
+                        if (onBitmapLoadedListener != null) {
+                            onBitmapLoadedListener.onBitmapLoaded(holder, position, bmp);
+                        }
                     }
                 });
             }
@@ -124,6 +156,7 @@ public class PageEditorAdapter extends RecyclerView.Adapter<PageEditorAdapter.Pa
             this.ivPageImage = binding.ivPageImage;
             this.cropOverlay = binding.cropOverlay;
             this.drawingOverlay = binding.drawingOverlay;
+            this.cropOverlay.setImageView(this.ivPageImage);
         }
     }
 }

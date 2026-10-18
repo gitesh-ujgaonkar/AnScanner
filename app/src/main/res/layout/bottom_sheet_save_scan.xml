@@ -102,6 +102,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             app:singleSelection="true"
+            app:selectionRequired="true"
             app:checkedButton="@+id/btnPdf">
             
             <com.google.android.material.button.MaterialButton
@@ -110,7 +111,10 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="@string/save_format_pdf" />
+                android:text="@string/save_format_pdf"
+                android:textColor="@color/selector_camera_mode_text"
+                app:backgroundTint="@color/selector_camera_mode_bg"
+                app:strokeColor="@color/selector_camera_mode_stroke" />
                 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnJpg"
@@ -118,7 +122,10 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="@string/save_format_jpg" />
+                android:text="@string/save_format_jpg"
+                android:textColor="@color/selector_camera_mode_text"
+                app:backgroundTint="@color/selector_camera_mode_bg"
+                app:strokeColor="@color/selector_camera_mode_stroke" />
         </com.google.android.material.button.MaterialButtonToggleGroup>
     </LinearLayout>
 

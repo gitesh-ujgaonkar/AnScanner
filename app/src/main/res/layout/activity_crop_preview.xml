@@ -24,7 +24,7 @@
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="@string/cd_close"
             android:src="@drawable/ic_close"
-            app:tint="@android:color/white" />
+            app:tint="@color/text_primary" />
 
         <LinearLayout
             android:layout_width="0dp"
@@ -42,7 +42,7 @@
                 android:contentDescription="@string/cd_prev_page"
                 android:src="@drawable/ic_chevron_left"
                 android:visibility="gone"
-                app:tint="@android:color/white" />
+                app:tint="@color/text_primary" />
 
             <TextView
                 android:id="@+id/tvTitle"
@@ -54,7 +54,7 @@
                 android:paddingVertical="6dp"
                 android:text="Page 1 of 1"
                 android:textAppearance="@style/TextAppearance.AnScanner.Title"
-                android:textColor="@android:color/white"
+                android:textColor="@color/text_primary"
                 android:textSize="14sp" />
 
             <ImageButton
@@ -66,7 +66,7 @@
                 android:contentDescription="@string/cd_next_page"
                 android:src="@drawable/ic_chevron_right"
                 android:visibility="gone"
-                app:tint="@android:color/white" />
+                app:tint="@color/text_primary" />
         </LinearLayout>
 
         <ImageButton
@@ -78,7 +78,7 @@
             android:enabled="false"
             android:alpha="0.3"
             android:src="@drawable/ic_undo"
-            app:tint="@android:color/white" />
+            app:tint="@color/text_primary" />
 
         <ImageButton
             android:id="@+id/btnExtractText"
@@ -87,7 +87,7 @@
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="@string/cd_extract_text"
             android:src="@drawable/ic_ocr_text"
-            app:tint="@android:color/white" />
+            app:tint="@color/text_primary" />
 
     </LinearLayout>
 
@@ -212,7 +212,7 @@
                         android:layout_height="@dimen/icon_md"
                         android:importantForAccessibility="no"
                         android:src="@drawable/ic_crop"
-                        app:tint="@android:color/white" />
+                        app:tint="@color/text_primary" />
 
                     <TextView
                         android:id="@+id/tvCropLabel"
@@ -221,7 +221,7 @@
                         android:layout_marginTop="4dp"
                         android:text="@string/crop_action_crop"
                         android:textAppearance="@style/TextAppearance.AnScanner.Label"
-                        android:textColor="@android:color/white"
+                        android:textColor="@color/text_primary"
                         android:textSize="12sp" />
                 </LinearLayout>
 
@@ -244,7 +244,7 @@
                         android:layout_height="@dimen/icon_md"
                         android:importantForAccessibility="no"
                         android:src="@drawable/ic_filter"
-                        app:tint="@android:color/white" />
+                        app:tint="@color/text_primary" />
 
                     <TextView
                         android:id="@+id/tvFilterLabel"
@@ -253,7 +253,7 @@
                         android:layout_marginTop="4dp"
                         android:text="@string/crop_action_filter"
                         android:textAppearance="@style/TextAppearance.AnScanner.Label"
-                        android:textColor="@android:color/white"
+                        android:textColor="@color/text_primary"
                         android:textSize="12sp" />
                 </LinearLayout>
 
@@ -276,7 +276,7 @@
                         android:layout_height="@dimen/icon_md"
                         android:importantForAccessibility="no"
                         android:src="@drawable/ic_rotate"
-                        app:tint="@android:color/white" />
+                        app:tint="@color/text_primary" />
 
                     <TextView
                         android:id="@+id/tvRotateLabel"
@@ -285,7 +285,7 @@
                         android:layout_marginTop="4dp"
                         android:text="@string/crop_action_rotate"
                         android:textAppearance="@style/TextAppearance.AnScanner.Label"
-                        android:textColor="@android:color/white"
+                        android:textColor="@color/text_primary"
                         android:textSize="12sp" />
                 </LinearLayout>
 
@@ -308,7 +308,7 @@
                         android:layout_height="@dimen/icon_md"
                         android:importantForAccessibility="no"
                         android:src="@drawable/ic_delete"
-                        app:tint="@android:color/white" />
+                        app:tint="@color/text_primary" />
 
                     <TextView
                         android:id="@+id/tvDeleteLabel"
@@ -317,7 +317,7 @@
                         android:layout_marginTop="4dp"
                         android:text="@string/crop_action_delete"
                         android:textAppearance="@style/TextAppearance.AnScanner.Label"
-                        android:textColor="@android:color/white"
+                        android:textColor="@color/text_primary"
                         android:textSize="12sp" />
                 </LinearLayout>
             </LinearLayout>

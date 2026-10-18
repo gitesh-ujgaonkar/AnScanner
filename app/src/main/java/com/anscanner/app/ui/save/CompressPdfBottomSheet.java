@@ -272,6 +272,10 @@ public class CompressPdfBottomSheet extends BottomSheetDialogFragment {
                         viewerIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                         startActivity(viewerIntent);
 
+                        if (getActivity() != null) {
+                            new com.anscanner.app.review.ReviewPromptManager(getActivity()).onExportCompleted(getActivity());
+                        }
+
                         dismiss();
                     });
                 } else {

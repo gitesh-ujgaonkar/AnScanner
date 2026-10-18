@@ -43,22 +43,7 @@ public final class InAppReviewHelper {
      */
     public static void onScanCompleted(@NonNull Activity activity) {
         if (activity.isFinishing() || activity.isDestroyed()) return;
-
-        SharedPreferences prefs = activity.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
-        boolean hasReviewed = prefs.getBoolean(KEY_HAS_REVIEWED, false);
-        if (hasReviewed) {
-            return;
-        }
-
-        int scanCount = prefs.getInt(KEY_SCAN_COUNT, 0) + 1;
-        prefs.edit().putInt(KEY_SCAN_COUNT, scanCount).apply();
-
-        Log.d(TAG, "Scan completed. Current scan_count=" + scanCount + ", has_reviewed=" + hasReviewed);
-
-        // Trigger on 1st scan, then every 3rd scan thereafter (1, 4, 7, 10...)
-        if (scanCount == 1 || (scanCount > 1 && (scanCount - 1) % 3 == 0)) {
-            triggerReviewFlow(activity, prefs);
-        }
+        new com.anscanner.app.review.ReviewPromptManager(activity).onExportCompleted(activity);
     }
 
     private static void triggerReviewFlow(@NonNull Activity activity, @NonNull SharedPreferences prefs) {

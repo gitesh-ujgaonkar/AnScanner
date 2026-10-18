@@ -6,7 +6,12 @@
         android:title="@string/action_open" />
     <item
         android:id="@+id/action_share"
-        android:title="@string/action_share" />
+        android:title="@string/action_share"
+        android:icon="@drawable/ic_share" />
+    <item
+        android:id="@+id/action_export_images"
+        android:title="@string/action_export_images"
+        android:icon="@drawable/ic_gallery" />
     <item
         android:id="@+id/action_properties"
         android:title="@string/action_properties"

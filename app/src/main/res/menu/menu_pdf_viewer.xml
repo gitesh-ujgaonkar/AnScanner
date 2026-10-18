@@ -3,33 +3,38 @@
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
     <item
-        android:id="@+id/action_toggle_orientation"
-        android:title="@string/cd_toggle_orientation"
-        android:icon="@drawable/ic_view_carousel"
-        app:showAsAction="ifRoom" />
+        android:id="@+id/action_share"
+        android:title="@string/action_share"
+        android:icon="@drawable/ic_share" />
+
+    <item
+        android:id="@+id/action_export_images"
+        android:title="@string/action_export_images"
+        android:icon="@drawable/ic_gallery" />
 
     <item
         android:id="@+id/action_ocr"
-        android:title="@string/cd_extract_text"
-        android:icon="@drawable/ic_ocr_text"
-        app:showAsAction="ifRoom" />
+        android:title="@string/action_extract_text"
+        android:icon="@drawable/ic_ocr_text" />
 
     <item
         android:id="@+id/action_annotate"
-        android:title="@string/cd_annotate"
-        android:icon="@drawable/ic_draw"
-        app:showAsAction="ifRoom" />
+        android:title="@string/action_annotate_sign"
+        android:icon="@drawable/ic_draw" />
 
     <item
         android:id="@+id/action_edit"
-        android:title="@string/action_edit_page"
-        android:icon="@drawable/ic_edit"
-        app:showAsAction="ifRoom" />
+        android:title="@string/action_edit_document"
+        android:icon="@drawable/ic_edit" />
+
+    <item
+        android:id="@+id/action_toggle_orientation"
+        android:title="@string/pdf_view_mode_horizontal"
+        android:icon="@drawable/ic_view_carousel" />
 
     <item
         android:id="@+id/action_print"
         android:title="@string/action_print"
-        android:icon="@drawable/ic_print"
-        app:showAsAction="never" />
+        android:icon="@drawable/ic_print" />
 
 </menu>

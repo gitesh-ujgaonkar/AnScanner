@@ -31,7 +31,7 @@
             android:layout_margin="3dp"
             android:background="@drawable/bg_page_badge"
             android:gravity="center"
-            android:textColor="@android:color/white"
+            android:textColor="@color/text_on_accent"
             android:textSize="10sp"
             android:textStyle="bold" />
 

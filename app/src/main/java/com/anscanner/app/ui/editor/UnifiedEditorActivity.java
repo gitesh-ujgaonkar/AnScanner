@@ -3,10 +3,12 @@ package com.anscanner.app.ui.editor;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Matrix;
 import android.graphics.Point;
+import android.graphics.PointF;
 import android.graphics.RectF;
 import android.graphics.Typeface;
 import android.net.Uri;
@@ -16,6 +18,7 @@ import android.os.Looper;
 import android.content.res.ColorStateList;
 import android.text.InputType;
 import android.util.Log;
+import android.view.Gravity;
 import android.view.View;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
@@ -33,12 +36,17 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
+import androidx.lifecycle.ViewModelProvider;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.viewpager2.widget.ViewPager2;
 
 import com.anscanner.app.R;
 import com.anscanner.app.databinding.ActivityUnifiedEditorBinding;
+import com.anscanner.app.model.draft.DraftManager;
+import com.anscanner.app.model.draft.EditHistoryManager;
+import com.anscanner.app.model.draft.ScanEditState;
+import com.anscanner.app.model.ocr.OcrPage;
 import com.anscanner.app.processing.DocumentDetector;
 import com.anscanner.app.processing.ImageProcessor;
 import com.anscanner.app.service.CacheManager;
@@ -51,8 +59,11 @@ import com.anscanner.app.ui.custom.DrawingOverlayView;
 import com.anscanner.app.ui.custom.TouchImageView;
 import com.anscanner.app.ui.save.SaveScanBottomSheet;
 import com.anscanner.app.util.FontUtils;
+import com.anscanner.app.util.InsetsHelper;
 import android.text.Editable;
 import android.text.TextWatcher;
+
+import com.google.android.material.card.MaterialCardView;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.materialswitch.MaterialSwitch;
 import com.google.android.material.textfield.TextInputEditText;
@@ -66,6 +77,8 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Stack;
 import java.util.UUID;
@@ -96,6 +109,7 @@ public class UnifiedEditorActivity extends AppCompatActivity {
     public static final String EXTRA_IS_ADDING_PAGE = "extra_is_adding_page";
     public static final String EXTRA_FROM_REVIEW = "extra_from_review";
     public static final String EXTRA_ENABLE_CROP_DEFAULT = "extra_enable_crop_default";
+    public static final String EXTRA_RESUME_DRAFT = "extra_resume_draft";
 
     public static final String MODE_BATCH_SCAN = "BATCH_SCAN";
     public static final String MODE_PDF_EDIT = "PDF_EDIT";
@@ -104,6 +118,7 @@ public class UnifiedEditorActivity extends AppCompatActivity {
     private ActivityUnifiedEditorBinding binding;
     private PageEditorAdapter pageAdapter;
     private ThumbnailStripAdapter thumbAdapter;
+    private EditorViewModel viewModel;
 
     private ArrayList<String> pagePaths;
     private ArrayList<String> originalPagePaths;
@@ -124,161 +139,35 @@ public class UnifiedEditorActivity extends AppCompatActivity {
     public enum DocumentFilter {
         ORIGINAL,
         MAGIC,
+        SCAN_ENHANCE,
         BW,
         GRAYSCALE,
         SHARPEN,
-        SCAN_ENHANCE
+        INVERT
     }
 
+    private FilterPreviewAdapter filterAdapter;
+    private final Map<Integer, Map<DocumentFilter, Bitmap>> filterPreviewCache = new HashMap<>();
     private final Map<Integer, Point[]> savedCornersMap = new HashMap<>();
     private ExecutorService executor;
     private Handler mainHandler;
     private volatile boolean isBusy = false;
 
-    // ── Unified Undo / Redo Architecture ──────────────────────────────
+    // ── Non-Destructive Undo / Redo & Draft Architecture ──────────────
+    private final Map<Integer, EditHistoryManager> pageHistoryMap = new HashMap<>();
 
-    public interface EditorAction {
-        void undo();
-        void redo();
-    }
-
-    public class ImageTransformAction implements EditorAction {
-        private final int targetPageIndex;
-        private final String backupPath;
-        private final String transformedPath;
-        private final Point[] previousCorners;
-        private final Point[] newCorners;
-
-        public ImageTransformAction(int targetPageIndex, String backupPath, String transformedPath, Point[] previousCorners, Point[] newCorners) {
-            this.targetPageIndex = targetPageIndex;
-            this.backupPath = backupPath;
-            this.transformedPath = transformedPath;
-            this.previousCorners = previousCorners;
-            this.newCorners = newCorners;
+    public EditHistoryManager getHistoryManager(int targetIndex) {
+        EditHistoryManager hm = pageHistoryMap.get(targetIndex);
+        if (hm == null) {
+            hm = new EditHistoryManager(ScanEditState.createDefault());
+            pageHistoryMap.put(targetIndex, hm);
         }
-
-        public int getTargetPageIndex() {
-            return targetPageIndex;
-        }
-
-        public String getBackupPath() {
-            return backupPath;
-        }
-
-        public String getTransformedPath() {
-            return transformedPath;
-        }
-
-        @Override
-        public void undo() {
-            if (targetPageIndex >= 0 && targetPageIndex < pagePaths.size()) {
-                pagePaths.set(targetPageIndex, backupPath);
-                if (previousCorners != null) {
-                    savedCornersMap.put(targetPageIndex, previousCorners);
-                } else {
-                    savedCornersMap.remove(targetPageIndex);
-                }
-
-                if (pageIndex != targetPageIndex) {
-                    scrollToPage(targetPageIndex, false);
-                }
-
-                pageAdapter.notifyItemChanged(targetPageIndex);
-                thumbAdapter.notifyItemChanged(targetPageIndex);
-
-                PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.viewPagerPages, targetPageIndex);
-                if (vh != null) {
-                    Bitmap bmp = CacheManager.loadBitmap(backupPath);
-                    if (bmp != null) {
-                        vh.ivPageImage.setImageBitmap(bmp);
-                        vh.drawingOverlay.bindImageView(vh.ivPageImage);
-                        if (previousCorners != null) {
-                            vh.cropOverlay.setCorners(previousCorners);
-                        }
-                    }
-                }
-            }
-        }
-
-        @Override
-        public void redo() {
-            if (targetPageIndex >= 0 && targetPageIndex < pagePaths.size()) {
-                pagePaths.set(targetPageIndex, transformedPath);
-                if (newCorners != null) {
-                    savedCornersMap.put(targetPageIndex, newCorners);
-                }
-
-                if (pageIndex != targetPageIndex) {
-                    scrollToPage(targetPageIndex, false);
-                }
-
-                pageAdapter.notifyItemChanged(targetPageIndex);
-                thumbAdapter.notifyItemChanged(targetPageIndex);
-
-                PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.viewPagerPages, targetPageIndex);
-                if (vh != null) {
-                    Bitmap bmp = CacheManager.loadBitmap(transformedPath);
-                    if (bmp != null) {
-                        vh.ivPageImage.setImageBitmap(bmp);
-                        vh.drawingOverlay.bindImageView(vh.ivPageImage);
-                        if (newCorners != null) {
-                            vh.cropOverlay.setCorners(newCorners);
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    public class DrawingStrokeAction implements EditorAction {
-        private final int targetPageIndex;
-
-        public DrawingStrokeAction(int targetPageIndex) {
-            this.targetPageIndex = targetPageIndex;
-        }
-
-        @Override
-        public void undo() {
-            if (pageIndex != targetPageIndex) {
-                scrollToPage(targetPageIndex, false);
-            }
-            PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.viewPagerPages, targetPageIndex);
-            if (vh != null) {
-                vh.drawingOverlay.undo();
-            }
-        }
-
-        @Override
-        public void redo() {
-        }
-    }
-
-    private final Stack<EditorAction> undoStack = new Stack<>();
-    private final Stack<EditorAction> redoStack = new Stack<>();
-
-    private String backupFile(String sourcePath, String prefix) {
-        if (sourcePath == null) return null;
-        try {
-            File src = new File(sourcePath);
-            if (!src.exists()) return null;
-            File backup = new File(getCacheDir(), prefix + "_" + System.currentTimeMillis() + "_" + UUID.randomUUID().toString() + ".jpg");
-            try (InputStream in = new FileInputStream(src);
-                 OutputStream out = new FileOutputStream(backup)) {
-                byte[] buf = new byte[8192];
-                int len;
-                while ((len = in.read(buf)) > 0) {
-                    out.write(buf, 0, len);
-                }
-            }
-            return backup.getAbsolutePath();
-        } catch (Exception e) {
-            Log.e(TAG, "Failed to backup file: " + sourcePath, e);
-            return sourcePath;
-        }
+        return hm;
     }
 
     private void updateUndoButtonState() {
-        boolean canUndo = !undoStack.isEmpty();
+        EditHistoryManager hm = getHistoryManager(pageIndex);
+        boolean canUndo = (hm != null && hm.canUndo());
         if (!canUndo && isDrawingMode) {
             PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.viewPagerPages, pageIndex);
             if (vh != null && vh.drawingOverlay.getActionCount() > 0) {
@@ -287,70 +176,326 @@ public class UnifiedEditorActivity extends AppCompatActivity {
         }
         binding.btnUndo.setEnabled(canUndo);
         binding.btnUndo.setAlpha(canUndo ? 1.0f : 0.3f);
+
+        if (binding.btnRedo != null) {
+            boolean canRedo = (hm != null && hm.canRedo());
+            binding.btnRedo.setEnabled(canRedo);
+            binding.btnRedo.setAlpha(canRedo ? 1.0f : 0.3f);
+        }
+    }
+
+    private void renderStateNonDestructively(int targetPageIndex, @Nullable ScanEditState state, @Nullable Runnable onComplete) {
+        if (state == null || targetPageIndex < 0 || targetPageIndex >= pagePaths.size()) {
+            if (onComplete != null) onComplete.run();
+            return;
+        }
+
+        isBusy = true;
+        if (binding.pbFilterApplying != null) {
+            binding.pbFilterApplying.setVisibility(View.VISIBLE);
+        }
+
+        final String origPath = (targetPageIndex < originalPagePaths.size())
+                ? originalPagePaths.get(targetPageIndex) : pagePaths.get(targetPageIndex);
+
+        executor.execute(() -> {
+            Bitmap base = CacheManager.loadBitmap(origPath);
+            if (base == null) {
+                base = CacheManager.loadBitmap(pagePaths.get(targetPageIndex));
+            }
+            if (base == null) {
+                runOnUiThread(() -> {
+                    isBusy = false;
+                    if (binding.pbFilterApplying != null) binding.pbFilterApplying.setVisibility(View.GONE);
+                    if (onComplete != null) onComplete.run();
+                });
+                return;
+            }
+
+            // 1. Perspective Crop Warp
+            float[] normCorners = state.getNormalizedCropPoints();
+            if (normCorners != null && normCorners.length == 8) {
+                int bw = base.getWidth();
+                int bh = base.getHeight();
+                org.opencv.core.Point[] opencvCorners = new org.opencv.core.Point[4];
+                for (int i = 0; i < 4; i++) {
+                    opencvCorners[i] = new org.opencv.core.Point(
+                            Math.max(0.0, Math.min((double) bw, (double) normCorners[i * 2] * bw)),
+                            Math.max(0.0, Math.min((double) bh, (double) normCorners[i * 2 + 1] * bh))
+                    );
+                }
+                opencvCorners = DocumentDetector.orderCorners(opencvCorners);
+                Bitmap cropped = ImageProcessor.perspectiveWarp(base, opencvCorners);
+                base.recycle();
+                base = cropped;
+            }
+
+            // 2. Post-Crop Rotation
+            int rotation = ((state.getRotationDegrees() % 360) + 360) % 360;
+            if (rotation != 0) {
+                Matrix matrix = new Matrix();
+                matrix.postRotate(rotation);
+                Bitmap rotated = Bitmap.createBitmap(base, 0, 0, base.getWidth(), base.getHeight(), matrix, true);
+                base.recycle();
+                base = rotated;
+            }
+
+            // 3. Document Filter
+            String filterMode = state.getFilterMode();
+            if (filterMode != null && !filterMode.equals("ORIGINAL")) {
+                try {
+                    DocumentFilter filter = DocumentFilter.valueOf(filterMode);
+                    Bitmap filtered = runFilterAlgorithm(filter, base);
+                    base.recycle();
+                    base = filtered;
+                } catch (Exception e) {
+                    Log.e(TAG, "Error applying filter: " + filterMode, e);
+                }
+            }
+
+            if (base == null) {
+                runOnUiThread(() -> {
+                    isBusy = false;
+                    if (binding.pbFilterApplying != null) binding.pbFilterApplying.setVisibility(View.GONE);
+                    if (onComplete != null) onComplete.run();
+                });
+                return;
+            }
+
+            String renderedPath = CacheManager.saveTempBitmap(
+                    UnifiedEditorActivity.this, base, "page_" + targetPageIndex + "_rendered_" + UUID.randomUUID().toString());
+            base.recycle();
+
+            runOnUiThread(() -> {
+                isBusy = false;
+                if (binding.pbFilterApplying != null) {
+                    binding.pbFilterApplying.setVisibility(View.GONE);
+                }
+
+                if (renderedPath != null) {
+                    pagePaths.set(targetPageIndex, renderedPath);
+
+                    if (normCorners != null && normCorners.length == 8) {
+                        if (viewModel != null) {
+                            viewModel.setNormalizedCornersForPage(targetPageIndex, normCorners);
+                            if (targetPageIndex == pageIndex) {
+                                viewModel.setActivePoints(normCorners);
+                            }
+                        }
+                    } else {
+                        savedCornersMap.remove(targetPageIndex);
+                        if (viewModel != null) {
+                            viewModel.setNormalizedCornersForPage(targetPageIndex, null);
+                            if (targetPageIndex == pageIndex) {
+                                viewModel.setActivePoints(null);
+                            }
+                        }
+                    }
+
+                    if (filterMode != null) {
+                        try {
+                            DocumentFilter filter = DocumentFilter.valueOf(filterMode);
+                            if (viewModel != null) viewModel.setSelectedFilter(filter);
+                            if (filterAdapter != null) filterAdapter.setSelectedFilter(filter);
+                        } catch (Exception ignored) {}
+                    }
+
+                    invalidateFilterPreview(targetPageIndex);
+                    pageAdapter.notifyItemChanged(targetPageIndex);
+                    thumbAdapter.notifyItemChanged(targetPageIndex);
+
+                    PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.viewPagerPages, targetPageIndex);
+                    if (vh != null) {
+                        Bitmap bmp = CacheManager.loadBitmap(renderedPath);
+                        if (bmp != null) {
+                            vh.ivPageImage.setImageBitmap(bmp);
+                            vh.drawingOverlay.bindImageView(vh.ivPageImage);
+                        }
+                    }
+                }
+
+                updateUndoButtonState();
+                if (onComplete != null) onComplete.run();
+            });
+        });
+    }
+
+    private boolean hasEdits() {
+        for (int i = 0; i < pagePaths.size(); i++) {
+            EditHistoryManager hm = pageHistoryMap.get(i);
+            if (hm != null && hm.hasEdits()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
+        InsetsHelper.applyEdgeToEdge(this);
         super.onCreate(savedInstanceState);
         binding = ActivityUnifiedEditorBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
+        InsetsHelper.handleSystemBars(binding.getRoot(), binding.topBar, binding.bottomContainer);
 
         executor = Executors.newSingleThreadExecutor();
         mainHandler = new Handler(Looper.getMainLooper());
+        viewModel = new ViewModelProvider(this).get(EditorViewModel.class);
 
         Intent intent = getIntent();
-        if (intent != null) {
-            editorMode = intent.getStringExtra(EXTRA_MODE);
-            isAddingPage = intent.getBooleanExtra(EXTRA_IS_ADDING_PAGE, false);
-            isFromReview = intent.getBooleanExtra(EXTRA_FROM_REVIEW, false);
+        boolean isResumingDraft = intent != null && intent.getBooleanExtra(DraftManager.EXTRA_RESUME_DRAFT, false);
+        DraftManager.DraftSession draftSession = null;
+        if (isResumingDraft) {
+            draftSession = DraftManager.loadDraft(this);
         }
-        if (editorMode == null) editorMode = MODE_SINGLE_SCAN;
 
-        // Resolve input paths or PDF URI
-        Uri pdfUri = intent != null ? intent.getData() : null;
-        if (pdfUri == null && intent != null && intent.hasExtra(EXTRA_PDF_URI)) {
-            try {
-                Object extra = intent.getExtras() != null ? intent.getExtras().get(EXTRA_PDF_URI) : null;
-                if (extra instanceof Uri) {
-                    pdfUri = (Uri) extra;
-                } else if (extra instanceof String) {
-                    pdfUri = Uri.parse((String) extra);
+        if (draftSession != null && !draftSession.pagePaths.isEmpty()) {
+            editorMode = draftSession.editorMode;
+            isAddingPage = false;
+            isFromReview = false;
+            pagePaths = draftSession.pagePaths;
+            originalPagePaths = draftSession.originalPagePaths;
+            pageIndex = draftSession.pageIndex;
+            pageHistoryMap.clear();
+            pageHistoryMap.putAll(draftSession.historyMap);
+
+            viewModel.setPagePaths(pagePaths);
+            viewModel.setOriginalPagePaths(originalPagePaths);
+            viewModel.setPageIndex(pageIndex);
+            viewModel.setEditorMode(editorMode);
+            viewModel.setAddingPage(isAddingPage);
+            viewModel.setFromReview(isFromReview);
+
+            EditHistoryManager hm = getHistoryManager(pageIndex);
+            ScanEditState state = hm.getCurrentState();
+            if (state != null) {
+                if (state.getNormalizedCropPoints() != null) {
+                    viewModel.setNormalizedCornersForPage(pageIndex, state.getNormalizedCropPoints());
+                    viewModel.setActivePoints(state.getNormalizedCropPoints());
                 }
-            } catch (Exception ignored) {}
-        }
-        String singleImagePath = intent != null ? intent.getStringExtra(EXTRA_IMAGE_PATH) : null;
-        if (pdfUri == null && singleImagePath != null && singleImagePath.toLowerCase().endsWith(".pdf")) {
-            pdfUri = Uri.fromFile(new File(singleImagePath));
-        }
-
-        if (intent != null && intent.hasExtra(EXTRA_PAGE_PATHS)) {
-            pagePaths = intent.getStringArrayListExtra(EXTRA_PAGE_PATHS);
-        } else if (pdfUri != null) {
-            pagePaths = CropPreviewActivity.extractAllPagesFromPdf(this, pdfUri);
+                if (state.getFilterMode() != null) {
+                    try {
+                        viewModel.setSelectedFilter(DocumentFilter.valueOf(state.getFilterMode()));
+                    } catch (Exception ignored) {}
+                }
+            }
+        } else if (viewModel.getPagePaths() != null && !viewModel.getPagePaths().isEmpty()) {
+            editorMode = viewModel.getEditorMode();
+            if (editorMode == null) editorMode = MODE_SINGLE_SCAN;
+            isAddingPage = viewModel.isAddingPage();
+            isFromReview = viewModel.isFromReview();
+            pagePaths = viewModel.getPagePaths();
+            originalPagePaths = viewModel.getOriginalPagePaths();
+            pageIndex = viewModel.getPageIndex();
+            isCropMode = viewModel.isCropMode();
+            isDrawingMode = viewModel.isDrawingMode();
+            isFilterMode = viewModel.isFilterMode();
+        } else if (savedInstanceState != null) {
+            editorMode = savedInstanceState.getString(EXTRA_MODE, MODE_SINGLE_SCAN);
+            isAddingPage = savedInstanceState.getBoolean(EXTRA_IS_ADDING_PAGE, false);
+            isFromReview = savedInstanceState.getBoolean(EXTRA_FROM_REVIEW, false);
+            pagePaths = savedInstanceState.getStringArrayList(EXTRA_PAGE_PATHS);
+            originalPagePaths = savedInstanceState.getStringArrayList(EXTRA_ORIGINAL_PAGE_PATHS);
+            pageIndex = savedInstanceState.getInt(EXTRA_PAGE_INDEX, 0);
+            isCropMode = savedInstanceState.getBoolean("isCropMode", false);
+            isDrawingMode = savedInstanceState.getBoolean("isDrawingMode", false);
+            isFilterMode = savedInstanceState.getBoolean("isFilterMode", false);
+            float[] restoredActivePts = savedInstanceState.getFloatArray("activePoints");
+            if (restoredActivePts != null) {
+                viewModel.setActivePoints(restoredActivePts);
+                viewModel.setNormalizedCornersForPage(pageIndex, restoredActivePts);
+            }
+            String filterName = savedInstanceState.getString("selectedFilter");
+            if (filterName != null) {
+                try {
+                    viewModel.setSelectedFilter(DocumentFilter.valueOf(filterName));
+                } catch (Exception ignored) {}
+            }
+            viewModel.setPagePaths(pagePaths);
+            viewModel.setOriginalPagePaths(originalPagePaths);
+            viewModel.setPageIndex(pageIndex);
+            viewModel.setEditorMode(editorMode);
+            viewModel.setAddingPage(isAddingPage);
+            viewModel.setFromReview(isFromReview);
+            viewModel.setCropMode(isCropMode);
+            viewModel.setDrawingMode(isDrawingMode);
+            viewModel.setFilterMode(isFilterMode);
         } else {
-            pagePaths = new ArrayList<>();
-            if (singleImagePath != null) {
-                pagePaths.add(singleImagePath);
+            if (intent != null) {
+                editorMode = intent.getStringExtra(EXTRA_MODE);
+                isAddingPage = intent.getBooleanExtra(EXTRA_IS_ADDING_PAGE, false);
+                isFromReview = intent.getBooleanExtra(EXTRA_FROM_REVIEW, false);
+            }
+            if (editorMode == null) editorMode = MODE_SINGLE_SCAN;
+
+            // Resolve input paths or PDF URI
+            Uri pdfUri = intent != null ? intent.getData() : null;
+            if (pdfUri == null && intent != null && intent.hasExtra(EXTRA_PDF_URI)) {
+                try {
+                    Object extra = intent.getExtras() != null ? intent.getExtras().get(EXTRA_PDF_URI) : null;
+                    if (extra instanceof Uri) {
+                        pdfUri = (Uri) extra;
+                    } else if (extra instanceof String) {
+                        pdfUri = Uri.parse((String) extra);
+                    }
+                } catch (Exception ignored) {}
+            }
+            String singleImagePath = intent != null ? intent.getStringExtra(EXTRA_IMAGE_PATH) : null;
+            if (pdfUri == null && singleImagePath != null && singleImagePath.toLowerCase().endsWith(".pdf")) {
+                pdfUri = Uri.fromFile(new File(singleImagePath));
+            }
+
+            if (intent != null && intent.hasExtra(EXTRA_PAGE_PATHS)) {
+                pagePaths = intent.getStringArrayListExtra(EXTRA_PAGE_PATHS);
+            } else if (pdfUri != null) {
+                pagePaths = CropPreviewActivity.extractAllPagesFromPdf(this, pdfUri);
+            } else {
+                pagePaths = new ArrayList<>();
+                if (singleImagePath != null) {
+                    pagePaths.add(singleImagePath);
+                }
+            }
+
+            if (pagePaths == null) {
+                pagePaths = new ArrayList<>();
+            }
+
+            if (intent != null && intent.hasExtra(EXTRA_ORIGINAL_PAGE_PATHS)) {
+                originalPagePaths = intent.getStringArrayListExtra(EXTRA_ORIGINAL_PAGE_PATHS);
+            } else {
+                originalPagePaths = new ArrayList<>(pagePaths);
+            }
+
+            pageIndex = intent != null ? intent.getIntExtra(EXTRA_PAGE_INDEX, 0) : 0;
+
+            viewModel.setPagePaths(pagePaths);
+            viewModel.setOriginalPagePaths(originalPagePaths);
+            viewModel.setPageIndex(pageIndex);
+            viewModel.setEditorMode(editorMode);
+            viewModel.setAddingPage(isAddingPage);
+            viewModel.setFromReview(isFromReview);
+            if (pdfUri != null) {
+                viewModel.setCurrentImageUri(pdfUri);
+            } else if (!pagePaths.isEmpty()) {
+                viewModel.setCurrentImageUri(Uri.fromFile(new File(pagePaths.get(pageIndex))));
             }
         }
 
         if (pagePaths == null) {
             pagePaths = new ArrayList<>();
         }
-
-        if (intent != null && intent.hasExtra(EXTRA_ORIGINAL_PAGE_PATHS)) {
-            originalPagePaths = intent.getStringArrayListExtra(EXTRA_ORIGINAL_PAGE_PATHS);
-        } else {
-            originalPagePaths = new ArrayList<>(pagePaths);
-        }
-
         if (originalPagePaths == null) {
             originalPagePaths = new ArrayList<>(pagePaths);
         }
 
-        pageIndex = intent != null ? intent.getIntExtra(EXTRA_PAGE_INDEX, 0) : 0;
         if (pageIndex < 0 || pageIndex >= pagePaths.size()) {
             pageIndex = 0;
+        }
+
+        for (int i = 0; i < pagePaths.size(); i++) {
+            if (!pageHistoryMap.containsKey(i)) {
+                pageHistoryMap.put(i, new EditHistoryManager(ScanEditState.createDefault()));
+            }
         }
 
         if (pagePaths.isEmpty()) {
@@ -380,12 +525,42 @@ public class UnifiedEditorActivity extends AppCompatActivity {
                 savedCornersMap.put(pageIndex, corners);
             }
 
-            // Check if opened directly into annotation or crop mode
-            if (intent.getBooleanExtra(EXTRA_START_ANNOTATE, false)) {
+            // Check if restored or opened directly into annotation or crop mode
+            if (isCropMode) {
+                binding.viewPagerPages.post(this::enterCropMode);
+            } else if (isDrawingMode) {
+                binding.getRoot().post(this::enterDrawingMode);
+            } else if (isFilterMode) {
+                binding.getRoot().post(this::enterFilterMode);
+            } else if (intent.getBooleanExtra(EXTRA_START_ANNOTATE, false)) {
                 binding.getRoot().post(this::enterDrawingMode);
             } else if (intent.getBooleanExtra(EXTRA_ENABLE_CROP_DEFAULT, false)) {
                 binding.viewPagerPages.post(this::enterCropMode);
             }
+        }
+        restoreLensOverlayState(savedInstanceState);
+    }
+
+    private void restoreLensOverlayState(@Nullable Bundle savedInstanceState) {
+        if (savedInstanceState == null || !savedInstanceState.getBoolean("KEY_LENS_ACTIVE", false)) {
+            return;
+        }
+        OcrPage savedPage = savedInstanceState.getParcelable("KEY_LENS_OCR_PAGE");
+        int selStart = savedInstanceState.getInt("KEY_LENS_SEL_START", -1);
+        int selEnd = savedInstanceState.getInt("KEY_LENS_SEL_END", -1);
+
+        if (savedPage != null) {
+            binding.lensOverlay.post(() -> {
+                if (isFinishing() || isDestroyed()) return;
+                PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.viewPagerPages, pageIndex);
+                RectF displayRect = vh != null ? vh.ivPageImage.getDisplayRect() : null;
+                binding.lensOverlay.setTargetRect(displayRect);
+                binding.lensOverlay.setOcrPage(savedPage);
+                if (selStart >= 0 && selEnd >= 0) {
+                    binding.lensOverlay.setSelection(selStart, selEnd);
+                }
+                binding.lensOverlay.setVisibility(View.VISIBLE);
+            });
         }
     }
 
@@ -394,6 +569,22 @@ public class UnifiedEditorActivity extends AppCompatActivity {
         pageAdapter = new PageEditorAdapter(pagePaths, null);
         binding.viewPagerPages.setAdapter(pageAdapter);
         binding.viewPagerPages.setOffscreenPageLimit(1);
+        pageAdapter.setOnViewHolderBoundListener((holder, position) -> {
+            if (isCropMode && position == pageIndex) {
+                holder.ivPageImage.setScale(1.0f, false);
+                holder.ivPageImage.setZoomable(false);
+                holder.cropOverlay.setImageView(holder.ivPageImage);
+                prepareCropForPage(position, holder);
+            }
+        });
+        pageAdapter.setOnBitmapLoadedListener((holder, position, bitmap) -> {
+            if (isCropMode && position == pageIndex) {
+                holder.ivPageImage.setScale(1.0f, false);
+                holder.ivPageImage.setZoomable(false);
+                holder.cropOverlay.setImageView(holder.ivPageImage);
+                prepareCropForPage(position, holder);
+            }
+        });
         binding.viewPagerPages.registerOnPageChangeCallback(new ViewPager2.OnPageChangeCallback() {
             @Override
             public void onPageSelected(int position) {
@@ -458,6 +649,7 @@ public class UnifiedEditorActivity extends AppCompatActivity {
         }
 
         pageIndex = newPosition;
+        if (viewModel != null) viewModel.setPageIndex(newPosition);
         updateTitle();
         if (thumbAdapter != null) {
             thumbAdapter.setSelectedPosition(pageIndex);
@@ -526,19 +718,30 @@ public class UnifiedEditorActivity extends AppCompatActivity {
         });
 
         binding.btnUndo.setOnClickListener(v -> {
-            if (!undoStack.isEmpty()) {
-                EditorAction action = undoStack.pop();
-                action.undo();
-                redoStack.push(action);
-                updateUndoButtonState();
-            } else if (isDrawingMode) {
+            if (isDrawingMode) {
                 PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.viewPagerPages, pageIndex);
                 if (vh != null && vh.drawingOverlay.getActionCount() > 0) {
                     vh.drawingOverlay.undo();
                     updateUndoButtonState();
+                    return;
                 }
             }
+            EditHistoryManager hm = getHistoryManager(pageIndex);
+            if (hm != null && hm.canUndo()) {
+                ScanEditState prevState = hm.undo();
+                renderStateNonDestructively(pageIndex, prevState, this::updateUndoButtonState);
+            }
         });
+
+        if (binding.btnRedo != null) {
+            binding.btnRedo.setOnClickListener(v -> {
+                EditHistoryManager hm = getHistoryManager(pageIndex);
+                if (hm != null && hm.canRedo()) {
+                    ScanEditState nextState = hm.redo();
+                    renderStateNonDestructively(pageIndex, nextState, this::updateUndoButtonState);
+                }
+            });
+        }
 
         binding.btnExtractText.setOnClickListener(v -> extractTextFromCurrentScan());
         binding.tvTitle.setOnClickListener(v -> showJumpToPageDialog());
@@ -610,6 +813,7 @@ public class UnifiedEditorActivity extends AppCompatActivity {
             exitDrawingMode();
         }
         isCropMode = true;
+        if (viewModel != null) viewModel.setCropMode(true);
         updateSwipeLock();
 
         binding.tvCropLabel.setText(R.string.action_apply);
@@ -618,17 +822,27 @@ public class UnifiedEditorActivity extends AppCompatActivity {
         PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.viewPagerPages, pageIndex);
         if (vh != null) {
             vh.ivPageImage.setScale(1.0f, false);
+            vh.ivPageImage.setZoomable(false);
             vh.cropOverlay.setImageView(vh.ivPageImage);
             prepareCropForPage(pageIndex, vh);
         } else {
-            binding.viewPagerPages.post(() -> {
-                PageEditorAdapter.PageViewHolder vhPost = PageEditorAdapter.getViewHolder(binding.viewPagerPages, pageIndex);
-                if (vhPost != null) {
-                    vhPost.ivPageImage.setScale(1.0f, false);
-                    vhPost.cropOverlay.setImageView(vhPost.ivPageImage);
-                    prepareCropForPage(pageIndex, vhPost);
+            tryPrepareCropWithRetry(pageIndex, 5);
+        }
+    }
+
+    private void tryPrepareCropWithRetry(int index, int remainingAttempts) {
+        PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.viewPagerPages, index);
+        if (vh != null) {
+            vh.ivPageImage.setScale(1.0f, false);
+            vh.ivPageImage.setZoomable(false);
+            vh.cropOverlay.setImageView(vh.ivPageImage);
+            prepareCropForPage(index, vh);
+        } else if (remainingAttempts > 0 && binding != null && binding.viewPagerPages != null) {
+            binding.viewPagerPages.postDelayed(() -> {
+                if (isCropMode && pageIndex == index) {
+                    tryPrepareCropWithRetry(index, remainingAttempts - 1);
                 }
-            });
+            }, 60);
         }
     }
 
@@ -636,34 +850,92 @@ public class UnifiedEditorActivity extends AppCompatActivity {
         isBusy = true;
         executor.execute(() -> {
             Point[] corners = savedCornersMap.get(index);
+            float[] computedNorm = null;
+            String currentPath = pagePaths.get(index);
+
             if (corners == null) {
-                String origPath = (index < originalPagePaths.size()) ? originalPagePaths.get(index) : pagePaths.get(index);
-                Bitmap bmp = CacheManager.loadBitmap(origPath);
-                if (bmp == null) {
-                    bmp = CacheManager.loadBitmap(pagePaths.get(index));
-                }
+                Bitmap bmp = CacheManager.loadBitmap(currentPath);
                 if (bmp != null) {
                     org.opencv.core.Point[] detected = DocumentDetector.getInstance(UnifiedEditorActivity.this)
-                            .detectCorners(bmp);
+                            .detectCorners(bmp, true);
                     if (detected == null) {
                         detected = DocumentDetector.getDefaultCorners(bmp.getWidth(), bmp.getHeight());
                     }
                     corners = CropPreviewActivity.toAndroidPoints(detected);
                     savedCornersMap.put(index, corners);
+
+                    int bw = bmp.getWidth();
+                    int bh = bmp.getHeight();
+                    if (bw > 0 && bh > 0) {
+                        computedNorm = new float[8];
+                        for (int i = 0; i < 4; i++) {
+                            computedNorm[i * 2] = Math.max(0f, Math.min(1f, (float) detected[i].x / bw));
+                            computedNorm[i * 2 + 1] = Math.max(0f, Math.min(1f, (float) detected[i].y / bh));
+                        }
+                    }
                     bmp.recycle();
+                }
+            } else {
+                BitmapFactory.Options opts = new BitmapFactory.Options();
+                opts.inJustDecodeBounds = true;
+                BitmapFactory.decodeFile(currentPath, opts);
+                if (opts.outWidth > 0 && opts.outHeight > 0) {
+                    computedNorm = new float[8];
+                    for (int i = 0; i < 4; i++) {
+                        computedNorm[i * 2] = Math.max(0f, Math.min(1f, (float) corners[i].x / opts.outWidth));
+                        computedNorm[i * 2 + 1] = Math.max(0f, Math.min(1f, (float) corners[i].y / opts.outHeight));
+                    }
                 }
             }
 
             final Point[] finalCorners = corners;
+            final float[] savedNorm = (viewModel != null) ? viewModel.getNormalizedCornersForPage(index) : null;
+            final float[] finalNorm = (savedNorm != null) ? savedNorm : computedNorm;
             runOnUiThread(() -> {
                 isBusy = false;
                 if (vh != null) {
                     vh.ivPageImage.setScale(1.0f, false);
+                    vh.ivPageImage.setZoomable(false);
                     vh.cropOverlay.setImageView(vh.ivPageImage);
-                    if (finalCorners != null) {
+                    if (finalNorm != null) {
+                        vh.cropOverlay.setNormalizedCornersFlat(finalNorm);
+                    } else if (finalCorners != null) {
                         vh.cropOverlay.setCorners(finalCorners);
-                        vh.cropOverlay.resetCornerMoved();
                     }
+                    float[] flat = vh.cropOverlay.getNormalizedCornersFlat();
+                    if (flat != null && viewModel != null) {
+                        viewModel.setNormalizedCornersForPage(index, flat);
+                        viewModel.setActivePoints(flat);
+                    }
+                    vh.cropOverlay.resetCornerMoved();
+                    vh.cropOverlay.setOnCornerDragListener(new CropOverlayView.OnCornerDragListener() {
+                        @Override
+                        public void onCornerDragStarted(int cornerIndex, float x, float y) {}
+
+                        @Override
+                        public void onCornerDragging(int cornerIndex, float x, float y) {}
+
+                        @Override
+                        public void onCornerDragEnded() {
+                            float[] flat = vh.cropOverlay.getNormalizedCornersFlat();
+                            if (flat != null && viewModel != null) {
+                                viewModel.setNormalizedCornersForPage(index, flat);
+                                viewModel.setActivePoints(flat);
+                            }
+                            Point[] currentCorners = vh.cropOverlay.getCornerPoints();
+                            if (currentCorners != null) {
+                                savedCornersMap.put(index, currentCorners);
+                            }
+                        }
+
+                        @Override
+                        public void onNormalizedCornersUpdated(float[] flatNormalizedCorners) {
+                            if (flatNormalizedCorners != null && viewModel != null) {
+                                viewModel.setNormalizedCornersForPage(index, flatNormalizedCorners);
+                                viewModel.setActivePoints(flatNormalizedCorners);
+                            }
+                        }
+                    });
                     vh.cropOverlay.setVisibility(View.VISIBLE);
                 }
             });
@@ -672,72 +944,52 @@ public class UnifiedEditorActivity extends AppCompatActivity {
 
     private void commitCrop(@Nullable Runnable onComplete) {
         PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.viewPagerPages, pageIndex);
-        Point[] currentCorners = vh != null ? vh.cropOverlay.getCornerPoints() : null;
-        if (currentCorners == null || currentCorners.length != 4) {
-            currentCorners = savedCornersMap.get(pageIndex);
+        PointF[] normCorners = vh != null ? vh.cropOverlay.getNormalizedCorners() : null;
+        if (normCorners == null || normCorners.length != 4) {
+            float[] savedFlat = (viewModel != null) ? viewModel.getNormalizedCornersForPage(pageIndex) : null;
+            if (savedFlat != null && savedFlat.length == 8) {
+                normCorners = new PointF[4];
+                for (int i = 0; i < 4; i++) {
+                    normCorners[i] = new PointF(savedFlat[i * 2], savedFlat[i * 2 + 1]);
+                }
+            }
         }
-        if (currentCorners == null || currentCorners.length != 4) {
+
+        if (normCorners == null || normCorners.length != 4) {
+            normCorners = new PointF[]{
+                    new PointF(0.05f, 0.05f),
+                    new PointF(0.95f, 0.05f),
+                    new PointF(0.95f, 0.95f),
+                    new PointF(0.05f, 0.95f)
+            };
+        }
+
+        final float[] flatCorners = new float[8];
+        for (int i = 0; i < 4; i++) {
+            flatCorners[i * 2] = normCorners[i].x;
+            flatCorners[i * 2 + 1] = normCorners[i].y;
+        }
+
+        final int targetPageIndex = pageIndex;
+        EditHistoryManager hm = getHistoryManager(targetPageIndex);
+        ScanEditState curr = hm.getCurrentState();
+        ScanEditState next = (curr != null) ? curr.withCrop(flatCorners)
+                : new ScanEditState(flatCorners, 0, ScanEditState.FILTER_ORIGINAL, System.currentTimeMillis());
+        hm.pushState(next);
+
+        renderStateNonDestructively(targetPageIndex, next, () -> {
+            Toast.makeText(UnifiedEditorActivity.this, "Crop applied", Toast.LENGTH_SHORT).show();
             exitCropMode();
             if (onComplete != null) onComplete.run();
-            return;
-        }
-
-        isBusy = true;
-        final Point[] cornersToApply = currentCorners;
-        final int targetPageIndex = pageIndex;
-        final String originalPath = (targetPageIndex < originalPagePaths.size())
-                ? originalPagePaths.get(targetPageIndex) : pagePaths.get(targetPageIndex);
-        final String preCropPath = pagePaths.get(targetPageIndex);
-        final String backupPath = backupFile(preCropPath, "backup_crop_page_" + targetPageIndex);
-        final Point[] prevCorners = savedCornersMap.get(targetPageIndex);
-
-        executor.execute(() -> {
-            Bitmap master = CacheManager.loadBitmap(originalPath);
-            if (master == null) {
-                master = CacheManager.loadBitmap(pagePaths.get(targetPageIndex));
-            }
-            if (master == null) {
-                runOnUiThread(() -> {
-                    isBusy = false;
-                    exitCropMode();
-                    if (onComplete != null) onComplete.run();
-                });
-                return;
-            }
-
-            org.opencv.core.Point[] opencvCorners = CropPreviewActivity.toOpenCvPoints(cornersToApply);
-            Bitmap cropped = ImageProcessor.perspectiveWarp(master, opencvCorners);
-            master.recycle();
-
-            String croppedPath = CacheManager.saveTempBitmap(
-                    UnifiedEditorActivity.this, cropped, "page_" + targetPageIndex + "_cropped_" + UUID.randomUUID().toString());
-            cropped.recycle();
-
-            runOnUiThread(() -> {
-                isBusy = false;
-                if (croppedPath != null) {
-                    pagePaths.set(targetPageIndex, croppedPath);
-                    savedCornersMap.put(targetPageIndex, cornersToApply);
-                    pageAdapter.notifyItemChanged(targetPageIndex);
-                    thumbAdapter.notifyItemChanged(targetPageIndex);
-
-                    undoStack.push(new ImageTransformAction(targetPageIndex, backupPath, croppedPath, prevCorners, cornersToApply));
-                    redoStack.clear();
-                    updateUndoButtonState();
-
-                    Toast.makeText(UnifiedEditorActivity.this, "Crop applied", Toast.LENGTH_SHORT).show();
-                }
-
-                exitCropMode();
-                if (onComplete != null) onComplete.run();
-            });
         });
     }
 
     private void exitCropMode() {
         isCropMode = false;
+        if (viewModel != null) viewModel.setCropMode(false);
         PageEditorAdapter.PageViewHolder vh = PageEditorAdapter.getViewHolder(binding.viewPagerPages, pageIndex);
         if (vh != null) {
+            vh.ivPageImage.setZoomable(true);
             vh.cropOverlay.resetCornerMoved();
             vh.cropOverlay.setVisibility(View.GONE);
         }
@@ -767,6 +1019,7 @@ public class UnifiedEditorActivity extends AppCompatActivity {
             exitCropMode();
         }
         isDrawingMode = true;
+        if (viewModel != null) viewModel.setDrawingMode(true);
         updateSwipeLock();
 
         binding.layoutAnnotationBar.setVisibility(View.VISIBLE);
@@ -779,11 +1032,7 @@ public class UnifiedEditorActivity extends AppCompatActivity {
             vh.drawingOverlay.setToolMode(currentToolMode);
             vh.drawingOverlay.setStrokeColor(currentDrawingColor);
             vh.drawingOverlay.setStrokeWidth(currentStrokeWidth);
-            vh.drawingOverlay.setOnActionAddedListener(() -> {
-                undoStack.push(new DrawingStrokeAction(pageIndex));
-                redoStack.clear();
-                updateUndoButtonState();
-            });
+            vh.drawingOverlay.setOnActionAddedListener(this::updateUndoButtonState);
             vh.drawingOverlay.setOnItemSelectionListener(new AnnotationDrawingView.OnItemSelectionListener() {
                 @Override
                 public void onTextItemTapped(@NonNull AnnotationDrawingView.TextItem item) {
@@ -804,6 +1053,7 @@ public class UnifiedEditorActivity extends AppCompatActivity {
 
     private void exitDrawingMode() {
         isDrawingMode = false;
+        if (viewModel != null) viewModel.setDrawingMode(false);
         binding.layoutAnnotationBar.setVisibility(View.GONE);
         updateSwipeLock();
         updateUndoButtonState();
@@ -826,7 +1076,6 @@ public class UnifiedEditorActivity extends AppCompatActivity {
 
         final int targetIndex = pageIndex;
         final String currentPath = pagePaths.get(targetIndex);
-        final String backupPath = backupFile(currentPath, "backup_annot_page_" + targetIndex);
 
         Bitmap base = CacheManager.loadBitmap(currentPath);
         if (base == null) return;
@@ -844,9 +1093,6 @@ public class UnifiedEditorActivity extends AppCompatActivity {
             vh.drawingOverlay.clear();
             pageAdapter.notifyItemChanged(targetIndex);
             thumbAdapter.notifyItemChanged(targetIndex);
-
-            undoStack.push(new ImageTransformAction(targetIndex, backupPath, newPath, null, null));
-            redoStack.clear();
             updateUndoButtonState();
 
             Toast.makeText(this, R.string.annotate_saved, Toast.LENGTH_SHORT).show();
@@ -959,32 +1205,143 @@ public class UnifiedEditorActivity extends AppCompatActivity {
             exitCropMode();
         }
         isFilterMode = true;
+        if (viewModel != null) viewModel.setFilterMode(true);
         binding.layoutFilterBar.setVisibility(View.VISIBLE);
         binding.ivFilterIcon.setColorFilter(ContextCompat.getColor(this, R.color.accent_mint));
         binding.tvFilterLabel.setTextColor(ContextCompat.getColor(this, R.color.accent_mint));
+
+        DocumentFilter current = (viewModel != null) ? viewModel.getSelectedFilter() : DocumentFilter.ORIGINAL;
+        if (filterAdapter != null) {
+            filterAdapter.setSelectedFilter(current);
+            int selectedPos = filterAdapter.getSelectedPosition();
+            if (selectedPos >= 0 && binding.rvFilters != null) {
+                binding.rvFilters.scrollToPosition(selectedPos);
+            }
+        }
+
+        loadFilterPreviewsForPage(pageIndex);
     }
 
     private void exitFilterMode() {
         isFilterMode = false;
+        if (viewModel != null) viewModel.setFilterMode(false);
         if (binding != null && binding.layoutFilterBar != null) {
             binding.layoutFilterBar.setVisibility(View.GONE);
-            binding.ivFilterIcon.setColorFilter(ContextCompat.getColor(this, android.R.color.white));
-            binding.tvFilterLabel.setTextColor(ContextCompat.getColor(this, android.R.color.white));
+            binding.ivFilterIcon.setColorFilter(ContextCompat.getColor(this, R.color.text_primary));
+            binding.tvFilterLabel.setTextColor(ContextCompat.getColor(this, R.color.text_primary));
         }
     }
 
     private void setupFilterBar() {
         binding.btnCloseFilter.setOnClickListener(v -> exitFilterMode());
-        binding.btnFilterOriginal.setOnClickListener(v -> applyFilter(DocumentFilter.ORIGINAL));
-        binding.btnFilterMagic.setOnClickListener(v -> applyFilter(DocumentFilter.MAGIC));
-        binding.btnFilterBW.setOnClickListener(v -> applyFilter(DocumentFilter.BW));
-        binding.btnFilterGrayscale.setOnClickListener(v -> applyFilter(DocumentFilter.GRAYSCALE));
-        binding.btnFilterSharpen.setOnClickListener(v -> applyFilter(DocumentFilter.SHARPEN));
-        binding.btnFilterScanEnhance.setOnClickListener(v -> applyFilter(DocumentFilter.SCAN_ENHANCE));
+        setupFilterRecyclerView();
+    }
+
+    private void setupFilterRecyclerView() {
+        if (binding == null || binding.rvFilters == null) return;
+        binding.rvFilters.setLayoutManager(new LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false));
+        binding.rvFilters.setHasFixedSize(true);
+
+        List<FilterPreviewAdapter.FilterItem> items = new ArrayList<>();
+        for (DocumentFilter filter : DocumentFilter.values()) {
+            items.add(new FilterPreviewAdapter.FilterItem(filter, getFilterName(filter)));
+        }
+
+        filterAdapter = new FilterPreviewAdapter(items, (filter, pos) -> {
+            applyFilter(filter);
+        });
+
+        DocumentFilter current = (viewModel != null) ? viewModel.getSelectedFilter() : DocumentFilter.ORIGINAL;
+        filterAdapter.setSelectedFilter(current);
+
+        binding.rvFilters.setAdapter(filterAdapter);
+    }
+
+    private void loadFilterPreviewsForPage(int targetIndex) {
+        if (targetIndex < 0 || targetIndex >= pagePaths.size()) return;
+
+        Map<DocumentFilter, Bitmap> cached = filterPreviewCache.get(targetIndex);
+        if (cached != null && !cached.isEmpty()) {
+            if (filterAdapter != null) {
+                filterAdapter.setPreviews(cached);
+            }
+            return;
+        }
+
+        if (filterAdapter != null) {
+            filterAdapter.clearPreviews();
+        }
+
+        final int requestId = targetIndex;
+        executor.execute(() -> {
+            Bitmap base = getBaseBitmapForPage(targetIndex);
+            if (base == null) {
+                base = CacheManager.loadBitmap(pagePaths.get(targetIndex));
+            }
+            if (base == null) return;
+
+            // Downscale to 140x140 thumbnail once for carousel preview generation (zero heavy ops on full-res)
+            Bitmap baseThumb = null;
+            try {
+                baseThumb = android.media.ThumbnailUtils.extractThumbnail(base, 140, 140);
+            } finally {
+                if (base != null && !base.isRecycled() && base != baseThumb) {
+                    base.recycle();
+                }
+            }
+            if (baseThumb == null) return;
+
+            Map<DocumentFilter, Bitmap> previews = new HashMap<>();
+            for (DocumentFilter filter : DocumentFilter.values()) {
+                Bitmap preview = runFilterAlgorithm(filter, baseThumb);
+                if (preview != null) {
+                    previews.put(filter, preview);
+                }
+            }
+            baseThumb.recycle();
+
+            runOnUiThread(() -> {
+                filterPreviewCache.put(requestId, previews);
+                if (isFilterMode && requestId == pageIndex && filterAdapter != null) {
+                    filterAdapter.setPreviews(previews);
+                }
+            });
+        });
+    }
+
+    private void invalidateFilterPreview(int pageIdx) {
+        Map<DocumentFilter, Bitmap> oldPreviews = filterPreviewCache.remove(pageIdx);
+        if (oldPreviews != null) {
+            for (Bitmap b : oldPreviews.values()) {
+                if (b != null && !b.isRecycled()) {
+                    b.recycle();
+                }
+            }
+        }
+        if (isFilterMode && pageIdx == pageIndex) {
+            loadFilterPreviewsForPage(pageIndex);
+        }
+    }
+
+    private void clearFilterPreviewCache() {
+        for (Map<DocumentFilter, Bitmap> map : filterPreviewCache.values()) {
+            if (map != null) {
+                for (Bitmap bmp : map.values()) {
+                    if (bmp != null && !bmp.isRecycled()) {
+                        bmp.recycle();
+                    }
+                }
+            }
+        }
+        filterPreviewCache.clear();
     }
 
     private void applyFilter(DocumentFilter filter) {
         if (isBusy) return;
+        if (viewModel != null) viewModel.setSelectedFilter(filter);
+        if (filterAdapter != null) {
+            filterAdapter.setSelectedFilter(filter);
+        }
         boolean applyToAll = binding.cbFilterApplyToAll != null && binding.cbFilterApplyToAll.isChecked();
 
         if (applyToAll) {
@@ -996,55 +1353,25 @@ public class UnifiedEditorActivity extends AppCompatActivity {
 
     private void applyFilterToSinglePage(DocumentFilter filter, int targetIndex) {
         if (targetIndex < 0 || targetIndex >= pagePaths.size()) return;
-        isBusy = true;
 
-        final String preFilterPath = pagePaths.get(targetIndex);
-        final String backupPath = backupFile(preFilterPath, "backup_filter_page_" + targetIndex);
-        final Point[] prevCorners = savedCornersMap.get(targetIndex);
+        EditHistoryManager hm = getHistoryManager(targetIndex);
+        ScanEditState curr = hm.getCurrentState();
+        ScanEditState next = (curr != null) ? curr.withFilter(filter.name())
+                : new ScanEditState(null, 0, filter.name(), System.currentTimeMillis());
+        hm.pushState(next);
 
-        executor.execute(() -> {
-            Bitmap base = getBaseBitmapForPage(targetIndex);
-            if (base == null) {
-                base = CacheManager.loadBitmap(preFilterPath);
-            }
-            if (base == null) {
-                runOnUiThread(() -> isBusy = false);
-                return;
-            }
-
-            Bitmap filtered = runFilterAlgorithm(filter, base);
-            base.recycle();
-
-            if (filtered == null) {
-                runOnUiThread(() -> isBusy = false);
-                return;
-            }
-
-            String newPath = CacheManager.saveTempBitmap(
-                    UnifiedEditorActivity.this, filtered, "page_" + targetIndex + "_filter_" + UUID.randomUUID().toString());
-            filtered.recycle();
-
-            runOnUiThread(() -> {
-                isBusy = false;
-                if (newPath != null) {
-                    pagePaths.set(targetIndex, newPath);
-                    pageAdapter.notifyItemChanged(targetIndex);
-                    thumbAdapter.notifyItemChanged(targetIndex);
-
-                    undoStack.push(new ImageTransformAction(targetIndex, backupPath, newPath, prevCorners, prevCorners));
-                    redoStack.clear();
-                    updateUndoButtonState();
-
-                    String filterName = getFilterName(filter);
-                    Toast.makeText(UnifiedEditorActivity.this, getString(R.string.filter_applied_single, filterName), Toast.LENGTH_SHORT).show();
-                }
-            });
+        renderStateNonDestructively(targetIndex, next, () -> {
+            String filterName = getFilterName(filter);
+            Toast.makeText(UnifiedEditorActivity.this, getString(R.string.filter_applied_single, filterName), Toast.LENGTH_SHORT).show();
         });
     }
 
     private void applyFilterToAllPages(DocumentFilter filter) {
         if (pagePaths.isEmpty()) return;
         isBusy = true;
+        if (binding.pbFilterApplying != null) {
+            binding.pbFilterApplying.setVisibility(View.VISIBLE);
+        }
 
         View progressView = getLayoutInflater().inflate(R.layout.dialog_progress, null);
         TextView tvProgressMessage = progressView.findViewById(R.id.tvProgressMessage);
@@ -1059,19 +1386,57 @@ public class UnifiedEditorActivity extends AppCompatActivity {
 
         executor.execute(() -> {
             for (int i = 0; i < pagePaths.size(); i++) {
-                Bitmap base = getBaseBitmapForPage(i);
+                final int idx = i;
+                EditHistoryManager hm = getHistoryManager(idx);
+                ScanEditState curr = hm.getCurrentState();
+                ScanEditState next = (curr != null) ? curr.withFilter(filter.name())
+                        : new ScanEditState(null, 0, filter.name(), System.currentTimeMillis());
+                hm.pushState(next);
+
+                String origPath = (idx < originalPagePaths.size())
+                        ? originalPagePaths.get(idx) : pagePaths.get(idx);
+                Bitmap base = CacheManager.loadBitmap(origPath);
                 if (base == null) {
-                    base = CacheManager.loadBitmap(pagePaths.get(i));
+                    base = CacheManager.loadBitmap(pagePaths.get(idx));
                 }
                 if (base != null) {
+                    // 1. Perspective Crop Warp
+                    float[] normCorners = next.getNormalizedCropPoints();
+                    if (normCorners != null && normCorners.length == 8) {
+                        int bw = base.getWidth();
+                        int bh = base.getHeight();
+                        org.opencv.core.Point[] opencvCorners = new org.opencv.core.Point[4];
+                        for (int k = 0; k < 4; k++) {
+                            opencvCorners[k] = new org.opencv.core.Point(
+                                    Math.max(0.0, Math.min((double) bw, (double) normCorners[k * 2] * bw)),
+                                    Math.max(0.0, Math.min((double) bh, (double) normCorners[k * 2 + 1] * bh))
+                            );
+                        }
+                        opencvCorners = DocumentDetector.orderCorners(opencvCorners);
+                        Bitmap cropped = ImageProcessor.perspectiveWarp(base, opencvCorners);
+                        base.recycle();
+                        base = cropped;
+                    }
+
+                    // 2. Rotation
+                    int rotation = ((next.getRotationDegrees() % 360) + 360) % 360;
+                    if (rotation != 0) {
+                        Matrix matrix = new Matrix();
+                        matrix.postRotate(rotation);
+                        Bitmap rotated = Bitmap.createBitmap(base, 0, 0, base.getWidth(), base.getHeight(), matrix, true);
+                        base.recycle();
+                        base = rotated;
+                    }
+
+                    // 3. Filter
                     Bitmap filtered = runFilterAlgorithm(filter, base);
                     base.recycle();
                     if (filtered != null) {
                         String newPath = CacheManager.saveTempBitmap(
-                                UnifiedEditorActivity.this, filtered, "page_" + i + "_filter_" + UUID.randomUUID().toString());
+                                UnifiedEditorActivity.this, filtered, "page_" + idx + "_filter_" + UUID.randomUUID().toString());
                         filtered.recycle();
                         if (newPath != null) {
-                            pagePaths.set(i, newPath);
+                            pagePaths.set(idx, newPath);
                         }
                     }
                 }
@@ -1079,11 +1444,16 @@ public class UnifiedEditorActivity extends AppCompatActivity {
 
             runOnUiThread(() -> {
                 isBusy = false;
+                if (binding.pbFilterApplying != null) {
+                    binding.pbFilterApplying.setVisibility(View.GONE);
+                }
                 if (progressDialog.isShowing()) {
                     progressDialog.dismiss();
                 }
+                clearFilterPreviewCache();
                 pageAdapter.notifyDataSetChanged();
                 thumbAdapter.notifyDataSetChanged();
+                updateUndoButtonState();
                 Toast.makeText(UnifiedEditorActivity.this, getString(R.string.filter_applied_all, pagePaths.size()), Toast.LENGTH_SHORT).show();
             });
         });
@@ -1093,15 +1463,17 @@ public class UnifiedEditorActivity extends AppCompatActivity {
         if (src == null || src.isRecycled()) return null;
         switch (filter) {
             case MAGIC:
-                return ImageProcessor.applyCLAHE(src);
+                return ImageProcessor.applyMagicColor(src);
+            case SCAN_ENHANCE:
+                return ImageProcessor.applyScanEnhance(src);
             case BW:
-                return ImageProcessor.applyOtsuBW(src);
+                return ImageProcessor.applyAdaptiveBW(src);
             case GRAYSCALE:
                 return ImageProcessor.applyGrayscale(src);
             case SHARPEN:
                 return ImageProcessor.applySharpen(src);
-            case SCAN_ENHANCE:
-                return ImageProcessor.applyScanEnhance(src);
+            case INVERT:
+                return ImageProcessor.applyInvert(src);
             case ORIGINAL:
             default:
                 return ImageProcessor.applyOriginalFilter(src);
@@ -1118,9 +1490,40 @@ public class UnifiedEditorActivity extends AppCompatActivity {
         }
         if (base == null) return null;
 
+        EditHistoryManager hm = pageHistoryMap.get(targetIndex);
+        ScanEditState state = hm != null ? hm.getCurrentState() : null;
+        if (state != null) {
+            float[] normCorners = state.getNormalizedCropPoints();
+            if (normCorners != null && normCorners.length == 8) {
+                int bw = base.getWidth();
+                int bh = base.getHeight();
+                org.opencv.core.Point[] pts = new org.opencv.core.Point[4];
+                for (int i = 0; i < 4; i++) {
+                    pts[i] = new org.opencv.core.Point(
+                            Math.max(0.0, Math.min((double) bw, (double) normCorners[i * 2] * bw)),
+                            Math.max(0.0, Math.min((double) bh, (double) normCorners[i * 2 + 1] * bh))
+                    );
+                }
+                pts = DocumentDetector.orderCorners(pts);
+                Bitmap cropped = ImageProcessor.perspectiveWarp(base, pts);
+                base.recycle();
+                base = cropped;
+            }
+            int rotation = ((state.getRotationDegrees() % 360) + 360) % 360;
+            if (rotation != 0) {
+                Matrix matrix = new Matrix();
+                matrix.postRotate(rotation);
+                Bitmap rotated = Bitmap.createBitmap(base, 0, 0, base.getWidth(), base.getHeight(), matrix, true);
+                base.recycle();
+                base = rotated;
+            }
+            return base;
+        }
+
         Point[] corners = savedCornersMap.get(targetIndex);
         if (corners != null && corners.length == 4) {
             org.opencv.core.Point[] opencvCorners = CropPreviewActivity.toOpenCvPoints(corners);
+            opencvCorners = DocumentDetector.orderCorners(opencvCorners);
             Bitmap cropped = ImageProcessor.perspectiveWarp(base, opencvCorners);
             base.recycle();
             return cropped;
@@ -1132,14 +1535,16 @@ public class UnifiedEditorActivity extends AppCompatActivity {
         switch (filter) {
             case MAGIC:
                 return getString(R.string.crop_filter_magic_color);
+            case SCAN_ENHANCE:
+                return getString(R.string.crop_filter_scan_enhance);
             case BW:
                 return getString(R.string.crop_filter_bw_clean);
             case GRAYSCALE:
                 return getString(R.string.crop_filter_grayscale);
             case SHARPEN:
                 return getString(R.string.crop_filter_sharpen);
-            case SCAN_ENHANCE:
-                return getString(R.string.crop_filter_scan_enhance);
+            case INVERT:
+                return getString(R.string.crop_filter_invert);
             case ORIGINAL:
             default:
                 return getString(R.string.crop_filter_original);
@@ -1235,7 +1640,7 @@ public class UnifiedEditorActivity extends AppCompatActivity {
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
             lp.setMargins((int) (2 * density), 0, (int) (2 * density), 0);
             btn.setLayoutParams(lp);
-            btn.setGravity(android.view.Gravity.CENTER);
+            btn.setGravity(Gravity.CENTER);
             btn.setTypeface(FontUtils.getTypeface(this, fontValues[i]));
 
             boolean isCurrent = fontValues[i].equalsIgnoreCase(selectedFont[0]);
@@ -1251,6 +1656,17 @@ public class UnifiedEditorActivity extends AppCompatActivity {
                 }
                 Typeface tf = FontUtils.getTypeface(this, selectedFont[0]);
                 input.setTypeface(tf);
+                CharSequence cur = input.getText();
+                if (cur != null && cur.length() > 0) {
+                    int s = input.getSelectionStart();
+                    int e = input.getSelectionEnd();
+                    input.setText(cur);
+                    if (s >= 0 && e >= 0) {
+                        input.setSelection(Math.min(s, cur.length()), Math.min(e, cur.length()));
+                    }
+                }
+                input.invalidate();
+                input.requestLayout();
 
                 // Update active text annotation directly and invalidate canvas immediately
                 if (existingItem != null) {
@@ -1272,7 +1688,7 @@ public class UnifiedEditorActivity extends AppCompatActivity {
         final float[] selectedSize = new float[]{initialSizeSp};
 
         final TextView tvSizeLabel = new TextView(this);
-        tvSizeLabel.setText(String.format(java.util.Locale.US, "Font Size: %dsp", (int) selectedSize[0]));
+        tvSizeLabel.setText(String.format(Locale.US, "Font Size: %dsp", (int) selectedSize[0]));
         tvSizeLabel.setTextColor(ContextCompat.getColor(this, R.color.text_secondary));
         tvSizeLabel.setTextSize(12);
         tvSizeLabel.setPadding(0, (int) (12 * density), 0, (int) (4 * density));
@@ -1285,7 +1701,7 @@ public class UnifiedEditorActivity extends AppCompatActivity {
             @Override
             public void onProgressChanged(SeekBar sb, int progress, boolean fromUser) {
                 selectedSize[0] = 12 + progress;
-                tvSizeLabel.setText(String.format(java.util.Locale.US, "Font Size: %dsp", (int) selectedSize[0]));
+                tvSizeLabel.setText(String.format(Locale.US, "Font Size: %dsp", (int) selectedSize[0]));
                 input.setTextSize(selectedSize[0]);
                 if (existingItem != null) {
                     existingItem.textSize = selectedSize[0] * density;
@@ -1310,7 +1726,7 @@ public class UnifiedEditorActivity extends AppCompatActivity {
 
         LinearLayout colorRow = new LinearLayout(this);
         colorRow.setOrientation(LinearLayout.HORIZONTAL);
-        colorRow.setGravity(android.view.Gravity.CENTER);
+        colorRow.setGravity(Gravity.CENTER);
 
         final int[] colors = {
                 Color.parseColor("#68D391"), // Mint
@@ -1342,7 +1758,7 @@ public class UnifiedEditorActivity extends AppCompatActivity {
 
             View ring = new View(this);
             int ringDim = (int) (30 * density);
-            FrameLayout.LayoutParams rlp = new FrameLayout.LayoutParams(ringDim, ringDim, android.view.Gravity.CENTER);
+            FrameLayout.LayoutParams rlp = new FrameLayout.LayoutParams(ringDim, ringDim, Gravity.CENTER);
             ring.setLayoutParams(rlp);
             ring.setBackgroundResource(R.drawable.bg_circle_ring);
             ring.setVisibility(c == selectedColor[0] ? View.VISIBLE : View.GONE);
@@ -1351,7 +1767,7 @@ public class UnifiedEditorActivity extends AppCompatActivity {
 
             View circle = new View(this);
             int circleDim = (int) (22 * density);
-            FrameLayout.LayoutParams clp = new FrameLayout.LayoutParams(circleDim, circleDim, android.view.Gravity.CENTER);
+            FrameLayout.LayoutParams clp = new FrameLayout.LayoutParams(circleDim, circleDim, Gravity.CENTER);
             circle.setLayoutParams(clp);
             circle.setBackgroundResource(colorDrawables[i]);
             slot.addView(circle);
@@ -1461,7 +1877,7 @@ public class UnifiedEditorActivity extends AppCompatActivity {
 
         LinearLayout colorRow = new LinearLayout(this);
         colorRow.setOrientation(LinearLayout.HORIZONTAL);
-        colorRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        colorRow.setGravity(Gravity.CENTER_VERTICAL);
         colorRow.setPadding(0, 0, 0, (int) (12 * density));
 
         final int[] inkColors = {
@@ -1490,7 +1906,7 @@ public class UnifiedEditorActivity extends AppCompatActivity {
 
             View ring = new View(this);
             int ringDim = (int) (30 * density);
-            FrameLayout.LayoutParams rlp = new FrameLayout.LayoutParams(ringDim, ringDim, android.view.Gravity.CENTER);
+            FrameLayout.LayoutParams rlp = new FrameLayout.LayoutParams(ringDim, ringDim, Gravity.CENTER);
             ring.setLayoutParams(rlp);
             ring.setBackgroundResource(R.drawable.bg_circle_ring);
             ring.setVisibility(i == 0 ? View.VISIBLE : View.GONE);
@@ -1499,7 +1915,7 @@ public class UnifiedEditorActivity extends AppCompatActivity {
 
             View circle = new View(this);
             int circleDim = (int) (22 * density);
-            FrameLayout.LayoutParams clp = new FrameLayout.LayoutParams(circleDim, circleDim, android.view.Gravity.CENTER);
+            FrameLayout.LayoutParams clp = new FrameLayout.LayoutParams(circleDim, circleDim, Gravity.CENTER);
             circle.setLayoutParams(clp);
             circle.setBackgroundResource(inkDrawables[i]);
             slot.addView(circle);
@@ -1509,7 +1925,7 @@ public class UnifiedEditorActivity extends AppCompatActivity {
         root.addView(colorRow);
 
         // Drawing Canvas Card
-        com.google.android.material.card.MaterialCardView card = new com.google.android.material.card.MaterialCardView(this);
+        MaterialCardView card = new MaterialCardView(this);
         int h = (int) (200 * density);
         LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, h);
         card.setLayoutParams(clp);
@@ -1573,41 +1989,15 @@ public class UnifiedEditorActivity extends AppCompatActivity {
         if (isDrawingMode) commitCurrentAnnotations();
         if (isCropMode) exitCropMode();
 
-        isBusy = true;
         final int targetIndex = pageIndex;
-        final String preRotatePath = pagePaths.get(targetIndex);
-        final String backupPath = backupFile(preRotatePath, "backup_rot_page_" + targetIndex);
-        final Point[] prevCorners = savedCornersMap.get(targetIndex);
+        EditHistoryManager hm = getHistoryManager(targetIndex);
+        ScanEditState curr = hm.getCurrentState();
+        int newRot = (curr != null ? curr.getRotationDegrees() + 90 : 90) % 360;
+        ScanEditState next = (curr != null) ? curr.withRotation(newRot)
+                : new ScanEditState(null, newRot, ScanEditState.FILTER_ORIGINAL, System.currentTimeMillis());
+        hm.pushState(next);
 
-        executor.execute(() -> {
-            Bitmap base = CacheManager.loadBitmap(preRotatePath);
-            if (base == null) {
-                runOnUiThread(() -> isBusy = false);
-                return;
-            }
-
-            Matrix matrix = new Matrix();
-            matrix.postRotate(90);
-            Bitmap rotated = Bitmap.createBitmap(base, 0, 0, base.getWidth(), base.getHeight(), matrix, true);
-            base.recycle();
-
-            String newPath = CacheManager.saveTempBitmap(
-                    UnifiedEditorActivity.this, rotated, "page_" + targetIndex + "_rot_" + UUID.randomUUID().toString());
-            rotated.recycle();
-
-            runOnUiThread(() -> {
-                isBusy = false;
-                if (newPath != null) {
-                    pagePaths.set(targetIndex, newPath);
-                    pageAdapter.notifyItemChanged(targetIndex);
-                    thumbAdapter.notifyItemChanged(targetIndex);
-
-                    undoStack.push(new ImageTransformAction(targetIndex, backupPath, newPath, prevCorners, null));
-                    redoStack.clear();
-                    updateUndoButtonState();
-                }
-            });
-        });
+        renderStateNonDestructively(targetIndex, next, null);
     }
 
     private void showDeleteConfirmation() {
@@ -1617,6 +2007,7 @@ public class UnifiedEditorActivity extends AppCompatActivity {
                     .setTitle(R.string.review_delete_page_confirm)
                     .setMessage("Deleting this page will discard the document session. Proceed?")
                     .setPositiveButton(R.string.action_delete, (dialog, which) -> {
+                        DraftManager.clearDraft(this);
                         finish();
                     })
                     .setNegativeButton(R.string.action_cancel, null)
@@ -1632,6 +2023,19 @@ public class UnifiedEditorActivity extends AppCompatActivity {
                     if (pageIndex < originalPagePaths.size()) {
                         originalPagePaths.remove(pageIndex);
                     }
+                    pageHistoryMap.remove(pageIndex);
+                    Map<Integer, EditHistoryManager> newHistoryMap = new HashMap<>();
+                    int idx = 0;
+                    for (int i = 0; i < pagePaths.size() + 1; i++) {
+                        if (i != pageIndex && pageHistoryMap.containsKey(i)) {
+                            newHistoryMap.put(idx, pageHistoryMap.get(i));
+                            idx++;
+                        }
+                    }
+                    pageHistoryMap.clear();
+                    pageHistoryMap.putAll(newHistoryMap);
+
+                    clearFilterPreviewCache();
                     pageAdapter.notifyDataSetChanged();
                     thumbAdapter.notifyDataSetChanged();
                     int newIndex = Math.min(pageIndex, pagePaths.size() - 1);
@@ -1839,6 +2243,7 @@ public class UnifiedEditorActivity extends AppCompatActivity {
     // â”€â”€ Finish, Export & Save â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private void finishAndExport() {
+        DraftManager.clearDraft(this);
         if (isAddingPage || isFromReview) {
             Intent resultIntent = new Intent();
             resultIntent.putStringArrayListExtra(EXTRA_PAGE_PATHS, pagePaths);
@@ -1859,6 +2264,9 @@ public class UnifiedEditorActivity extends AppCompatActivity {
     }
 
     private void handleExit() {
+        if (!isFromReview && !isAddingPage && hasEdits()) {
+            DraftManager.saveDraftSync(this, originalPagePaths, pagePaths, pageHistoryMap, pageIndex, editorMode);
+        }
         if (isFromReview || isAddingPage) {
             Intent resultIntent = new Intent();
             resultIntent.putStringArrayListExtra(EXTRA_PAGE_PATHS, pagePaths);
@@ -1875,8 +2283,47 @@ public class UnifiedEditorActivity extends AppCompatActivity {
     }
 
     @Override
+    protected void onPause() {
+        super.onPause();
+        if (!isFinishing() && !isAddingPage && !isFromReview && hasEdits()) {
+            DraftManager.saveDraftAsync(this, originalPagePaths, pagePaths, pageHistoryMap, pageIndex, editorMode);
+        }
+    }
+
+    @Override
+    protected void onSaveInstanceState(@NonNull Bundle outState) {
+        super.onSaveInstanceState(outState);
+        outState.putStringArrayList(EXTRA_PAGE_PATHS, pagePaths);
+        outState.putStringArrayList(EXTRA_ORIGINAL_PAGE_PATHS, originalPagePaths);
+        outState.putInt(EXTRA_PAGE_INDEX, pageIndex);
+        outState.putString(EXTRA_MODE, editorMode);
+        outState.putBoolean(EXTRA_IS_ADDING_PAGE, isAddingPage);
+        outState.putBoolean(EXTRA_FROM_REVIEW, isFromReview);
+        outState.putBoolean("isCropMode", isCropMode);
+        outState.putBoolean("isDrawingMode", isDrawingMode);
+        outState.putBoolean("isFilterMode", isFilterMode);
+        if (viewModel != null) {
+            float[] active = viewModel.getActivePoints();
+            if (active != null) {
+                outState.putFloatArray("activePoints", active);
+            }
+            outState.putString("selectedFilter", viewModel.getSelectedFilter().name());
+        }
+        if (binding != null && binding.lensOverlay.getVisibility() == View.VISIBLE) {
+            outState.putBoolean("KEY_LENS_ACTIVE", true);
+            OcrPage ocrPage = binding.lensOverlay.getOcrPage();
+            if (ocrPage != null) {
+                outState.putParcelable("KEY_LENS_OCR_PAGE", ocrPage);
+                outState.putInt("KEY_LENS_SEL_START", binding.lensOverlay.getSelectionStart());
+                outState.putInt("KEY_LENS_SEL_END", binding.lensOverlay.getSelectionEnd());
+            }
+        }
+    }
+
+    @Override
     protected void onDestroy() {
         super.onDestroy();
+        clearFilterPreviewCache();
         if (executor != null) {
             executor.shutdown();
         }

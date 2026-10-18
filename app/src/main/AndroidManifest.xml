@@ -5,10 +5,7 @@
     <!-- ── Permissions ────────────────────────────────────────────────── -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.CAMERA" />
-    <!-- Legacy read/write for older Android versions (API <= 32) -->
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!-- Required hardware feature -->
     <uses-feature
@@ -25,46 +22,58 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:label="@string/app_name"
         android:supportsRtl="true"
-        android:requestLegacyExternalStorage="true"
         android:theme="@style/Theme.AnScanner"
         tools:targetApi="34">
 
-        <!-- ── Screen 0: Onboarding ──────────────────────────────────── -->
+        <!-- ── Screen 0: Splash Screen (Main Launcher) ───────────────── -->
         <activity
-            android:name=".ui.onboarding.OnboardingActivity"
-            android:exported="false"
-            android:screenOrientation="portrait" />
-
-        <!-- ── Screen 1: Camera (Main Launcher) ────────────────────────── -->
-        <activity
-            android:name=".ui.camera.CameraActivity"
+            android:name=".ui.splash.SplashActivity"
             android:exported="true"
-            android:screenOrientation="portrait"
-            android:theme="@style/Theme.AnScanner.Camera">
+            android:screenOrientation="user"
+            android:theme="@style/Theme.AnScanner.Splash">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
 
+        <!-- ── Main Activity Alias / Router ──────────────────────────── -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:theme="@style/Theme.AnScanner.Splash" />
+
+        <!-- ── Screen 0: Onboarding ──────────────────────────────────── -->
+        <activity
+            android:name=".ui.onboarding.OnboardingActivity"
+            android:exported="false"
+            android:screenOrientation="user" />
+
+        <!-- ── Screen 1: Camera ────────────────────────────────────────── -->
+        <activity
+            android:name=".ui.camera.CameraActivity"
+            android:exported="false"
+            android:screenOrientation="user"
+            android:theme="@style/Theme.AnScanner.Camera" />
+
         <!-- ── Scanned Documents Library ───────────────────────────────── -->
         <activity
             android:name=".ui.library.LibraryActivity"
             android:exported="false"
-            android:screenOrientation="portrait" />
+            android:screenOrientation="user" />
 
         <!-- ── Screen 2: Crop Preview & Manual Edge Cropping ─────────── -->
         <activity
             android:name=".ui.crop.CropPreviewActivity"
             android:exported="false"
-            android:screenOrientation="portrait"
+            android:screenOrientation="user"
             android:theme="@style/Theme.AnScanner.CropPreview" />
 
         <!-- ── Multi-Page PDF Editor ────────────────────────────────────── -->
         <activity
             android:name=".ui.crop.EditPdfActivity"
             android:exported="false"
-            android:screenOrientation="portrait"
+            android:screenOrientation="user"
             android:theme="@style/Theme.AnScanner.CropPreview" />
 
         <!-- ── Unified Editor (Batch Scan & PDF Annotation / Editor) ───── -->
@@ -72,20 +81,19 @@
             android:name=".ui.editor.UnifiedEditorActivity"
             android:exported="false"
             android:screenOrientation="user"
-            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize"
             android:theme="@style/Theme.AnScanner.CropPreview" />
 
         <!-- ── Screen 3: Review Scan (Multi-Page Grid) ───────────────── -->
         <activity
             android:name=".ui.review.ReviewScanActivity"
             android:exported="false"
-            android:screenOrientation="portrait" />
+            android:screenOrientation="user" />
 
         <!-- ── Screen 6: Settings & Privacy ──────────────────────────── -->
         <activity
             android:name=".ui.settings.SettingsActivity"
             android:exported="false"
-            android:screenOrientation="portrait" />
+            android:screenOrientation="user" />
 
         <!-- ── Screen 7: Native PDF Viewer ────────────────────────────── -->
         <activity

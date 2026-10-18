@@ -27,7 +27,8 @@
     <LinearLayout
         android:id="@+id/topBar"
         android:layout_width="match_parent"
-        android:layout_height="@dimen/top_bar_height"
+        android:layout_height="wrap_content"
+        android:minHeight="@dimen/top_bar_height"
         android:background="#40000000"
         android:gravity="center_vertical"
         android:orientation="horizontal"
@@ -61,6 +62,30 @@
 
     </LinearLayout>
 
+    <include
+        android:id="@+id/layoutUpdateBanner"
+        layout="@layout/layout_update_banner"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="@dimen/spacing_md"
+        android:layout_marginTop="8dp"
+        android:visibility="gone"
+        app:layout_constraintTop_toBottomOf="@id/topBar"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <include
+        android:id="@+id/layoutDraftBanner"
+        layout="@layout/layout_draft_banner"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="@dimen/spacing_lg"
+        android:layout_marginBottom="@dimen/spacing_md"
+        android:visibility="gone"
+        app:layout_constraintBottom_toTopOf="@id/bottomSection"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
+
     <LinearLayout
         android:id="@+id/bottomSection"
         android:layout_width="match_parent"
@@ -91,15 +116,19 @@
                     android:layout_weight="1"
                     android:text="@string/recent_scans"
                     android:textAppearance="@style/TextAppearance.AnScanner.Label"
-                    android:textColor="@android:color/white" />
+                    android:textColor="@color/text_primary" />
 
                 <TextView
                     android:id="@+id/tvSeeAll"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:background="?attr/selectableItemBackground"
+                    android:paddingHorizontal="10dp"
+                    android:paddingVertical="6dp"
                     android:text="@string/see_all"
-                    android:textAppearance="@style/TextAppearance.AnScanner.Label"
+                    android:textSize="14sp"
+                    android:fontFamily="sans-serif-medium"
+                    android:textStyle="bold"
                     android:textColor="@color/accent_mint" />
             </LinearLayout>
 
@@ -231,36 +260,39 @@
                 style="@style/Widget.Material3.Button.OutlinedButton"
                 android:layout_width="wrap_content"
                 android:layout_height="36dp"
-                android:paddingHorizontal="14dp"
+                android:paddingHorizontal="16dp"
                 android:paddingVertical="0dp"
                 android:text="@string/mode_document"
                 android:textSize="12sp"
-                android:textColor="@android:color/white"
-                app:strokeColor="@color/divider" />
+                android:textColor="@color/selector_camera_mode_text"
+                app:backgroundTint="@color/selector_camera_mode_bg"
+                app:strokeColor="@color/selector_camera_mode_stroke" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnModeBatch"
                 style="@style/Widget.Material3.Button.OutlinedButton"
                 android:layout_width="wrap_content"
                 android:layout_height="36dp"
-                android:paddingHorizontal="14dp"
+                android:paddingHorizontal="16dp"
                 android:paddingVertical="0dp"
                 android:text="@string/mode_batch"
                 android:textSize="12sp"
-                android:textColor="@android:color/white"
-                app:strokeColor="@color/divider" />
+                android:textColor="@color/selector_camera_mode_text"
+                app:backgroundTint="@color/selector_camera_mode_bg"
+                app:strokeColor="@color/selector_camera_mode_stroke" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnModeIdCard"
                 style="@style/Widget.Material3.Button.OutlinedButton"
                 android:layout_width="wrap_content"
                 android:layout_height="36dp"
-                android:paddingHorizontal="14dp"
+                android:paddingHorizontal="16dp"
                 android:paddingVertical="0dp"
                 android:text="@string/mode_id_card"
                 android:textSize="12sp"
-                android:textColor="@android:color/white"
-                app:strokeColor="@color/divider" />
+                android:textColor="@color/selector_camera_mode_text"
+                app:backgroundTint="@color/selector_camera_mode_bg"
+                app:strokeColor="@color/selector_camera_mode_stroke" />
 
         </com.google.android.material.button.MaterialButtonToggleGroup>
 
@@ -279,7 +311,7 @@
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:contentDescription="@string/cd_gallery_button"
                 android:src="@drawable/ic_gallery"
-                app:tint="@android:color/white" />
+                app:tint="@color/text_primary" />
 
             <Space
                 android:layout_width="0dp"
@@ -293,7 +325,7 @@
                 android:background="@drawable/bg_shutter_button"
                 android:contentDescription="@string/cd_scan_button"
                 android:src="@drawable/ic_camera"
-                app:tint="@android:color/white" />
+                app:tint="@color/text_on_accent" />
 
             <Space
                 android:layout_width="0dp"
@@ -307,7 +339,7 @@
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:contentDescription="@string/cd_compress_button"
                 android:src="@drawable/ic_compress"
-                app:tint="@android:color/white" />
+                app:tint="@color/text_primary" />
 
         </LinearLayout>
 

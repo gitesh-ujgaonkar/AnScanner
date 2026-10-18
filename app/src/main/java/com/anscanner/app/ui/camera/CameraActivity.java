@@ -20,8 +20,12 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.PickVisualMediaRequest;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+
+import com.anscanner.app.util.AppUpdateHelper;
+import com.google.android.play.core.appupdate.AppUpdateInfo;
 import androidx.camera.core.Camera;
 import androidx.camera.core.CameraSelector;
 import androidx.camera.core.ImageAnalysis;
@@ -78,6 +82,9 @@ public class CameraActivity extends AppCompatActivity {
     private ActivityCameraBinding binding;
     private ImageCapture imageCapture;
     private ImageAnalysis imageAnalysis;
+    private com.anscanner.app.util.AppUpdateHelper appUpdateHelper;
+    private AppUpdateInfo pendingAppUpdateInfo;
+    private static boolean isUpdateBannerDismissed = false;
     private boolean isFlashOn = false;
     private Camera camera;
     private ExecutorService bgExecutor;
@@ -110,6 +117,7 @@ public class CameraActivity extends AppCompatActivity {
      * Stored so they can be passed to CropPreviewActivity on capture.
      */
     private volatile Point[] lastDetectedCorners = null;
+    private android.view.OrientationEventListener orientationEventListener;
 
     // ── Permission launcher ──────────────────────────────────────────────
 
@@ -172,16 +180,26 @@ public class CameraActivity extends AppCompatActivity {
             return;
         }
 
-        // Enable edge-to-edge: draw behind both status bar and navigation bar
-        androidx.core.view.WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+        // Enable edge-to-edge: status bar icons stay white over dark camera feed, navigation bar adapts to light/dark mode
+        com.anscanner.app.util.InsetsHelper.applyEdgeToEdge(this);
+        boolean isDark = com.anscanner.app.util.ThemeHelper.isDarkMode(this);
+        androidx.core.view.WindowInsetsControllerCompat insetsController =
+                androidx.core.view.WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
+        if (insetsController != null) {
+            insetsController.setAppearanceLightStatusBars(false); // Status bar icons white over camera feed
+            insetsController.setAppearanceLightNavigationBars(!isDark); // Navigation icons dark in Light mode, white in Dark mode
+        }
 
         binding = ActivityCameraBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
 
-        // Apply system bar insets: pad the topBar for status bar, adView for navigation bar
+        // Apply system bar insets: pad the topBar for status bar, root for horizontal cutouts/nav bar, adView for navigation bar
         androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(binding.getRoot(), (v, windowInsets) -> {
             androidx.core.graphics.Insets insets = windowInsets.getInsets(
-                    androidx.core.view.WindowInsetsCompat.Type.systemBars());
+                    androidx.core.view.WindowInsetsCompat.Type.systemBars() |
+                    androidx.core.view.WindowInsetsCompat.Type.displayCutout());
+
+            binding.getRoot().setPadding(insets.left, 0, insets.right, 0);
 
             // Push topBar content below the status bar
             binding.topBar.setPadding(
@@ -198,6 +216,26 @@ public class CameraActivity extends AppCompatActivity {
 
             return windowInsets;
         });
+
+        // Dynamic CameraX target rotation tracking on physical device orientation changes
+        orientationEventListener = new android.view.OrientationEventListener(this) {
+            @Override
+            public void onOrientationChanged(int orientation) {
+                if (orientation == android.view.OrientationEventListener.ORIENTATION_UNKNOWN) return;
+                int displayRotation = binding != null && binding.previewView.getDisplay() != null
+                        ? binding.previewView.getDisplay().getRotation()
+                        : getWindowManager().getDefaultDisplay().getRotation();
+                if (imageCapture != null) {
+                    imageCapture.setTargetRotation(displayRotation);
+                }
+                if (imageAnalysis != null) {
+                    imageAnalysis.setTargetRotation(displayRotation);
+                }
+            }
+        };
+        if (orientationEventListener.canDetectOrientation()) {
+            orientationEventListener.enable();
+        }
 
         bgExecutor = Executors.newSingleThreadExecutor();
         analysisExecutor = Executors.newSingleThreadExecutor();
@@ -218,6 +256,48 @@ public class CameraActivity extends AppCompatActivity {
         }
 
         setupUI();
+
+        if (savedInstanceState != null) {
+            currentScanMode = savedInstanceState.getInt("currentScanMode", SCAN_MODE_DOCUMENT);
+            ArrayList<String> savedBatch = savedInstanceState.getStringArrayList("batchPagePaths");
+            if (savedBatch != null) {
+                batchPagePaths.clear();
+                batchPagePaths.addAll(savedBatch);
+                for (String p : savedBatch) {
+                    batchAdapter.addPage(p);
+                }
+            }
+            idCardStep = savedInstanceState.getInt("idCardStep", DocumentOverlayView.ID_STEP_FRONT);
+            idFrontTempPath = savedInstanceState.getString("idFrontTempPath", null);
+
+            if (currentScanMode == SCAN_MODE_BATCH) {
+                binding.toggleMode.check(R.id.btnModeBatch);
+                switchScanMode(SCAN_MODE_BATCH);
+            } else if (currentScanMode == SCAN_MODE_ID_CARD) {
+                binding.toggleMode.check(R.id.btnModeIdCard);
+                switchScanMode(SCAN_MODE_ID_CARD);
+                if (idCardStep == DocumentOverlayView.ID_STEP_BACK) {
+                    binding.overlayView.setIdCardStep(DocumentOverlayView.ID_STEP_BACK);
+                    binding.tvIdCardStepTitle.setText(R.string.id_card_step2_title);
+                    binding.tvIdCardStepDesc.setText(R.string.id_card_step2_hint);
+                    binding.tvFramingHint.setText(R.string.id_card_step2_hint);
+                    binding.btnIdCardRetakeFront.setVisibility(View.VISIBLE);
+                }
+            }
+        }
+
+        // ── Google Play In-App Updates (Flexible) ──────────────────────
+        appUpdateHelper = new com.anscanner.app.util.AppUpdateHelper(this);
+        setupInAppUpdate();
+    }
+
+    @Override
+    protected void onSaveInstanceState(@NonNull Bundle outState) {
+        super.onSaveInstanceState(outState);
+        outState.putInt("currentScanMode", currentScanMode);
+        outState.putStringArrayList("batchPagePaths", batchPagePaths);
+        outState.putInt("idCardStep", idCardStep);
+        outState.putString("idFrontTempPath", idFrontTempPath);
     }
 
     private void setupUI() {
@@ -369,6 +449,102 @@ public class CameraActivity extends AppCompatActivity {
         if (bgExecutor != null && recentAdapter != null) {
             loadRecentScans();
         }
+        // Check if a flexible update was downloaded while the app was in the background
+        if (appUpdateHelper != null) {
+            appUpdateHelper.onResume();
+        }
+        checkDraftBanner();
+    }
+
+    private void checkDraftBanner() {
+        if (binding == null || binding.layoutDraftBanner == null) return;
+        boolean hasDraft = com.anscanner.app.model.draft.DraftManager.hasActiveDraft(this);
+        if (hasDraft) {
+            binding.layoutDraftBanner.getRoot().setVisibility(View.VISIBLE);
+            binding.layoutDraftBanner.btnDraftResume.setOnClickListener(v -> {
+                Intent resumeIntent = com.anscanner.app.model.draft.DraftManager.createResumeIntent(this);
+                startActivity(resumeIntent);
+            });
+            binding.layoutDraftBanner.btnDraftDiscard.setOnClickListener(v -> {
+                com.anscanner.app.model.draft.DraftManager.clearDraft(this);
+                binding.layoutDraftBanner.getRoot().setVisibility(View.GONE);
+                Toast.makeText(this, R.string.draft_discarded, Toast.LENGTH_SHORT).show();
+            });
+        } else {
+            binding.layoutDraftBanner.getRoot().setVisibility(View.GONE);
+        }
+    }
+
+    private void setupInAppUpdate() {
+        boolean triggeredFromNotification = getIntent() != null
+                && getIntent().getBooleanExtra(AppUpdateHelper.EXTRA_TRIGGER_UPDATE, false);
+
+        appUpdateHelper.checkUpdate(new AppUpdateHelper.UpdateCheckCallback() {
+            @Override
+            public void onUpdateAvailable(@NonNull AppUpdateInfo appUpdateInfo) {
+                pendingAppUpdateInfo = appUpdateInfo;
+                if (triggeredFromNotification) {
+                    Log.i(TAG, "Launched with EXTRA_TRIGGER_UPDATE=true, starting flexible update directly.");
+                    appUpdateHelper.startFlexibleUpdate(appUpdateInfo);
+                } else if (!isUpdateBannerDismissed) {
+                    showUpdateBanner(appUpdateInfo);
+                }
+            }
+
+            @Override
+            public void onUpToDate() {
+                hideUpdateBanner();
+            }
+
+            @Override
+            public void onFailure(@NonNull Exception e) {
+                Log.w(TAG, "In-app update check failed in CameraActivity: " + e.getMessage());
+            }
+        });
+    }
+
+    private void showUpdateBanner(@NonNull AppUpdateInfo appUpdateInfo) {
+        if (binding == null || binding.layoutUpdateBanner == null) return;
+
+        binding.layoutUpdateBanner.btnUpdateNow.setOnClickListener(v -> {
+            appUpdateHelper.startFlexibleUpdate(appUpdateInfo);
+        });
+
+        binding.layoutUpdateBanner.btnDismissUpdate.setOnClickListener(v -> {
+            isUpdateBannerDismissed = true;
+            hideUpdateBanner();
+        });
+
+        binding.layoutUpdateBanner.getRoot().setVisibility(View.VISIBLE);
+    }
+
+    private void hideUpdateBanner() {
+        if (binding != null && binding.layoutUpdateBanner != null) {
+            binding.layoutUpdateBanner.getRoot().setVisibility(View.GONE);
+        }
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        if (intent != null && intent.getBooleanExtra(AppUpdateHelper.EXTRA_TRIGGER_UPDATE, false)) {
+            if (pendingAppUpdateInfo != null) {
+                appUpdateHelper.startFlexibleUpdate(pendingAppUpdateInfo);
+            } else if (appUpdateHelper != null) {
+                appUpdateHelper.startFlexibleUpdateFlow();
+            }
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == AppUpdateHelper.RC_APP_UPDATE) {
+            if (resultCode != RESULT_OK) {
+                Log.w(TAG, "In-app update flow failed or was cancelled by user: " + resultCode);
+            }
+        }
     }
 
     private void loadRecentScans() {
@@ -390,18 +566,27 @@ public class CameraActivity extends AppCompatActivity {
             try {
                 ProcessCameraProvider provider = future.get();
 
+                binding.previewView.setScaleType(androidx.camera.view.PreviewView.ScaleType.FILL_CENTER);
+                int rotation = binding.previewView.getDisplay() != null
+                        ? binding.previewView.getDisplay().getRotation()
+                        : getWindowManager().getDefaultDisplay().getRotation();
+
                 // 1) Preview
-                Preview preview = new Preview.Builder().build();
+                Preview preview = new Preview.Builder()
+                        .setTargetRotation(rotation)
+                        .build();
                 preview.setSurfaceProvider(binding.previewView.getSurfaceProvider());
 
                 // 2) ImageCapture (full resolution for final scan)
                 imageCapture = new ImageCapture.Builder()
                         .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
+                        .setTargetRotation(rotation)
                         .build();
 
                 // 3) ImageAnalysis (downscaled for real-time edge detection)
                 imageAnalysis = new ImageAnalysis.Builder()
                         .setTargetResolution(new Size(640, 480))
+                        .setTargetRotation(rotation)
                         .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                         .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_YUV_420_888)
                         .build();
@@ -465,7 +650,7 @@ public class CameraActivity extends AppCompatActivity {
             Point[] corners = null;
             if (frameBitmap != null) {
                 try {
-                    corners = DocumentDetector.getInstance(CameraActivity.this).detectCorners(frameBitmap);
+                    corners = DocumentDetector.getInstance(CameraActivity.this).detectCorners(frameBitmap, false);
                 } finally {
                     frameBitmap.recycle();
                 }
@@ -475,7 +660,8 @@ public class CameraActivity extends AppCompatActivity {
             lastDetectedCorners = corners;
 
             // Update the overlay on the UI thread
-            binding.overlayView.setDetectedCorners(corners);
+            final Point[] finalCorners = corners;
+            runOnUiThread(() -> binding.overlayView.setDetectedCorners(finalCorners));
 
         } catch (Exception e) {
             // Silently ignore analysis errors to avoid crashing the preview
@@ -589,10 +775,31 @@ public class CameraActivity extends AppCompatActivity {
 
                                 } else {
                                     // Default Document Mode (Single Page)
-                                    Point[] mappedCorners = null;
-                                    if (captureCorners != null) {
-                                        mappedCorners = binding.overlayView.getCornersForCapture(
-                                                bitmap.getWidth(), bitmap.getHeight());
+                                    // Run edge detection directly on the full-resolution captured photo for exact alignment
+                                    Point[] mappedCorners = DocumentDetector.getInstance(CameraActivity.this)
+                                            .detectCorners(bitmap, false);
+
+                                    // If high-res detection missed, map corners detected during live camera preview
+                                    if (mappedCorners == null && captureCorners != null && captureCorners.length == 4) {
+                                        int bw = bitmap.getWidth();
+                                        int bh = bitmap.getHeight();
+                                        int aw = binding.overlayView.getAnalysisWidth();
+                                        int ah = binding.overlayView.getAnalysisHeight();
+                                        if (aw > 0 && ah > 0) {
+                                            float sx = (float) bw / aw;
+                                            float sy = (float) bh / ah;
+                                            mappedCorners = new Point[4];
+                                            for (int i = 0; i < 4; i++) {
+                                                mappedCorners[i] = new Point(
+                                                        Math.max(0, Math.min(bw, captureCorners[i].x * sx)),
+                                                        Math.max(0, Math.min(bh, captureCorners[i].y * sy))
+                                                );
+                                            }
+                                        }
+                                    }
+
+                                    if (mappedCorners == null) {
+                                        mappedCorners = DocumentDetector.getDefaultCorners(bitmap.getWidth(), bitmap.getHeight());
                                     }
 
                                     String path = CacheManager.saveTempBitmap(
@@ -645,6 +852,33 @@ public class CameraActivity extends AppCompatActivity {
                     inputStream.close();
 
                     if (bitmap == null) continue;
+
+                    // Read EXIF orientation to ensure rotated camera photos appear upright
+                    try (InputStream exifStream = getContentResolver().openInputStream(uri)) {
+                        if (exifStream != null) {
+                            android.media.ExifInterface exif = new android.media.ExifInterface(exifStream);
+                            int orientation = exif.getAttributeInt(
+                                    android.media.ExifInterface.TAG_ORIENTATION,
+                                    android.media.ExifInterface.ORIENTATION_NORMAL);
+                            int rotationDegrees = 0;
+                            if (orientation == android.media.ExifInterface.ORIENTATION_ROTATE_90) {
+                                rotationDegrees = 90;
+                            } else if (orientation == android.media.ExifInterface.ORIENTATION_ROTATE_180) {
+                                rotationDegrees = 180;
+                            } else if (orientation == android.media.ExifInterface.ORIENTATION_ROTATE_270) {
+                                rotationDegrees = 270;
+                            }
+                            if (rotationDegrees != 0) {
+                                android.graphics.Matrix matrix = new android.graphics.Matrix();
+                                matrix.postRotate(rotationDegrees);
+                                Bitmap rotated = Bitmap.createBitmap(bitmap, 0, 0, bitmap.getWidth(), bitmap.getHeight(), matrix, true);
+                                if (rotated != bitmap) {
+                                    bitmap.recycle();
+                                    bitmap = rotated;
+                                }
+                            }
+                        }
+                    } catch (Exception ignored) {}
 
                     String fileName = "scan_" + timestamp + "_" + i;
                     String cachedPath = CacheManager.saveTempBitmap(this, bitmap, fileName);
@@ -834,6 +1068,7 @@ public class CameraActivity extends AppCompatActivity {
                         }
                         Toast.makeText(this, R.string.compression_complete, Toast.LENGTH_SHORT).show();
                         loadRecentScans();
+                        new com.anscanner.app.review.ReviewPromptManager(this).onExportCompleted(this);
                     });
                 } else {
                     throw new IOException("Failed to export compressed PDF to storage");
@@ -853,6 +1088,9 @@ public class CameraActivity extends AppCompatActivity {
 
     @Override
     protected void onDestroy() {
+        if (orientationEventListener != null) {
+            orientationEventListener.disable();
+        }
         if (binding != null && binding.adView != null) {
             binding.adView.destroy();
         }
@@ -861,6 +1099,10 @@ public class CameraActivity extends AppCompatActivity {
         }
         if (analysisExecutor != null && !analysisExecutor.isShutdown()) {
             analysisExecutor.shutdown();
+        }
+        // Unregister the in-app update listener to prevent memory leaks
+        if (appUpdateHelper != null) {
+            appUpdateHelper.onDestroy();
         }
         super.onDestroy();
         binding = null;

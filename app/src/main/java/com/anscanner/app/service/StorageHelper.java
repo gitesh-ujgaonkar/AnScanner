@@ -14,6 +14,7 @@ import android.util.Log;
 
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -183,6 +184,98 @@ public final class StorageHelper {
 
         Log.i(TAG, "JPG saved to MediaStore: " + itemUri);
         return itemUri;
+    }
+
+    /**
+     * Saves a Bitmap image directly to public Pictures/AnScanner/ via MediaStore.
+     * Complies fully with Scoped Storage policies (zero broad storage permissions needed).
+     *
+     * @param context   Application context.
+     * @param bitmap    Bitmap to save (caller retains or manages lifecycle).
+     * @param fileName  User-facing filename (e.g. "Doc_Page_1.jpg").
+     * @param format    Compression format (JPEG or PNG).
+     * @param quality   Compression quality (0-100).
+     * @param mimeType  MIME type ("image/jpeg" or "image/png").
+     * @return Content URI of the saved image, or null on failure.
+     */
+    public static Uri saveBitmapToPublicPictures(Context context, Bitmap bitmap, String fileName,
+                                                 Bitmap.CompressFormat format, int quality, String mimeType) {
+        if (context == null || bitmap == null || bitmap.isRecycled()) return null;
+
+        ContentResolver resolver = context.getContentResolver();
+        ContentValues values = new ContentValues();
+        values.put(MediaStore.Images.Media.DISPLAY_NAME, fileName);
+        values.put(MediaStore.Images.Media.MIME_TYPE, mimeType);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            values.put(MediaStore.Images.Media.RELATIVE_PATH,
+                    Environment.DIRECTORY_PICTURES + "/" + APP_DIRECTORY);
+            values.put(MediaStore.Images.Media.IS_PENDING, 1);
+        }
+
+        Uri collection = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
+                ? MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+                : MediaStore.Images.Media.EXTERNAL_CONTENT_URI;
+        Uri itemUri = resolver.insert(collection, values);
+
+        if (itemUri == null) {
+            Log.e(TAG, "Failed to create MediaStore entry for " + fileName);
+            return null;
+        }
+
+        try (OutputStream os = resolver.openOutputStream(itemUri)) {
+            if (os == null) {
+                Log.e(TAG, "Failed to open output stream for image URI: " + itemUri);
+                resolver.delete(itemUri, null, null);
+                return null;
+            }
+
+            bitmap.compress(format, quality, os);
+            os.flush();
+
+        } catch (IOException e) {
+            Log.e(TAG, "Failed to write image to MediaStore", e);
+            resolver.delete(itemUri, null, null);
+            return null;
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            values.clear();
+            values.put(MediaStore.Images.Media.IS_PENDING, 0);
+            resolver.update(itemUri, values, null, null);
+        }
+
+        Log.i(TAG, "Image saved to MediaStore: " + itemUri);
+        return itemUri;
+    }
+
+    /**
+     * Saves a Bitmap to a temporary cache directory for immediate sharing via FileProvider.
+     *
+     * @param context   Application context.
+     * @param bitmap    Bitmap to save.
+     * @param fileName  Filename (e.g. "Page_1.jpg").
+     * @param format    Compression format (JPEG or PNG).
+     * @param quality   Quality (0-100).
+     * @return Content URI grantable to other apps via FileProvider, or null on failure.
+     */
+    public static Uri saveBitmapToShareCache(Context context, Bitmap bitmap, String fileName,
+                                             Bitmap.CompressFormat format, int quality) {
+        if (context == null || bitmap == null || bitmap.isRecycled()) return null;
+        File shareDir = new File(context.getCacheDir(), "shared_export");
+        if (!shareDir.exists()) {
+            shareDir.mkdirs();
+        }
+        File targetFile = new File(shareDir, fileName);
+        try (FileOutputStream fos = new FileOutputStream(targetFile)) {
+            bitmap.compress(format, quality, fos);
+            fos.flush();
+            return androidx.core.content.FileProvider.getUriForFile(
+                    context, context.getPackageName() + ".provider", targetFile);
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to save bitmap to share cache", e);
+            return null;
+        }
     }
 
     // ════════════════════════════════════════════════════════════════════

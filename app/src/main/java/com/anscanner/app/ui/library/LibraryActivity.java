@@ -5,6 +5,7 @@ import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.text.Editable;
 import android.text.TextWatcher;
+import android.view.View;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
@@ -27,6 +28,7 @@ public class LibraryActivity extends AppCompatActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        com.anscanner.app.util.InsetsHelper.applyEdgeToEdge(this);
         super.onCreate(savedInstanceState);
 
         // Check if this is the first app launch; show onboarding if so
@@ -37,6 +39,40 @@ public class LibraryActivity extends AppCompatActivity {
 
         binding = ActivityLibraryBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
+        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(binding.getRoot(), (v, windowInsets) -> {
+            androidx.core.graphics.Insets insets = windowInsets.getInsets(
+                    androidx.core.view.WindowInsetsCompat.Type.systemBars() |
+                    androidx.core.view.WindowInsetsCompat.Type.displayCutout());
+
+            binding.getRoot().setPadding(insets.left, 0, insets.right, 0);
+
+            if (binding.topSection != null) {
+                binding.topSection.setPadding(
+                        binding.topSection.getPaddingLeft(),
+                        insets.top,
+                        binding.topSection.getPaddingRight(),
+                        binding.topSection.getPaddingBottom());
+            }
+
+            if (binding.bottomNavContainer != null) {
+                binding.bottomNavContainer.setPadding(
+                        binding.bottomNavContainer.getPaddingLeft(),
+                        binding.bottomNavContainer.getPaddingTop(),
+                        binding.bottomNavContainer.getPaddingRight(),
+                        insets.bottom);
+            }
+
+            if (binding.adView != null) {
+                boolean isLandscape = getResources().getConfiguration().orientation
+                        == android.content.res.Configuration.ORIENTATION_LANDSCAPE;
+                android.view.ViewGroup.MarginLayoutParams params =
+                        (android.view.ViewGroup.MarginLayoutParams) binding.adView.getLayoutParams();
+                params.bottomMargin = isLandscape ? insets.bottom : 0;
+                binding.adView.setLayoutParams(params);
+            }
+
+            return windowInsets;
+        });
 
         // Prompt user if a crash occurred previously
         CrashManager.checkAndPromptCrashLog(this);
@@ -63,6 +99,26 @@ public class LibraryActivity extends AppCompatActivity {
         super.onResume();
         if (binding.adView != null) {
             binding.adView.resume();
+        }
+        checkDraftBanner();
+    }
+
+    private void checkDraftBanner() {
+        if (binding == null || binding.layoutDraftBanner == null) return;
+        boolean hasDraft = com.anscanner.app.model.draft.DraftManager.hasActiveDraft(this);
+        if (hasDraft) {
+            binding.layoutDraftBanner.getRoot().setVisibility(View.VISIBLE);
+            binding.layoutDraftBanner.btnDraftResume.setOnClickListener(v -> {
+                Intent resumeIntent = com.anscanner.app.model.draft.DraftManager.createResumeIntent(this);
+                startActivity(resumeIntent);
+            });
+            binding.layoutDraftBanner.btnDraftDiscard.setOnClickListener(v -> {
+                com.anscanner.app.model.draft.DraftManager.clearDraft(this);
+                binding.layoutDraftBanner.getRoot().setVisibility(View.GONE);
+                Toast.makeText(this, R.string.draft_discarded, Toast.LENGTH_SHORT).show();
+            });
+        } else {
+            binding.layoutDraftBanner.getRoot().setVisibility(View.GONE);
         }
     }
 

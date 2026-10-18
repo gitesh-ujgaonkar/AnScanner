@@ -20,6 +20,9 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 
 import com.anscanner.app.R;
+import com.anscanner.app.model.ocr.OcrPage;
+import com.anscanner.app.ui.dialog.OcrTextBottomSheetDialog;
+import com.anscanner.app.util.PdfRendererHelper;
 import com.google.android.gms.tasks.Tasks;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.progressindicator.LinearProgressIndicator;
@@ -48,6 +51,11 @@ public final class OcrHelper {
         void onError(Exception e);
     }
 
+    public interface OcrPageCallback {
+        void onSuccess(OcrPage ocrPage, Text visionText);
+        void onError(Exception e);
+    }
+
     public interface MultiPageOcrCallback {
         void onSuccess(String fullText);
         void onError(Exception e);
@@ -60,8 +68,33 @@ public final class OcrHelper {
         void onError(Exception e);
     }
 
-    private OcrHelper() {
-        // Utility class
+    public static void extractOcrPage(@Nullable Bitmap bitmap, @NonNull Context context, @NonNull OcrPageCallback callback) {
+        if (bitmap == null || bitmap.isRecycled()) {
+            callback.onError(new IllegalArgumentException("Bitmap is null or recycled"));
+            return;
+        }
+        final int w = bitmap.getWidth();
+        final int h = bitmap.getHeight();
+        extractText(bitmap, context, new OcrCallback() {
+            @Override
+            public void onSuccess(Text visionText) {
+                OcrPage page = OcrPage.fromMlKitText(visionText, w, h);
+                callback.onSuccess(page, visionText);
+            }
+
+            @Override
+            public void onError(Exception e) {
+                callback.onError(e);
+            }
+        });
+    }
+
+    public static void showExtractedTextBottomSheet(@NonNull Context context, @Nullable OcrPage ocrPage, @Nullable OcrTextBottomSheetDialog.OnTextEditedListener listener) {
+        OcrTextBottomSheetDialog.show(context, ocrPage, listener);
+    }
+
+    public static void showExtractedTextBottomSheet(@NonNull Context context, @Nullable String text, @Nullable OcrTextBottomSheetDialog.OnTextEditedListener listener) {
+        OcrTextBottomSheetDialog.show(context, text, listener);
     }
 
     /**
@@ -176,7 +209,7 @@ public final class OcrHelper {
                             int targetHeight = (int) ((float) page.getHeight() / page.getWidth() * targetWidth);
                             if (targetHeight <= 0) targetHeight = 1400;
 
-                            pageBitmap = com.anscanner.app.util.PdfRendererHelper.renderPageWithWhiteBackground(
+                            pageBitmap = PdfRendererHelper.renderPageWithWhiteBackground(
                                     page, targetWidth, targetHeight, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
                         }
                     } finally {

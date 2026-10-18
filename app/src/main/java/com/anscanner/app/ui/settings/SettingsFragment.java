@@ -20,9 +20,12 @@ import androidx.fragment.app.Fragment;
 import com.anscanner.app.R;
 import com.anscanner.app.databinding.DialogFeedbackBinding;
 import com.anscanner.app.databinding.FragmentSettingsBinding;
+import com.anscanner.app.review.ReviewPromptManager;
 import com.anscanner.app.service.CacheManager;
+import com.anscanner.app.util.AppUpdateHelper;
 import com.anscanner.app.util.ThemeHelper;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+import com.google.android.play.core.appupdate.AppUpdateInfo;
 import com.google.firebase.firestore.FieldValue;
 import com.google.firebase.firestore.FirebaseFirestore;
 
@@ -39,6 +42,7 @@ public class SettingsFragment extends Fragment {
     private FragmentSettingsBinding binding;
     private SharedPreferences prefs;
     private ExecutorService executor;
+    private AppUpdateHelper appUpdateHelper;
 
     @Nullable
     @Override
@@ -87,9 +91,18 @@ public class SettingsFragment extends Fragment {
         binding.rowTerms.setOnClickListener(v -> showTermsAndConditions());
         binding.rowLicenses.setOnClickListener(v -> showOpenSourceLicenses());
         binding.rowFeedback.setOnClickListener(v -> showFeedbackDialog());
+        binding.rowRateApp.setOnClickListener(v -> new ReviewPromptManager(requireContext()).openStoreListing());
 
-        // ── About & Version ─────────────────────────────────────────────────
-        binding.tvAppVersion.setText(getString(R.string.app_name) + " v" + com.anscanner.app.BuildConfig.VERSION_NAME);
+        // ── About & Version / In-App Updates ─────────────────────────────────
+        appUpdateHelper = new AppUpdateHelper(requireActivity());
+        binding.tvAppVersion.setText(getString(R.string.settings_app_version_title,
+                com.anscanner.app.BuildConfig.VERSION_NAME));
+        binding.tvAppVersionSubtitle.setText(R.string.settings_check_for_updates);
+
+        boolean isUpdateAvailable = AppUpdateHelper.isUpdateKnownAvailable(requireContext());
+        binding.tvUpdateBadge.setVisibility(isUpdateAvailable ? View.VISIBLE : View.GONE);
+
+        binding.rowAppVersion.setOnClickListener(v -> checkAndLaunchUpdate());
     }
 
     private void updateThemeDisplay() {
@@ -268,12 +281,19 @@ public class SettingsFragment extends Fragment {
                 + "Licensed under the Apache License, Version 2.0.</p>";
 
         WebView webView = new WebView(requireContext());
+        boolean isDark = ThemeHelper.isDarkMode(requireContext());
+        String bodyColor = isDark ? "#E2E8F0" : "#111827";
+        String bgColor = isDark ? "#1A202C" : "#FFFFFF";
+        String h3Color = isDark ? "#68D391" : "#10B981";
+        String h4Color = isDark ? "#FFFFFF" : "#111827";
+        String hrColor = isDark ? "#2D3748" : "#E5E7EB";
+
         String styledHtml = "<html><head><style>"
-                + "body { font-family: sans-serif; padding: 16px; color: #E2E8F0; background-color: #1A202C; line-height: 1.5; font-size: 13px; }"
-                + "h3 { color: #68D391; margin-top: 0; }"
-                + "h4 { color: #FFFFFF; margin-bottom: 4px; }"
+                + "body { font-family: sans-serif; padding: 16px; color: " + bodyColor + "; background-color: " + bgColor + "; line-height: 1.5; font-size: 13px; }"
+                + "h3 { color: " + h3Color + "; margin-top: 0; }"
+                + "h4 { color: " + h4Color + "; margin-bottom: 4px; }"
                 + "p { margin-top: 4px; }"
-                + "hr { border: 0; border-top: 1px solid #2D3748; margin: 12px 0; }"
+                + "hr { border: 0; border-top: 1px solid " + hrColor + "; margin: 12px 0; }"
                 + "</style></head><body>" + licenseContent + "</body></html>";
         webView.loadDataWithBaseURL(null, styledHtml, "text/html", "UTF-8", null);
 
@@ -375,8 +395,59 @@ public class SettingsFragment extends Fragment {
         dialog.show();
     }
 
+    public void checkAndLaunchUpdate() {
+        if (binding == null || getContext() == null || getActivity() == null) return;
+
+        binding.pbCheckUpdate.setVisibility(View.VISIBLE);
+        binding.tvAppVersionSubtitle.setText(R.string.settings_checking_updates);
+
+        appUpdateHelper.checkUpdate(new AppUpdateHelper.UpdateCheckCallback() {
+            @Override
+            public void onUpdateAvailable(@NonNull AppUpdateInfo appUpdateInfo) {
+                if (binding == null || getContext() == null) return;
+                binding.pbCheckUpdate.setVisibility(View.GONE);
+                binding.tvAppVersionSubtitle.setText(R.string.settings_check_for_updates);
+                binding.tvUpdateBadge.setVisibility(View.VISIBLE);
+
+                appUpdateHelper.startFlexibleUpdate(appUpdateInfo);
+            }
+
+            @Override
+            public void onUpToDate() {
+                if (binding == null || getContext() == null) return;
+                binding.pbCheckUpdate.setVisibility(View.GONE);
+                binding.tvAppVersionSubtitle.setText(R.string.settings_check_for_updates);
+                binding.tvUpdateBadge.setVisibility(View.GONE);
+                Toast.makeText(getContext(), R.string.settings_app_up_to_date, Toast.LENGTH_SHORT).show();
+            }
+
+            @Override
+            public void onFailure(@NonNull Exception e) {
+                if (binding == null || getContext() == null) return;
+                binding.pbCheckUpdate.setVisibility(View.GONE);
+                binding.tvAppVersionSubtitle.setText(R.string.settings_check_for_updates);
+                Toast.makeText(getContext(), R.string.settings_update_check_failed, Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        if (appUpdateHelper != null) {
+            appUpdateHelper.onResume();
+        }
+        if (binding != null && getContext() != null) {
+            boolean isKnownAvailable = AppUpdateHelper.isUpdateKnownAvailable(requireContext());
+            binding.tvUpdateBadge.setVisibility(isKnownAvailable ? View.VISIBLE : View.GONE);
+        }
+    }
+
     @Override
     public void onDestroyView() {
+        if (appUpdateHelper != null) {
+            appUpdateHelper.onDestroy();
+        }
         super.onDestroyView();
         if (executor != null) {
             executor.shutdown();

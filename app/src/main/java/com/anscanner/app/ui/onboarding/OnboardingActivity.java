@@ -37,9 +37,11 @@ public class OnboardingActivity extends AppCompatActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        com.anscanner.app.util.InsetsHelper.applyEdgeToEdge(this);
         super.onCreate(savedInstanceState);
         binding = ActivityOnboardingBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
+        com.anscanner.app.util.InsetsHelper.handleSystemBars(binding.getRoot(), binding.btnSkip, binding.bottomContainer);
 
         initSlides();
         setupViewPager();
