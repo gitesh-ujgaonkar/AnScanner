@@ -3,9 +3,11 @@ package com.anscanner.app.ui.library;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.view.LayoutInflater;
+import android.view.View;
 import android.view.ViewGroup;
 
 import androidx.annotation.NonNull;
+import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.anscanner.app.R;
@@ -19,6 +21,7 @@ import android.os.Looper;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
@@ -35,19 +38,99 @@ public class DocumentListAdapter extends RecyclerView.Adapter<RecyclerView.ViewH
     private final ExecutorService imageExecutor = Executors.newSingleThreadExecutor();
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
+    private boolean isMultiSelectMode = false;
+    private final LinkedHashMap<String, DocumentEntity> selectedDocuments = new LinkedHashMap<>();
+
     public interface DocumentClickListener {
         void onDocumentClick(DocumentEntity document);
         void onDocumentShare(DocumentEntity document);
         void onDocumentExportImages(DocumentEntity document);
+        void onDocumentOrganizePages(DocumentEntity document);
+        void onDocumentSplitPdf(DocumentEntity document);
         void onDocumentProperties(DocumentEntity document);
         void onDocumentRemoveAppOnly(DocumentEntity document);
         void onDocumentDeletePermanently(DocumentEntity document);
+        void onSelectionModeChanged(boolean isMultiSelect, int selectedCount);
     }
 
     public DocumentListAdapter(Context context, DocumentClickListener listener) {
         this.context = context;
         this.listener = listener;
         this.dateFormat = new SimpleDateFormat("MMM dd", Locale.getDefault());
+    }
+
+    public boolean isMultiSelectMode() {
+        return isMultiSelectMode;
+    }
+
+    public void startMultiSelect(@NonNull DocumentEntity initialDoc) {
+        isMultiSelectMode = true;
+        selectedDocuments.clear();
+        if (initialDoc.fileUri != null) {
+            selectedDocuments.put(initialDoc.fileUri, initialDoc);
+        }
+        notifyDataSetChanged();
+        if (listener != null) {
+            listener.onSelectionModeChanged(true, selectedDocuments.size());
+        }
+    }
+
+    public void exitMultiSelect() {
+        if (!isMultiSelectMode) return;
+        isMultiSelectMode = false;
+        selectedDocuments.clear();
+        notifyDataSetChanged();
+        if (listener != null) {
+            listener.onSelectionModeChanged(false, 0);
+        }
+    }
+
+    public void selectAllDocuments() {
+        for (Object item : items) {
+            if (item instanceof DocumentEntity) {
+                DocumentEntity d = (DocumentEntity) item;
+                if (d.fileUri != null) {
+                    selectedDocuments.put(d.fileUri, d);
+                }
+            }
+        }
+        notifyDataSetChanged();
+        if (listener != null) {
+            listener.onSelectionModeChanged(true, selectedDocuments.size());
+        }
+    }
+
+    public void clearSelection() {
+        selectedDocuments.clear();
+        notifyDataSetChanged();
+        if (listener != null) {
+            listener.onSelectionModeChanged(true, 0);
+        }
+    }
+
+    public void toggleSelection(@NonNull DocumentEntity doc) {
+        if (doc.fileUri == null) return;
+        if (selectedDocuments.containsKey(doc.fileUri)) {
+            selectedDocuments.remove(doc.fileUri);
+        } else {
+            selectedDocuments.put(doc.fileUri, doc);
+        }
+        notifyDataSetChanged();
+        if (listener != null) {
+            listener.onSelectionModeChanged(true, selectedDocuments.size());
+        }
+    }
+
+    public List<DocumentEntity> getSelectedDocuments() {
+        return new ArrayList<>(selectedDocuments.values());
+    }
+
+    public int getSelectedCount() {
+        return selectedDocuments.size();
+    }
+
+    public List<Object> getItems() {
+        return items;
     }
 
     public void updateItems(List<Object> newItems) {
@@ -159,7 +242,12 @@ public class DocumentListAdapter extends RecyclerView.Adapter<RecyclerView.ViewH
             binding.getRoot().setOnClickListener(v -> {
                 int pos = getBindingAdapterPosition();
                 if (pos != RecyclerView.NO_POSITION && items.get(pos) instanceof DocumentEntity) {
-                    listener.onDocumentClick((DocumentEntity) items.get(pos));
+                    DocumentEntity doc = (DocumentEntity) items.get(pos);
+                    if (isMultiSelectMode) {
+                        toggleSelection(doc);
+                    } else {
+                        listener.onDocumentClick(doc);
+                    }
                 }
             });
 
@@ -173,8 +261,11 @@ public class DocumentListAdapter extends RecyclerView.Adapter<RecyclerView.ViewH
             binding.getRoot().setOnLongClickListener(v -> {
                 int pos = getBindingAdapterPosition();
                 if (pos != RecyclerView.NO_POSITION && items.get(pos) instanceof DocumentEntity) {
-                    showPopupMenu(binding.btnMore, (DocumentEntity) items.get(pos));
-                    return true;
+                    DocumentEntity doc = (DocumentEntity) items.get(pos);
+                    if (!isMultiSelectMode) {
+                        startMultiSelect(doc);
+                        return true;
+                    }
                 }
                 return false;
             });
@@ -218,6 +309,12 @@ public class DocumentListAdapter extends RecyclerView.Adapter<RecyclerView.ViewH
                 } else if (id == R.id.action_export_images) {
                     listener.onDocumentExportImages(document);
                     return true;
+                } else if (id == R.id.action_organize_pages) {
+                    listener.onDocumentOrganizePages(document);
+                    return true;
+                } else if (id == R.id.action_split_pdf) {
+                    listener.onDocumentSplitPdf(document);
+                    return true;
                 } else if (id == R.id.action_properties) {
                     listener.onDocumentProperties(document);
                     return true;
@@ -248,6 +345,20 @@ public class DocumentListAdapter extends RecyclerView.Adapter<RecyclerView.ViewH
             binding.tvDocPages.setText(pagesText);
             
             binding.tvDocFormat.setText(document.format.toUpperCase(Locale.getDefault()));
+
+            boolean isSelected = isMultiSelectMode && document.fileUri != null && selectedDocuments.containsKey(document.fileUri);
+            if (isMultiSelectMode) {
+                binding.cbSelected.setVisibility(View.VISIBLE);
+                binding.cbSelected.setChecked(isSelected);
+                binding.btnMore.setVisibility(View.GONE);
+                binding.cardDocument.setStrokeColor(ContextCompat.getColor(context, isSelected ? R.color.accent_mint : R.color.border_subtle));
+                binding.cardDocument.setStrokeWidth(isSelected ? (int) (2 * context.getResources().getDisplayMetrics().density) : (int) (1 * context.getResources().getDisplayMetrics().density));
+            } else {
+                binding.cbSelected.setVisibility(View.GONE);
+                binding.btnMore.setVisibility(View.VISIBLE);
+                binding.cardDocument.setStrokeColor(ContextCompat.getColor(context, R.color.border_subtle));
+                binding.cardDocument.setStrokeWidth((int) (1 * context.getResources().getDisplayMetrics().density));
+            }
 
             // 1. Clear ImageView at the start to prevent recycled views from showing wrong image
             binding.ivDocThumb.setImageBitmap(null);

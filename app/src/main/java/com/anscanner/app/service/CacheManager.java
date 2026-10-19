@@ -302,6 +302,40 @@ public final class CacheManager {
         return savePermanentThumbnail(context, sourcePath, documentId);
     }
 
+    /**
+     * Downscales and permanently saves a provided Bitmap as a document thumbnail in internal storage.
+     *
+     * @param context    Application or Activity context.
+     * @param bitmap     In-memory Bitmap to save as thumbnail.
+     * @param documentId Unique document identifier or timestamp.
+     * @return Absolute file path to the permanent thumbnail JPEG, or null on failure.
+     */
+    public static String savePermanentThumbnail(Context context, Bitmap bitmap, long documentId) {
+        if (context == null || bitmap == null || bitmap.isRecycled()) return null;
+        try {
+            final int targetDim = 200;
+            float scale = Math.min((float) targetDim / bitmap.getWidth(),
+                                   (float) targetDim / bitmap.getHeight());
+            int finalWidth = Math.max(1, Math.round(bitmap.getWidth() * scale));
+            int finalHeight = Math.max(1, Math.round(bitmap.getHeight() * scale));
+
+            Bitmap finalThumb = Bitmap.createScaledBitmap(bitmap, finalWidth, finalHeight, true);
+            File thumbFile = new File(context.getFilesDir(), "thumb_" + documentId + ".jpg");
+            try (FileOutputStream fos = new FileOutputStream(thumbFile)) {
+                finalThumb.compress(Bitmap.CompressFormat.JPEG, 85, fos);
+                fos.flush();
+            } finally {
+                if (finalThumb != bitmap) {
+                    finalThumb.recycle();
+                }
+            }
+            return thumbFile.getAbsolutePath();
+        } catch (Exception e) {
+            Log.e(TAG, "savePermanentThumbnail from bitmap failed", e);
+            return null;
+        }
+    }
+
     // ════════════════════════════════════════════════════════════════════
     // Cache Clearing & Lifecycle Scratch Purge
     // ════════════════════════════════════════════════════════════════════

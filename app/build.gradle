@@ -65,6 +65,10 @@ android {
     aaptOptions {
         noCompress 'tflite'
     }
+
+    testOptions {
+        unitTests.returnDefaultValues = true
+    }
 }
 
 dependencies {

@@ -2,12 +2,16 @@ package com.anscanner.app.ui.library;
 
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.net.Uri;
 import android.os.Bundle;
+import android.provider.OpenableColumns;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.view.View;
 import android.widget.Toast;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.anscanner.app.R;
@@ -15,16 +19,62 @@ import com.anscanner.app.databinding.ActivityLibraryBinding;
 import com.anscanner.app.service.CrashManager;
 import com.anscanner.app.ui.camera.CameraActivity;
 import com.anscanner.app.ui.onboarding.OnboardingActivity;
+import com.anscanner.app.ui.pdf.MergePdfBottomSheet;
 import com.anscanner.app.ui.settings.SettingsActivity;
 import com.google.android.gms.ads.AdRequest;
 import com.google.android.gms.ads.MobileAds;
 import com.google.android.material.tabs.TabLayoutMediator;
 
-public class LibraryActivity extends AppCompatActivity {
+import java.util.ArrayList;
+
+public class LibraryActivity extends AppCompatActivity implements MergePdfBottomSheet.OnPdfMergedListener {
     private static final String TAG = "LibraryActivity";
 
     private ActivityLibraryBinding binding;
     private LibraryPagerAdapter pagerAdapter;
+
+    private final ActivityResultLauncher<Intent> mergePickerLauncher =
+            registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
+                if (result.getResultCode() == RESULT_OK && result.getData() != null) {
+                    Intent data = result.getData();
+                    ArrayList<Uri> uris = new ArrayList<>();
+                    ArrayList<String> titles = new ArrayList<>();
+
+                    if (data.getClipData() != null) {
+                        int count = data.getClipData().getItemCount();
+                        for (int i = 0; i < count; i++) {
+                            Uri uri = data.getClipData().getItemAt(i).getUri();
+                            if (uri != null) {
+                                try {
+                                    final int takeFlags = data.getFlags()
+                                            & (Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+                                    getContentResolver().takePersistableUriPermission(
+                                            uri, takeFlags != 0 ? takeFlags : Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                                } catch (Exception ignored) {}
+                                uris.add(uri);
+                                titles.add(queryDisplayName(uri));
+                            }
+                        }
+                    } else if (data.getData() != null) {
+                        Uri uri = data.getData();
+                        try {
+                            final int takeFlags = data.getFlags()
+                                    & (Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+                            getContentResolver().takePersistableUriPermission(
+                                    uri, takeFlags != 0 ? takeFlags : Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                        } catch (Exception ignored) {}
+                        uris.add(uri);
+                        titles.add(queryDisplayName(uri));
+                    }
+
+                    if (uris.size() < 2) {
+                        Toast.makeText(this, R.string.merge_min_files_error, Toast.LENGTH_SHORT).show();
+                    } else {
+                        MergePdfBottomSheet sheet = MergePdfBottomSheet.newInstance(uris, titles);
+                        sheet.show(getSupportFragmentManager(), "MergePdfBottomSheet");
+                    }
+                }
+            });
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -84,6 +134,10 @@ public class LibraryActivity extends AppCompatActivity {
         setupViewPagerAndTabs();
         setupBottomNav();
         setupSearch();
+
+        if (binding.btnMergePdfsHeader != null) {
+            binding.btnMergePdfsHeader.setOnClickListener(v -> launchPdfPickerForMerge());
+        }
     }
 
     @Override
@@ -170,6 +224,39 @@ public class LibraryActivity extends AppCompatActivity {
                 }
             }
         });
+    }
+
+    private void launchPdfPickerForMerge() {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("application/pdf");
+        intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+        mergePickerLauncher.launch(intent);
+    }
+
+    private String queryDisplayName(Uri uri) {
+        String result = null;
+        if ("content".equalsIgnoreCase(uri.getScheme())) {
+            try (android.database.Cursor cursor = getContentResolver().query(uri, null, null, null, null)) {
+                if (cursor != null && cursor.moveToFirst()) {
+                    int nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME);
+                    if (nameIndex != -1) {
+                        result = cursor.getString(nameIndex);
+                    }
+                }
+            } catch (Exception ignored) {}
+        }
+        if (result == null) {
+            result = uri.getLastPathSegment();
+        }
+        return result != null ? result : "Document.pdf";
+    }
+
+    @Override
+    public void onPdfMergedSuccess() {
+        if (pagerAdapter != null) {
+            pagerAdapter.reloadCurrentTab();
+        }
     }
 
     @Override

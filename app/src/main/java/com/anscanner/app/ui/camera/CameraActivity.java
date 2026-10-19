@@ -78,6 +78,8 @@ public class CameraActivity extends AppCompatActivity {
     public static final String EXTRA_IS_ADDING_PAGE = "extra_is_adding_page";
     public static final String EXTRA_CROPPED_PATH = "extra_cropped_path";
     public static final String EXTRA_DETECTED_CORNERS = "extra_detected_corners";
+    public static final String EXTRA_APPEND_MODE = "extra_append_mode";
+    public static final String EXTRA_SESSION_ID = "extra_session_id";
 
     private ActivityCameraBinding binding;
     private ImageCapture imageCapture;
@@ -91,6 +93,8 @@ public class CameraActivity extends AppCompatActivity {
     private ExecutorService analysisExecutor;
     private RecentScansAdapter recentAdapter;
     private boolean isAddingPage = false;
+    private boolean isAppendMode = false;
+    private String sessionId = null;
 
     // Scan Modes
     public static final int SCAN_MODE_DOCUMENT = 0;
@@ -240,6 +244,11 @@ public class CameraActivity extends AppCompatActivity {
         bgExecutor = Executors.newSingleThreadExecutor();
         analysisExecutor = Executors.newSingleThreadExecutor();
         isAddingPage = getIntent().getBooleanExtra(EXTRA_IS_ADDING_PAGE, false);
+        isAppendMode = getIntent().getBooleanExtra(EXTRA_APPEND_MODE, false);
+        sessionId = getIntent().getStringExtra(EXTRA_SESSION_ID);
+        if (isAppendMode) {
+            isAddingPage = true;
+        }
 
         // Check and prompt to upload crash log if a previous crash occurred
         CrashManager.checkAndPromptCrashLog(this);
@@ -259,6 +268,11 @@ public class CameraActivity extends AppCompatActivity {
 
         if (savedInstanceState != null) {
             currentScanMode = savedInstanceState.getInt("currentScanMode", SCAN_MODE_DOCUMENT);
+            isAppendMode = savedInstanceState.getBoolean(EXTRA_APPEND_MODE, isAppendMode);
+            sessionId = savedInstanceState.getString(EXTRA_SESSION_ID, sessionId);
+            if (isAppendMode) {
+                isAddingPage = true;
+            }
             ArrayList<String> savedBatch = savedInstanceState.getStringArrayList("batchPagePaths");
             if (savedBatch != null) {
                 batchPagePaths.clear();
@@ -298,6 +312,8 @@ public class CameraActivity extends AppCompatActivity {
         outState.putStringArrayList("batchPagePaths", batchPagePaths);
         outState.putInt("idCardStep", idCardStep);
         outState.putString("idFrontTempPath", idFrontTempPath);
+        outState.putBoolean(EXTRA_APPEND_MODE, isAppendMode);
+        outState.putString(EXTRA_SESSION_ID, sessionId);
     }
 
     private void setupUI() {
@@ -387,7 +403,20 @@ public class CameraActivity extends AppCompatActivity {
             return;
         }
 
-        if (isAddingPage) {
+        if (isAppendMode) {
+            Intent resultIntent = new Intent();
+            resultIntent.putStringArrayListExtra(ReviewScanActivity.EXTRA_PAGE_PATHS, new ArrayList<>(batchPagePaths));
+            if (!batchPagePaths.isEmpty()) {
+                resultIntent.putExtra(EXTRA_IMAGE_PATH, batchPagePaths.get(0));
+                resultIntent.putExtra(EXTRA_CROPPED_PATH, batchPagePaths.get(0));
+            }
+            resultIntent.putExtra(EXTRA_APPEND_MODE, true);
+            if (sessionId != null) {
+                resultIntent.putExtra(EXTRA_SESSION_ID, sessionId);
+            }
+            setResult(RESULT_OK, resultIntent);
+            finish();
+        } else if (isAddingPage) {
             Intent resultIntent = new Intent();
             resultIntent.putStringArrayListExtra(ReviewScanActivity.EXTRA_PAGE_PATHS, new ArrayList<>(batchPagePaths));
             setResult(RESULT_OK, resultIntent);
@@ -403,7 +432,20 @@ public class CameraActivity extends AppCompatActivity {
     }
 
     private void routeIdComposite(String compositePath) {
-        if (isAddingPage) {
+        if (isAppendMode) {
+            Intent resultIntent = new Intent();
+            resultIntent.putExtra(EXTRA_CROPPED_PATH, compositePath);
+            resultIntent.putExtra(EXTRA_IMAGE_PATH, compositePath);
+            ArrayList<String> pages = new ArrayList<>();
+            pages.add(compositePath);
+            resultIntent.putStringArrayListExtra(ReviewScanActivity.EXTRA_PAGE_PATHS, pages);
+            resultIntent.putExtra(EXTRA_APPEND_MODE, true);
+            if (sessionId != null) {
+                resultIntent.putExtra(EXTRA_SESSION_ID, sessionId);
+            }
+            setResult(RESULT_OK, resultIntent);
+            finish();
+        } else if (isAddingPage) {
             Intent resultIntent = new Intent();
             resultIntent.putExtra(EXTRA_CROPPED_PATH, compositePath);
             ArrayList<String> pages = new ArrayList<>();
@@ -619,6 +661,11 @@ public class CameraActivity extends AppCompatActivity {
      * the resulting corners onto the {@link DocumentOverlayView}.</p>
      */
     private void analyzeFrame(@NonNull ImageProxy imageProxy) {
+        if (binding == null || isFinishing() || isDestroyed()) {
+            imageProxy.close();
+            return;
+        }
+
         // Drop frame if we're still processing the previous one
         if (!isAnalyzing.compareAndSet(false, true)) {
             imageProxy.close();
@@ -641,10 +688,8 @@ public class CameraActivity extends AppCompatActivity {
                 rawBitmap.recycle();
             }
 
-            if (frameBitmap != null) {
-                // Set upright analysis dimensions on the overlay for coordinate mapping
-                binding.overlayView.setAnalysisDimensions(frameBitmap.getWidth(), frameBitmap.getHeight());
-            }
+            final int fw = frameBitmap != null ? frameBitmap.getWidth() : 0;
+            final int fh = frameBitmap != null ? frameBitmap.getHeight() : 0;
 
             // Run corner detection on the upright frame bitmap
             Point[] corners = null;
@@ -661,7 +706,14 @@ public class CameraActivity extends AppCompatActivity {
 
             // Update the overlay on the UI thread
             final Point[] finalCorners = corners;
-            runOnUiThread(() -> binding.overlayView.setDetectedCorners(finalCorners));
+            runOnUiThread(() -> {
+                if (binding != null && !isFinishing() && !isDestroyed()) {
+                    if (fw > 0 && fh > 0) {
+                        binding.overlayView.setAnalysisDimensions(fw, fh);
+                    }
+                    binding.overlayView.setDetectedCorners(finalCorners);
+                }
+            });
 
         } catch (Exception e) {
             // Silently ignore analysis errors to avoid crashing the preview
@@ -710,6 +762,7 @@ public class CameraActivity extends AppCompatActivity {
                                     bitmap.recycle();
 
                                     runOnUiThread(() -> {
+                                        if (binding == null || isFinishing() || isDestroyed()) return;
                                         if (path != null) {
                                             batchPagePaths.add(path);
                                             batchAdapter.addPage(path);
@@ -728,8 +781,8 @@ public class CameraActivity extends AppCompatActivity {
 
                                 } else if (mode == SCAN_MODE_ID_CARD) {
                                     // ID Card Mode: Crop directly to ID card guide frame (no Canny edge detection)
-                                    android.graphics.Rect cropRect = binding.overlayView.getIdCardCropRect(
-                                            bitmap.getWidth(), bitmap.getHeight());
+                                    android.graphics.Rect cropRect = binding != null ? binding.overlayView.getIdCardCropRect(
+                                            bitmap.getWidth(), bitmap.getHeight()) : new android.graphics.Rect(0, 0, bitmap.getWidth(), bitmap.getHeight());
                                     Bitmap cardBitmap = ImageProcessor.cropIdCardFrame(bitmap, cropRect);
                                     bitmap.recycle();
 
@@ -741,6 +794,7 @@ public class CameraActivity extends AppCompatActivity {
                                         idFrontTempPath = frontPath;
 
                                         runOnUiThread(() -> {
+                                            if (binding == null || isFinishing() || isDestroyed()) return;
                                             idCardStep = DocumentOverlayView.ID_STEP_BACK;
                                             binding.overlayView.setIdCardStep(idCardStep);
                                             binding.tvIdCardStepTitle.setText(R.string.id_card_step2_title);
@@ -903,7 +957,20 @@ public class CameraActivity extends AppCompatActivity {
                     launchCropPreview(savedPaths.get(0), null);
                 } else {
                     // Multiple images: route directly to ReviewScanActivity
-                    if (isAddingPage) {
+                    if (isAppendMode) {
+                        Intent resultIntent = new Intent();
+                        resultIntent.putStringArrayListExtra(ReviewScanActivity.EXTRA_PAGE_PATHS, savedPaths);
+                        if (!savedPaths.isEmpty()) {
+                            resultIntent.putExtra(EXTRA_IMAGE_PATH, savedPaths.get(0));
+                            resultIntent.putExtra(EXTRA_CROPPED_PATH, savedPaths.get(0));
+                        }
+                        resultIntent.putExtra(EXTRA_APPEND_MODE, true);
+                        if (sessionId != null) {
+                            resultIntent.putExtra(EXTRA_SESSION_ID, sessionId);
+                        }
+                        setResult(RESULT_OK, resultIntent);
+                        finish();
+                    } else if (isAddingPage) {
                         Intent resultIntent = new Intent();
                         resultIntent.putStringArrayListExtra(ReviewScanActivity.EXTRA_PAGE_PATHS, savedPaths);
                         setResult(RESULT_OK, resultIntent);
@@ -942,6 +1009,30 @@ public class CameraActivity extends AppCompatActivity {
      */
     private void launchCropPreview(String path, Point[] corners) {
         new Handler(Looper.getMainLooper()).post(() -> {
+            if (isAppendMode) {
+                Intent resultIntent = new Intent();
+                resultIntent.putExtra(EXTRA_IMAGE_PATH, path);
+                resultIntent.putExtra(EXTRA_CROPPED_PATH, path);
+                resultIntent.putExtra(EXTRA_APPEND_MODE, true);
+                if (sessionId != null) {
+                    resultIntent.putExtra(EXTRA_SESSION_ID, sessionId);
+                }
+                if (corners != null && corners.length == 4) {
+                    double[] cornerArray = new double[8];
+                    for (int i = 0; i < 4; i++) {
+                        cornerArray[i * 2] = corners[i].x;
+                        cornerArray[i * 2 + 1] = corners[i].y;
+                    }
+                    resultIntent.putExtra(EXTRA_DETECTED_CORNERS, cornerArray);
+                }
+                ArrayList<String> pages = new ArrayList<>();
+                pages.add(path);
+                resultIntent.putStringArrayListExtra(ReviewScanActivity.EXTRA_PAGE_PATHS, pages);
+                setResult(RESULT_OK, resultIntent);
+                finish();
+                return;
+            }
+
             Intent intent = new Intent(CameraActivity.this, CropPreviewActivity.class);
             intent.putExtra(EXTRA_IMAGE_PATH, path);
             intent.putExtra(EXTRA_IS_ADDING_PAGE, isAddingPage);

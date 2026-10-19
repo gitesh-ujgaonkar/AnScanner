@@ -16,12 +16,39 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
-        <TextView
-            android:id="@+id/tvTitle"
-            android:layout_width="wrap_content"
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="@string/library_title"
-            android:textAppearance="@style/TextAppearance.AnScanner.Headline" />
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/tvTitle"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/library_title"
+                android:textAppearance="@style/TextAppearance.AnScanner.Headline" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnMergePdfsHeader"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:minHeight="0dp"
+                android:paddingHorizontal="12dp"
+                android:paddingVertical="0dp"
+                android:text="@string/action_merge_pdfs"
+                android:textColor="@color/accent_mint"
+                android:textSize="12sp"
+                app:cornerRadius="18dp"
+                app:icon="@drawable/ic_merge_pdf"
+                app:iconPadding="6dp"
+                app:iconSize="16dp"
+                app:iconTint="@color/accent_mint"
+                app:strokeColor="@color/accent_mint"
+                app:strokeWidth="1dp" />
+        </LinearLayout>
 
         <LinearLayout
             android:id="@+id/searchContainer"

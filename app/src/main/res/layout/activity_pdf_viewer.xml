@@ -41,6 +41,16 @@
             tools:text="Document Title.pdf" />
 
         <ImageButton
+            android:id="@+id/btnOrganizePages"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/action_organize_pages"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_organize_pages"
+            app:tint="@color/text_primary" />
+
+        <ImageButton
             android:id="@+id/btnMore"
             android:layout_width="48dp"
             android:layout_height="48dp"

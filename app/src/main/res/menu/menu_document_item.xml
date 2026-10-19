@@ -13,6 +13,14 @@
         android:title="@string/action_export_images"
         android:icon="@drawable/ic_gallery" />
     <item
+        android:id="@+id/action_organize_pages"
+        android:title="@string/action_organize_pages"
+        android:icon="@drawable/ic_organize_pages" />
+    <item
+        android:id="@+id/action_split_pdf"
+        android:title="@string/action_split_pdf"
+        android:icon="@drawable/ic_split_pdf" />
+    <item
         android:id="@+id/action_properties"
         android:title="@string/action_properties"
         android:icon="@drawable/ic_info" />

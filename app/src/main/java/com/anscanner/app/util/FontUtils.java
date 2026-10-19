@@ -120,6 +120,11 @@ public final class FontUtils {
                 }
                 return Typeface.create(Typeface.SERIF, Typeface.ITALIC);
 
+            case "bold_condensed":
+            case "condensed":
+            case "impact":
+                return Typeface.create("sans-serif-condensed", Typeface.BOLD);
+
             default:
                 break;
         }

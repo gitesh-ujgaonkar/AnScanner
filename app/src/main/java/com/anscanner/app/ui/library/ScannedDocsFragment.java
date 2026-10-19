@@ -10,6 +10,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Toast;
 
+import androidx.activity.OnBackPressedCallback;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.content.ContextCompat;
@@ -23,7 +24,10 @@ import com.anscanner.app.data.entity.DocumentEntity;
 import com.anscanner.app.databinding.FragmentDocumentListBinding;
 import com.anscanner.app.service.FilePropertiesHelper;
 import com.anscanner.app.service.StorageHelper;
+import com.anscanner.app.ui.pdf.MergePdfBottomSheet;
+import com.anscanner.app.ui.pdf.OrganizePagesActivity;
 import com.anscanner.app.ui.pdf.PdfViewerActivity;
+import com.anscanner.app.ui.pdf.SplitPdfBottomSheet;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 import java.io.File;
@@ -36,7 +40,10 @@ import java.util.concurrent.Executors;
 /**
  * Tab fragment displaying documents scanned in-app and saved to internal / app storage.
  */
-public class ScannedDocsFragment extends Fragment implements DocumentListAdapter.DocumentClickListener {
+public class ScannedDocsFragment extends Fragment implements
+        DocumentListAdapter.DocumentClickListener,
+        MergePdfBottomSheet.OnPdfMergedListener,
+        SplitPdfBottomSheet.OnPdfSplitListener {
 
     private FragmentDocumentListBinding binding;
     private DocumentListAdapter adapter;
@@ -67,6 +74,43 @@ public class ScannedDocsFragment extends Fragment implements DocumentListAdapter
         binding.swipeRefreshLayout.setProgressBackgroundColorSchemeColor(
                 ContextCompat.getColor(requireContext(), R.color.surface_card));
         binding.swipeRefreshLayout.setOnRefreshListener(() -> loadDocuments(currentSearchQuery));
+
+        binding.btnCloseSelection.setOnClickListener(v -> {
+            if (adapter != null) adapter.exitMultiSelect();
+        });
+
+        binding.btnSelectAll.setOnClickListener(v -> {
+            if (adapter != null) {
+                if (adapter.getSelectedCount() == getDocumentCount()) {
+                    adapter.clearSelection();
+                } else {
+                    adapter.selectAllDocuments();
+                }
+            }
+        });
+
+        binding.btnMergeSelection.setOnClickListener(v -> {
+            if (adapter == null) return;
+            List<DocumentEntity> selected = adapter.getSelectedDocuments();
+            if (selected.size() < 2) {
+                Toast.makeText(requireContext(), R.string.merge_min_files_error, Toast.LENGTH_SHORT).show();
+                return;
+            }
+            MergePdfBottomSheet sheet = MergePdfBottomSheet.newInstanceFromDocuments(selected);
+            sheet.show(getChildFragmentManager(), "MergePdfBottomSheet");
+        });
+
+        requireActivity().getOnBackPressedDispatcher().addCallback(getViewLifecycleOwner(), new OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                if (adapter != null && adapter.isMultiSelectMode()) {
+                    adapter.exitMultiSelect();
+                } else {
+                    setEnabled(false);
+                    requireActivity().getOnBackPressedDispatcher().onBackPressed();
+                }
+            }
+        });
 
         loadDocuments(currentSearchQuery);
     }
@@ -229,6 +273,67 @@ public class ScannedDocsFragment extends Fragment implements DocumentListAdapter
         com.anscanner.app.ui.export.ExportImagesBottomSheet sheet =
                 com.anscanner.app.ui.export.ExportImagesBottomSheet.newInstance(uri, document.title);
         sheet.show(getChildFragmentManager(), "ExportImagesBottomSheet");
+    }
+
+    @Override
+    public void onDocumentOrganizePages(DocumentEntity document) {
+        if (document == null || document.fileUri == null) return;
+        Intent intent = new Intent(requireContext(), OrganizePagesActivity.class);
+        intent.putExtra(OrganizePagesActivity.EXTRA_PDF_URI, Uri.parse(document.fileUri));
+        intent.putExtra(OrganizePagesActivity.EXTRA_DOCUMENT_TITLE, document.title);
+        intent.putExtra(OrganizePagesActivity.EXTRA_DOCUMENT_ID, document.id);
+        startActivity(intent);
+    }
+
+    @Override
+    public void onDocumentSplitPdf(DocumentEntity document) {
+        if (document == null || document.fileUri == null) return;
+        Uri uri = Uri.parse(document.fileUri);
+        SplitPdfBottomSheet sheet = SplitPdfBottomSheet.newInstance(uri, document.title);
+        sheet.show(getChildFragmentManager(), "SplitPdfBottomSheet");
+    }
+
+    @Override
+    public void onSelectionModeChanged(boolean isMultiSelect, int selectedCount) {
+        if (binding == null) return;
+        if (isMultiSelect) {
+            binding.cardSelectionBar.setVisibility(View.VISIBLE);
+            binding.btnBrowseBottom.setVisibility(View.GONE);
+            binding.tvSelectionCount.setText(getString(R.string.selection_count_format, selectedCount));
+            binding.btnMergeSelection.setEnabled(selectedCount >= 2);
+            binding.btnMergeSelection.setAlpha(selectedCount >= 2 ? 1.0f : 0.5f);
+            int total = getDocumentCount();
+            boolean allSelected = selectedCount > 0 && selectedCount == total;
+            binding.btnSelectAll.setText(allSelected ? R.string.action_deselect_all : R.string.action_select_all);
+        } else {
+            binding.cardSelectionBar.setVisibility(View.GONE);
+            binding.btnMergeSelection.setEnabled(false);
+        }
+    }
+
+    @Override
+    public void onPdfMergedSuccess() {
+        if (adapter != null) adapter.exitMultiSelect();
+        loadDocuments(currentSearchQuery);
+    }
+
+    @Override
+    public void onPdfSplitSuccess() {
+        loadDocuments(currentSearchQuery);
+    }
+
+    public void reload() {
+        loadDocuments(currentSearchQuery);
+    }
+
+    private int getDocumentCount() {
+        int count = 0;
+        if (adapter != null) {
+            for (Object item : adapter.getItems()) {
+                if (item instanceof DocumentEntity) count++;
+            }
+        }
+        return count;
     }
 
     @Override

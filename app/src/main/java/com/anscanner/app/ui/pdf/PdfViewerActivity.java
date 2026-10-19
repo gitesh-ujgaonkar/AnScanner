@@ -37,6 +37,8 @@ import android.widget.FrameLayout;
 import android.widget.Toast;
 
 import androidx.activity.OnBackPressedCallback;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
@@ -102,6 +104,7 @@ public class PdfViewerActivity extends AppCompatActivity {
     public static final String EXTRA_PDF_PATH = "extra_pdf_path";
     public static final String EXTRA_PDF_URI = "extra_pdf_uri";
     public static final String EXTRA_DOCUMENT_TITLE = "extra_document_title";
+    public static final String EXTRA_DOCUMENT_ID = "extra_document_id";
 
     private static final String PREFS_NAME = "anscanner_pdf_viewer_prefs";
     private static final String PREF_SWIPE_HORIZONTAL = "pref_swipe_horizontal";
@@ -112,7 +115,18 @@ public class PdfViewerActivity extends AppCompatActivity {
     private File resolvedFile;
     private File decryptedTempFile = null;
     private String documentTitle = "Document";
+    private long documentId = -1L;
     private int pageCount = 0;
+
+    private final ActivityResultLauncher<Intent> organizePagesLauncher =
+            registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
+                if (result.getResultCode() == RESULT_OK && result.getData() != null) {
+                    boolean reorganized = result.getData().getBooleanExtra("KEY_PAGES_REORGANIZED", false);
+                    if (reorganized) {
+                        loadPdfDocument();
+                    }
+                }
+            });
 
     // Viewing mode state: false = continuous vertical, true = continuous horizontal
     private boolean isSwipeHorizontal = false;
@@ -253,6 +267,7 @@ public class PdfViewerActivity extends AppCompatActivity {
 
     private void setupToolbar() {
         binding.btnBack.setOnClickListener(v -> finish());
+        binding.btnOrganizePages.setOnClickListener(v -> openOrganizePages());
         binding.btnMore.setOnClickListener(this::showActionsMenu);
         binding.tvPageIndicator.setOnClickListener(v -> showJumpToPageDialog());
 
@@ -303,6 +318,15 @@ public class PdfViewerActivity extends AppCompatActivity {
             }
         }
 
+        MenuItem organizeItem = menu.findItem(R.id.action_organize_pages);
+        if (organizeItem != null) {
+            organizeItem.setVisible(!isImageDocument());
+        }
+        MenuItem splitItem = menu.findItem(R.id.action_split_pdf);
+        if (splitItem != null) {
+            splitItem.setVisible(!isImageDocument());
+        }
+
         // 2. Tint icons with text_primary and apply subtle inset for a refined, modern look
         int primaryColor = ContextCompat.getColor(this, R.color.text_primary);
         int inset = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 2, getResources().getDisplayMetrics());
@@ -323,6 +347,12 @@ public class PdfViewerActivity extends AppCompatActivity {
                 return true;
             } else if (id == R.id.action_export_images) {
                 showExportImagesDialog();
+                return true;
+            } else if (id == R.id.action_organize_pages) {
+                openOrganizePages();
+                return true;
+            } else if (id == R.id.action_split_pdf) {
+                showSplitPdfDialog();
                 return true;
             } else if (id == R.id.action_ocr) {
                 onExtractTextClicked();
@@ -455,11 +485,16 @@ public class PdfViewerActivity extends AppCompatActivity {
             binding.tvTitle.setText(documentTitle);
         }
 
+        documentId = intent.getLongExtra(EXTRA_DOCUMENT_ID, -1L);
+
         // 3. Check for JPG / Image document
         if (isImageDocument()) {
+            binding.btnOrganizePages.setVisibility(View.GONE);
             loadImageDocument();
             return;
         }
+
+        binding.btnOrganizePages.setVisibility(View.VISIBLE);
 
         // 4. Load PDF with PDFView engine
         loadPdfWithEngine(0);
@@ -1249,6 +1284,31 @@ public class PdfViewerActivity extends AppCompatActivity {
         com.anscanner.app.ui.export.ExportImagesBottomSheet sheet =
                 com.anscanner.app.ui.export.ExportImagesBottomSheet.newInstance(targetUri, documentTitle);
         sheet.show(getSupportFragmentManager(), "ExportImagesBottomSheet");
+    }
+
+    private void openOrganizePages() {
+        Uri targetUri = resolvedUri != null ? resolvedUri : (resolvedFile != null ? Uri.fromFile(resolvedFile) : null);
+        if (targetUri == null) {
+            Toast.makeText(this, R.string.pdf_load_error, Toast.LENGTH_SHORT).show();
+            return;
+        }
+        Intent intent = new Intent(this, OrganizePagesActivity.class);
+        intent.putExtra(OrganizePagesActivity.EXTRA_PDF_URI, targetUri);
+        intent.putExtra(OrganizePagesActivity.EXTRA_DOCUMENT_TITLE, documentTitle);
+        if (documentId > 0) {
+            intent.putExtra(OrganizePagesActivity.EXTRA_DOCUMENT_ID, documentId);
+        }
+        organizePagesLauncher.launch(intent);
+    }
+
+    private void showSplitPdfDialog() {
+        Uri targetUri = resolvedUri != null ? resolvedUri : (resolvedFile != null ? Uri.fromFile(resolvedFile) : null);
+        if (targetUri == null) {
+            Toast.makeText(this, R.string.pdf_load_error, Toast.LENGTH_SHORT).show();
+            return;
+        }
+        SplitPdfBottomSheet sheet = SplitPdfBottomSheet.newInstance(targetUri, documentTitle);
+        sheet.show(getSupportFragmentManager(), "SplitPdfBottomSheet");
     }
 
     // ── Flattened Annotation Engine (Sign/Draw) ──────────────────────────

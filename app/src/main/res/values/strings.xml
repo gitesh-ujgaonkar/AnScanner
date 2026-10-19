@@ -52,6 +52,7 @@
     <string name="review_page_count">%1$d pages</string>
     <string name="review_page_count_singular">1 page</string>
     <string name="review_add_page">Add Page</string>
+    <string name="page_added">Page added</string>
     <string name="review_retake">Retake</string>
     <string name="review_proceed">Proceed to Save</string>
     <string name="review_delete_page_confirm">Delete this page?</string>
@@ -320,6 +321,7 @@
 
     <!-- ── Unified Editor & Annotations ─────────────────────────────── -->
     <string name="action_annotate">Annotate</string>
+    <string name="action_draw">Draw</string>
     <string name="action_pen">Pen</string>
     <string name="action_highlighter">Highlighter</string>
     <string name="action_text">Text</string>
@@ -419,5 +421,49 @@
     <!-- ── Production AdMob IDs ──────────────────────────────────────── -->
     <string name="admob_app_id" translatable="false">ca-app-pub-6921879884284454~7792924137</string>
     <string name="admob_banner_ad_unit_id" translatable="false">ca-app-pub-6921879884284454/8435177106</string>
+    <!-- ── PDF Tools Suite: Organise, Merge & Split ───────────────────── -->
+    <string name="action_organize_pages">Organise Pages</string>
+    <string name="organize_pages_title">Organise Pages</string>
+    <string name="organize_pages_page_badge">Page %1$d</string>
+    <string name="organize_pages_save">Save Changes</string>
+    <string name="organize_pages_saving">Saving changes…</string>
+    <string name="organize_pages_saved">Changes saved successfully</string>
+    <string name="organize_pages_cannot_delete_all">Document must have at least one page</string>
+    <string name="organize_pages_unsaved_title">Unsaved Changes</string>
+    <string name="organize_pages_unsaved_message">You have unsaved changes to page order. Do you want to save them before leaving?</string>
+    <string name="organize_pages_delete_confirm_title">Delete Page?</string>
+    <string name="organize_pages_delete_confirm_msg">Remove Page %1$d from this document?</string>
+    <string name="organize_pages_drag_hint">Long press and drag to rearrange pages</string>
+    <string name="cd_rotate_page">Rotate page 90 degrees</string>
+    <string name="cd_drag_page">Drag to reorder</string>
+
+    <string name="action_merge_pdfs">Merge PDFs</string>
+    <string name="merge_title">Merge PDFs</string>
+    <string name="merge_documents_header">DOCUMENTS TO MERGE</string>
+    <string name="merge_reorder_hint">Drag handles to set document merge order</string>
+    <string name="merge_file_name_label">Merged File Name</string>
+    <string name="merge_action_btn">Merge PDFs</string>
+    <string name="merge_progress">Merging PDF documents…</string>
+    <string name="merge_success">PDFs merged successfully</string>
+    <string name="merge_error">Failed to merge PDFs</string>
+    <string name="merge_min_files_error">Please select at least 2 PDF documents to merge</string>
+    <string name="action_merge">Merge</string>
+
+    <string name="action_split_pdf">Split PDF</string>
+    <string name="split_title">Split / Extract PDF</string>
+    <string name="split_extract_selected">Extract Selected Pages</string>
+    <string name="split_all_single">Split into Single Pages</string>
+    <string name="split_pages_header">SELECT PAGES TO EXTRACT</string>
+    <string name="split_progress_extracting">Extracting selected pages…</string>
+    <string name="split_progress_splitting">Splitting document into single pages…</string>
+    <string name="split_success">PDF split successfully</string>
+    <string name="split_success_single">Split into %1$d single-page PDFs</string>
+    <string name="split_error">Failed to split PDF</string>
+    <string name="split_no_selection_error">Please select at least one page</string>
+
+    <string name="action_open_file">Open</string>
+    <string name="action_select_all">Select All</string>
+    <string name="action_deselect_all">Deselect All</string>
+    <string name="selection_count_format">%1$d selected</string>
 </resources>
 

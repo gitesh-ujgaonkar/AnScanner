@@ -33,7 +33,7 @@
 
     <!-- ── Dividers & Borders (Dark) ──────────────────────────────────── -->
     <color name="divider">#FF333333</color>
-    <color name="border_subtle">#FF2A2A2A</color>
+    <color name="border_subtle">#FF30363D</color>
     <color name="border_dashed">#FF444444</color>
 
     <!-- ── Overlay & Scrim ────────────────────────────────────────────── -->

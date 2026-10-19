@@ -1,23 +1,17 @@
 package com.anscanner.app.ui.library;
 
-import android.content.ContentUris;
+import android.Manifest;
 import android.content.Context;
 import android.content.Intent;
-import android.database.Cursor;
-import android.graphics.Bitmap;
-import android.graphics.pdf.PdfRenderer;
 import android.net.Uri;
-import android.os.Build;
 import android.os.Bundle;
-import android.os.Environment;
-import android.os.ParcelFileDescriptor;
-import android.provider.MediaStore;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Toast;
 
+import androidx.activity.OnBackPressedCallback;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
@@ -29,29 +23,30 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import com.anscanner.app.R;
 import com.anscanner.app.data.entity.DocumentEntity;
 import com.anscanner.app.databinding.FragmentDocumentListBinding;
+import com.anscanner.app.service.DevicePdfScanner;
 import com.anscanner.app.service.FilePropertiesHelper;
 import com.anscanner.app.service.StorageHelper;
+import com.anscanner.app.ui.pdf.MergePdfBottomSheet;
+import com.anscanner.app.ui.pdf.OrganizePagesActivity;
 import com.anscanner.app.ui.pdf.PdfViewerActivity;
+import com.anscanner.app.ui.pdf.SplitPdfBottomSheet;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 import java.io.File;
-import java.io.FileOutputStream;
 import java.util.ArrayList;
 import java.util.Calendar;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
-import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
- * Tab fragment displaying public PDF documents queried from the device using MediaStore
- * across all external storage volumes, with runtime permission checks and SAF integration.
+ * Tab fragment displaying public PDF documents discovered from the device using MediaStore API.
+ * Scoped Storage compliant without MANAGE_EXTERNAL_STORAGE.
  */
-public class DeviceDocsFragment extends Fragment implements DocumentListAdapter.DocumentClickListener {
+public class DeviceDocsFragment extends Fragment implements
+        DocumentListAdapter.DocumentClickListener,
+        MergePdfBottomSheet.OnPdfMergedListener,
+        SplitPdfBottomSheet.OnPdfSplitListener {
 
     private static final String TAG = "DeviceDocsFragment";
 
@@ -59,6 +54,15 @@ public class DeviceDocsFragment extends Fragment implements DocumentListAdapter.
     private DocumentListAdapter adapter;
     private ExecutorService executor;
     private String currentSearchQuery = "";
+
+    private final ActivityResultLauncher<String> requestPermissionLauncher =
+            registerForActivityResult(new ActivityResultContracts.RequestPermission(), isGranted -> {
+                if (isGranted) {
+                    loadDevicePdfs(currentSearchQuery);
+                } else {
+                    showPermissionDeniedState();
+                }
+            });
 
     private final ActivityResultLauncher<String[]> openDocumentLauncher =
             registerForActivityResult(new ActivityResultContracts.OpenDocument(), uri -> {
@@ -95,8 +99,43 @@ public class DeviceDocsFragment extends Fragment implements DocumentListAdapter.
                 ContextCompat.getColor(requireContext(), R.color.accent_mint));
         binding.swipeRefreshLayout.setProgressBackgroundColorSchemeColor(
                 ContextCompat.getColor(requireContext(), R.color.surface_card));
-        binding.swipeRefreshLayout.setOnRefreshListener(() -> {
-            loadDevicePdfs(currentSearchQuery);
+        binding.swipeRefreshLayout.setOnRefreshListener(() -> loadDevicePdfs(currentSearchQuery));
+
+        binding.btnCloseSelection.setOnClickListener(v -> {
+            if (adapter != null) adapter.exitMultiSelect();
+        });
+
+        binding.btnSelectAll.setOnClickListener(v -> {
+            if (adapter != null) {
+                if (adapter.getSelectedCount() == getDocumentCount()) {
+                    adapter.clearSelection();
+                } else {
+                    adapter.selectAllDocuments();
+                }
+            }
+        });
+
+        binding.btnMergeSelection.setOnClickListener(v -> {
+            if (adapter == null) return;
+            List<DocumentEntity> selected = adapter.getSelectedDocuments();
+            if (selected.size() < 2) {
+                Toast.makeText(requireContext(), R.string.merge_min_files_error, Toast.LENGTH_SHORT).show();
+                return;
+            }
+            MergePdfBottomSheet sheet = MergePdfBottomSheet.newInstanceFromDocuments(selected);
+            sheet.show(getChildFragmentManager(), "MergePdfBottomSheet");
+        });
+
+        requireActivity().getOnBackPressedDispatcher().addCallback(getViewLifecycleOwner(), new OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                if (adapter != null && adapter.isMultiSelectMode()) {
+                    adapter.exitMultiSelect();
+                } else {
+                    setEnabled(false);
+                    requireActivity().getOnBackPressedDispatcher().onBackPressed();
+                }
+            }
         });
 
         loadDevicePdfs(currentSearchQuery);
@@ -122,7 +161,9 @@ public class DeviceDocsFragment extends Fragment implements DocumentListAdapter.
     }
 
     public boolean hasStoragePermission() {
-        return true;
+        Context context = getContext();
+        if (context == null) return false;
+        return DevicePdfScanner.hasStoragePermission(context);
     }
 
     private void openDocumentPicker() {
@@ -134,253 +175,44 @@ public class DeviceDocsFragment extends Fragment implements DocumentListAdapter.
         }
     }
 
+    private void showPermissionDeniedState() {
+        if (binding == null) return;
+        if (binding.swipeRefreshLayout.isRefreshing()) {
+            binding.swipeRefreshLayout.setRefreshing(false);
+        }
+        binding.tvEmptyTitle.setText(R.string.permission_storage_title);
+        binding.tvEmptySubtitle.setText(R.string.permission_storage_desc);
+        binding.btnEmptyAction.setText(R.string.permission_grant);
+        binding.btnEmptyAction.setVisibility(View.VISIBLE);
+        binding.btnEmptyAction.setOnClickListener(v ->
+                requestPermissionLauncher.launch(Manifest.permission.READ_EXTERNAL_STORAGE));
+        binding.emptyState.setVisibility(View.VISIBLE);
+        binding.rvDocuments.setVisibility(View.GONE);
+        binding.btnBrowseBottom.setVisibility(View.GONE);
+    }
+
     private void loadDevicePdfs(String query) {
-        if (executor == null || executor.isShutdown()) return;
+        if (!isAdded()) return;
+        Context context = getContext();
+        if (context == null) return;
 
-        executor.execute(() -> {
-            List<Object> items = new ArrayList<>();
-            List<DocumentEntity> pdfList = new ArrayList<>();
-            Set<String> seenUris = new HashSet<>();
+        if (!DevicePdfScanner.hasStoragePermission(context)) {
+            requestPermissionLauncher.launch(Manifest.permission.READ_EXTERNAL_STORAGE);
+            showPermissionDeniedState();
+            return;
+        }
 
-            if (!isAdded()) return;
-
-            Context context = getContext();
-            if (context == null) return;
-
-            Set<Uri> contentUris = new LinkedHashSet<>();
-            // 1. Primary external files query (searches all external storage)
-            contentUris.add(MediaStore.Files.getContentUri("external"));
-
-            // 2. Query external_primary and Downloads collections on Android 10+ (API 29+) to discover downloaded & document PDFs
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                contentUris.add(MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY));
-                contentUris.add(MediaStore.Downloads.EXTERNAL_CONTENT_URI);
-                try {
-                    contentUris.add(MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY));
-                } catch (Exception ignored) {}
-                try {
-                    Set<String> volumeNames = MediaStore.getExternalVolumeNames(context);
-                    for (String volume : volumeNames) {
-                        if (volume != null && !volume.isEmpty()) {
-                            contentUris.add(MediaStore.Files.getContentUri(volume));
-                            contentUris.add(MediaStore.Downloads.getContentUri(volume));
-                        }
-                    }
-                } catch (Exception e) {
-                    Log.w(TAG, "Failed to retrieve external volume names", e);
-                }
-            }
-
-            String[] projection = new String[] {
-                    MediaStore.MediaColumns._ID,
-                    MediaStore.MediaColumns.DISPLAY_NAME,
-                    MediaStore.MediaColumns.DATA,
-                    MediaStore.MediaColumns.SIZE,
-                    MediaStore.MediaColumns.DATE_ADDED,
-                    MediaStore.MediaColumns.DATE_MODIFIED,
-                    MediaStore.MediaColumns.MIME_TYPE
-            };
-
-            String selection = "(" + MediaStore.MediaColumns.MIME_TYPE + " = ? OR "
-                    + MediaStore.MediaColumns.MIME_TYPE + " = ? OR "
-                    + MediaStore.MediaColumns.DISPLAY_NAME + " LIKE '%.pdf' OR "
-                    + MediaStore.MediaColumns.DISPLAY_NAME + " LIKE '%.PDF' OR "
-                    + MediaStore.MediaColumns.DATA + " LIKE '%.pdf' OR "
-                    + MediaStore.MediaColumns.DATA + " LIKE '%.PDF')";
-            String[] selectionArgs = new String[]{"application/pdf", "application/x-pdf"};
-            String sortOrder = MediaStore.MediaColumns.DATE_ADDED + " DESC";
-
-            Set<String> seenPaths = new HashSet<>();
-
-            for (Uri baseUri : contentUris) {
-                try (Cursor cursor = context.getContentResolver().query(baseUri, projection, selection, selectionArgs, sortOrder)) {
-                    if (cursor != null) {
-                        int idCol = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns._ID);
-                        int nameCol = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.DISPLAY_NAME);
-                        int dataCol = cursor.getColumnIndex(MediaStore.MediaColumns.DATA);
-                        int sizeCol = cursor.getColumnIndex(MediaStore.MediaColumns.SIZE);
-                        int dateAddedCol = cursor.getColumnIndex(MediaStore.MediaColumns.DATE_ADDED);
-                        int dateModifiedCol = cursor.getColumnIndex(MediaStore.MediaColumns.DATE_MODIFIED);
-                        int mimeCol = cursor.getColumnIndex(MediaStore.MediaColumns.MIME_TYPE);
-
-                        while (cursor.moveToNext()) {
-                            long id = cursor.getLong(idCol);
-                            String name = cursor.getString(nameCol);
-                            String data = dataCol != -1 ? cursor.getString(dataCol) : null;
-                            long size = sizeCol != -1 ? cursor.getLong(sizeCol) : 0;
-
-                            long dateAddedSec = dateAddedCol != -1 ? cursor.getLong(dateAddedCol) : 0;
-                            long dateModifiedSec = dateModifiedCol != -1 ? cursor.getLong(dateModifiedCol) : 0;
-                            long timestampSec = dateAddedSec > 0 ? dateAddedSec : dateModifiedSec;
-                            long timestampMillis = timestampSec * 1000L;
-
-                            Uri itemContentUri = ContentUris.withAppendedId(baseUri, id);
-                            String uriKey = itemContentUri.toString();
-
-                            // Validate that entry represents a PDF
-                            boolean isPdf = (name != null && name.toLowerCase(Locale.ROOT).endsWith(".pdf"))
-                                    || (data != null && data.toLowerCase(Locale.ROOT).endsWith(".pdf"));
-                            if (!isPdf && mimeCol != -1) {
-                                String mime = cursor.getString(mimeCol);
-                                if (mime != null && (mime.equalsIgnoreCase("application/pdf") || mime.equalsIgnoreCase("application/x-pdf"))) {
-                                    isPdf = true;
-                                }
-                            }
-                            if (!isPdf) {
-                                continue;
-                            }
-
-                            // If direct file path is available and exists on disk with 0 bytes, skip empty invalid file
-                            if (data != null && !data.trim().isEmpty()) {
-                                try {
-                                    File f = new File(data);
-                                    if (f.exists() && f.length() == 0) {
-                                        continue;
-                                    }
-                                } catch (Exception ignored) {}
-                            }
-
-                            // Deduplicate across volumes and downloads collections
-                            String dedupeKey = (data != null && !data.trim().isEmpty())
-                                    ? data.toLowerCase(Locale.ROOT)
-                                    : (name != null ? name.toLowerCase(Locale.ROOT) : "") + "_" + size;
-                            if (seenPaths.contains(dedupeKey) || seenUris.contains(uriKey)) {
-                                continue;
-                            }
-                            seenPaths.add(dedupeKey);
-                            seenUris.add(uriKey);
-
-                            DocumentEntity entity = new DocumentEntity();
-                            entity.id = -Math.abs(id != 0 ? id : dedupeKey.hashCode());
-                            entity.title = (name != null && !name.trim().isEmpty()) ? name : (data != null ? new File(data).getName() : "PDF Document");
-                            entity.format = "PDF";
-                            entity.quality = "NORMAL";
-                            entity.pageCount = 0;
-                            entity.fileSizeBytes = size;
-                            entity.fileUri = uriKey;
-
-                            File cachedThumb = new File(context.getCacheDir(), "thumb_device_" + Math.abs(entity.id) + ".jpg");
-                            if (cachedThumb.exists() && cachedThumb.length() > 0) {
-                                entity.thumbnailPath = cachedThumb.getAbsolutePath();
-                            } else {
-                                entity.thumbnailPath = null;
-                            }
-
-                            entity.createdAt = timestampMillis > 0 ? timestampMillis : System.currentTimeMillis();
-                            entity.updatedAt = entity.createdAt;
-
-                            if (query == null || query.trim().isEmpty()
-                                    || entity.title.toLowerCase(Locale.getDefault()).contains(query.toLowerCase(Locale.getDefault()).trim())) {
-                                pdfList.add(entity);
-                            }
-                        }
-                    }
-                } catch (Exception e) {
-                    Log.e(TAG, "Error querying device PDFs via volume: " + baseUri, e);
-                }
-            }
-
-            // Direct storage directory scanning across standard Documents and Download folders on all Android versions
-            try {
-                List<File> searchDirs = new ArrayList<>();
-                searchDirs.add(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS));
-                searchDirs.add(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS));
-
-                File extStorage = Environment.getExternalStorageDirectory();
-                if (extStorage != null) {
-                    searchDirs.add(new File(extStorage, "Documents"));
-                    searchDirs.add(new File(extStorage, "Download"));
-                    searchDirs.add(new File(extStorage, "Downloads"));
-                    searchDirs.add(new File(extStorage, "Documents/AnScanner"));
-                    searchDirs.add(new File(extStorage, "Download/AnScanner"));
-                }
-                searchDirs.add(new File("/storage/emulated/0/Documents"));
-                searchDirs.add(new File("/storage/emulated/0/Download"));
-                searchDirs.add(new File("/storage/emulated/0/Downloads"));
-                searchDirs.add(new File("/sdcard/Documents"));
-                searchDirs.add(new File("/sdcard/Download"));
-
-                File extDocs = context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS);
-                if (extDocs != null) searchDirs.add(extDocs);
-                File extDownloads = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
-                if (extDownloads != null) searchDirs.add(extDownloads);
-
-                File[] mediaDirs = context.getExternalMediaDirs();
-                if (mediaDirs != null) {
-                    for (File md : mediaDirs) {
-                        if (md != null) searchDirs.add(md);
-                    }
-                }
-
-                Set<String> scannedDirPaths = new HashSet<>();
-                for (File dir : searchDirs) {
-                    if (dir != null && dir.exists() && dir.isDirectory()) {
-                        String dirPath = dir.getAbsolutePath().toLowerCase(Locale.ROOT);
-                        if (!scannedDirPaths.contains(dirPath)) {
-                            scannedDirPaths.add(dirPath);
-                            scanDirectoryForPdfs(dir, seenPaths, pdfList, query, context, 0);
-                        }
-                    }
-                }
-            } catch (Exception e) {
-                Log.w(TAG, "Direct storage directory scan completed with warnings", e);
-            }
-
-            // Sort aggregated list by date added/created descending
-            Collections.sort(pdfList, (d1, d2) -> Long.compare(d2.createdAt, d1.createdAt));
-
-            if (query != null && !query.trim().isEmpty()) {
-                if (!pdfList.isEmpty()) {
-                    items.add("SEARCH RESULTS");
-                    items.addAll(pdfList);
-                }
-            } else {
-                Calendar cal = Calendar.getInstance();
-                cal.set(Calendar.HOUR_OF_DAY, 0);
-                cal.set(Calendar.MINUTE, 0);
-                cal.set(Calendar.SECOND, 0);
-                cal.set(Calendar.MILLISECOND, 0);
-                long todayStart = cal.getTimeInMillis();
-
-                cal.add(Calendar.DAY_OF_YEAR, -7);
-                long weekAgo = cal.getTimeInMillis();
-
-                List<DocumentEntity> todayDocs = new ArrayList<>();
-                List<DocumentEntity> prevWeekDocs = new ArrayList<>();
-                List<DocumentEntity> olderDocs = new ArrayList<>();
-
-                for (DocumentEntity doc : pdfList) {
-                    if (doc.createdAt >= todayStart) {
-                        todayDocs.add(doc);
-                    } else if (doc.createdAt >= weekAgo) {
-                        prevWeekDocs.add(doc);
-                    } else {
-                        olderDocs.add(doc);
-                    }
-                }
-
-                if (!todayDocs.isEmpty()) {
-                    items.add(getString(R.string.library_date_today));
-                    items.addAll(todayDocs);
-                }
-                if (!prevWeekDocs.isEmpty()) {
-                    items.add(getString(R.string.library_date_previous_7));
-                    items.addAll(prevWeekDocs);
-                }
-                if (!olderDocs.isEmpty()) {
-                    items.add(getString(R.string.library_date_older));
-                    items.addAll(olderDocs);
-                }
-            }
-
-            if (!isAdded()) return;
-
-            requireActivity().runOnUiThread(() -> {
-                if (binding == null) return;
+        DevicePdfScanner.scanPublicDocumentsAsync(context, query, new DevicePdfScanner.DocumentCallback() {
+            @Override
+            public void onDocumentsLoaded(@NonNull List<DocumentEntity> pdfList) {
+                if (!isAdded() || binding == null) return;
                 if (binding.swipeRefreshLayout.isRefreshing()) {
                     binding.swipeRefreshLayout.setRefreshing(false);
                 }
+
+                List<Object> items = groupDocumentsByDate(pdfList, query);
                 adapter.updateItems(items);
+
                 if (items.isEmpty()) {
                     binding.tvEmptyTitle.setText(R.string.tab_all_device_pdfs);
                     binding.tvEmptySubtitle.setText(R.string.library_empty_device_pdfs);
@@ -396,35 +228,88 @@ public class DeviceDocsFragment extends Fragment implements DocumentListAdapter.
                     binding.btnBrowseBottom.setVisibility(View.VISIBLE);
                     binding.btnBrowseBottom.setOnClickListener(v -> openDocumentPicker());
                 }
-            });
 
-            // Asynchronously generate thumbnails for any items that lack a cached thumbnail
-            generateMissingThumbnailsAsync(pdfList);
+                // Asynchronously generate thumbnails for any items missing cached thumbnails
+                Context ctx = getContext();
+                if (ctx != null) {
+                    DevicePdfScanner.generateThumbnailsAsync(ctx, pdfList, () -> {
+                        if (isAdded() && adapter != null) {
+                            adapter.notifyDataSetChanged();
+                        }
+                    });
+                }
+            }
+
+            @Override
+            public void onError(@NonNull Exception exception) {
+                Log.e(TAG, "Error scanning public PDFs", exception);
+                if (!isAdded() || binding == null) return;
+                if (binding.swipeRefreshLayout.isRefreshing()) {
+                    binding.swipeRefreshLayout.setRefreshing(false);
+                }
+
+                if (adapter.isEmpty()) {
+                    binding.tvEmptyTitle.setText(R.string.tab_all_device_pdfs);
+                    binding.tvEmptySubtitle.setText(R.string.library_empty_device_pdfs);
+                    binding.btnEmptyAction.setText(R.string.action_browse_pdf);
+                    binding.btnEmptyAction.setVisibility(View.VISIBLE);
+                    binding.btnEmptyAction.setOnClickListener(v -> openDocumentPicker());
+                    binding.emptyState.setVisibility(View.VISIBLE);
+                    binding.rvDocuments.setVisibility(View.GONE);
+                    binding.btnBrowseBottom.setVisibility(View.GONE);
+                }
+            }
         });
     }
 
-    private void generateMissingThumbnailsAsync(List<DocumentEntity> documents) {
-        if (executor == null || executor.isShutdown()) return;
+    private List<Object> groupDocumentsByDate(List<DocumentEntity> pdfList, String query) {
+        List<Object> items = new ArrayList<>();
+        if (query != null && !query.trim().isEmpty()) {
+            if (!pdfList.isEmpty()) {
+                items.add("SEARCH RESULTS");
+                items.addAll(pdfList);
+            }
+            return items;
+        }
 
-        executor.execute(() -> {
-            boolean anyGenerated = false;
-            for (DocumentEntity doc : documents) {
-                if (doc.thumbnailPath == null && doc.fileUri != null) {
-                    String path = getOrGeneratePdfThumbnail(Uri.parse(doc.fileUri), -doc.id);
-                    if (path != null) {
-                        doc.thumbnailPath = path;
-                        anyGenerated = true;
-                    }
-                }
+        Calendar cal = Calendar.getInstance();
+        cal.set(Calendar.HOUR_OF_DAY, 0);
+        cal.set(Calendar.MINUTE, 0);
+        cal.set(Calendar.SECOND, 0);
+        cal.set(Calendar.MILLISECOND, 0);
+        long todayStart = cal.getTimeInMillis();
+
+        cal.add(Calendar.DAY_OF_YEAR, -7);
+        long weekAgo = cal.getTimeInMillis();
+
+        List<DocumentEntity> todayDocs = new ArrayList<>();
+        List<DocumentEntity> prevWeekDocs = new ArrayList<>();
+        List<DocumentEntity> olderDocs = new ArrayList<>();
+
+        for (DocumentEntity doc : pdfList) {
+            if (doc.createdAt >= todayStart) {
+                todayDocs.add(doc);
+            } else if (doc.createdAt >= weekAgo) {
+                prevWeekDocs.add(doc);
+            } else {
+                olderDocs.add(doc);
             }
-            if (anyGenerated && isAdded()) {
-                requireActivity().runOnUiThread(() -> {
-                    if (adapter != null) {
-                        adapter.notifyDataSetChanged();
-                    }
-                });
-            }
-        });
+        }
+
+        if (!todayDocs.isEmpty()) {
+            items.add(getString(R.string.library_date_today));
+            items.addAll(todayDocs);
+        }
+        if (!prevWeekDocs.isEmpty()) {
+            items.add(getString(R.string.library_date_previous_7));
+            items.addAll(prevWeekDocs);
+        }
+        if (!olderDocs.isEmpty()) {
+            items.add(getString(R.string.library_date_older));
+            items.addAll(olderDocs);
+        }
+
+        return items;
     }
 
     @Override
@@ -454,6 +339,67 @@ public class DeviceDocsFragment extends Fragment implements DocumentListAdapter.
     }
 
     @Override
+    public void onDocumentOrganizePages(DocumentEntity document) {
+        if (document == null || document.fileUri == null) return;
+        Intent intent = new Intent(requireContext(), OrganizePagesActivity.class);
+        intent.putExtra(OrganizePagesActivity.EXTRA_PDF_URI, Uri.parse(document.fileUri));
+        intent.putExtra(OrganizePagesActivity.EXTRA_DOCUMENT_TITLE, document.title);
+        intent.putExtra(OrganizePagesActivity.EXTRA_DOCUMENT_ID, document.id);
+        startActivity(intent);
+    }
+
+    @Override
+    public void onDocumentSplitPdf(DocumentEntity document) {
+        if (document == null || document.fileUri == null) return;
+        Uri uri = Uri.parse(document.fileUri);
+        SplitPdfBottomSheet sheet = SplitPdfBottomSheet.newInstance(uri, document.title);
+        sheet.show(getChildFragmentManager(), "SplitPdfBottomSheet");
+    }
+
+    @Override
+    public void onSelectionModeChanged(boolean isMultiSelect, int selectedCount) {
+        if (binding == null) return;
+        if (isMultiSelect) {
+            binding.cardSelectionBar.setVisibility(View.VISIBLE);
+            binding.btnBrowseBottom.setVisibility(View.GONE);
+            binding.tvSelectionCount.setText(getString(R.string.selection_count_format, selectedCount));
+            binding.btnMergeSelection.setEnabled(selectedCount >= 2);
+            binding.btnMergeSelection.setAlpha(selectedCount >= 2 ? 1.0f : 0.5f);
+            int total = getDocumentCount();
+            boolean allSelected = selectedCount > 0 && selectedCount == total;
+            binding.btnSelectAll.setText(allSelected ? R.string.action_deselect_all : R.string.action_select_all);
+        } else {
+            binding.cardSelectionBar.setVisibility(View.GONE);
+            binding.btnMergeSelection.setEnabled(false);
+        }
+    }
+
+    @Override
+    public void onPdfMergedSuccess() {
+        if (adapter != null) adapter.exitMultiSelect();
+        loadDevicePdfs(currentSearchQuery);
+    }
+
+    @Override
+    public void onPdfSplitSuccess() {
+        loadDevicePdfs(currentSearchQuery);
+    }
+
+    public void reload() {
+        loadDevicePdfs(currentSearchQuery);
+    }
+
+    private int getDocumentCount() {
+        int count = 0;
+        if (adapter != null) {
+            for (Object item : adapter.getItems()) {
+                if (item instanceof DocumentEntity) count++;
+            }
+        }
+        return count;
+    }
+
+    @Override
     public void onDocumentProperties(DocumentEntity document) {
         FilePropertiesHelper.showPropertiesDialog(requireContext(), document);
     }
@@ -476,6 +422,7 @@ public class DeviceDocsFragment extends Fragment implements DocumentListAdapter.
     }
 
     private void deleteDocumentPermanently(DocumentEntity document) {
+        if (executor == null || executor.isShutdown()) return;
         executor.execute(() -> {
             String path = document.getFilePath();
             if (path != null && !path.isEmpty()) {
@@ -509,112 +456,6 @@ public class DeviceDocsFragment extends Fragment implements DocumentListAdapter.
                 Toast.makeText(requireContext(), R.string.library_deleted_permanently, Toast.LENGTH_SHORT).show();
             });
         });
-    }
-
-    /**
-     * Resiliently generates a thumbnail for an external PDF using PdfRenderer.
-     * Catches and safely recovers from corruption, password protection, or decoding errors.
-     */
-    @Nullable
-    private String getOrGeneratePdfThumbnail(Uri uri, long docId) {
-        Context context = getContext();
-        if (context == null) return null;
-
-        File thumbFile = new File(context.getCacheDir(), "thumb_device_" + Math.abs(docId) + ".jpg");
-        if (thumbFile.exists() && thumbFile.length() > 0) {
-            return thumbFile.getAbsolutePath();
-        }
-
-        ParcelFileDescriptor pfd = null;
-        PdfRenderer renderer = null;
-        PdfRenderer.Page page = null;
-        try {
-            if ("file".equalsIgnoreCase(uri.getScheme()) && uri.getPath() != null) {
-                pfd = ParcelFileDescriptor.open(new File(uri.getPath()), ParcelFileDescriptor.MODE_READ_ONLY);
-            } else {
-                pfd = context.getContentResolver().openFileDescriptor(uri, "r");
-            }
-            if (pfd != null) {
-                renderer = new PdfRenderer(pfd);
-                if (renderer.getPageCount() > 0) {
-                    page = renderer.openPage(0);
-                    int width = 160;
-                    int height = Math.max(1, (int) (((float) page.getHeight() / page.getWidth()) * width));
-                    Bitmap bitmap = com.anscanner.app.util.PdfRendererHelper.renderPageWithWhiteBackground(
-                            page, width, height, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
-
-                    try (FileOutputStream fos = new FileOutputStream(thumbFile)) {
-                        bitmap.compress(Bitmap.CompressFormat.JPEG, 75, fos);
-                        fos.flush();
-                    } finally {
-                        bitmap.recycle();
-                    }
-                    return thumbFile.getAbsolutePath();
-                }
-            }
-        } catch (Exception e) {
-            Log.w(TAG, "Failed to render PDF thumbnail for " + uri + " (corrupted or password-protected): " + e.getMessage());
-            return null;
-        } finally {
-            if (page != null) {
-                try { page.close(); } catch (Exception ignored) {}
-            }
-            if (renderer != null) {
-                try { renderer.close(); } catch (Exception ignored) {}
-            }
-            if (pfd != null) {
-                try { pfd.close(); } catch (Exception ignored) {}
-            }
-        }
-        return null;
-    }
-
-    private void scanDirectoryForPdfs(File dir, Set<String> seenPaths, List<DocumentEntity> pdfList, String query, Context context, int depth) {
-        if (dir == null || !dir.exists() || !dir.isDirectory() || depth > 6) return;
-        String dirName = dir.getName();
-        if (dirName.startsWith(".") || "Android".equalsIgnoreCase(dirName)) return;
-
-        File[] files = null;
-        try {
-            files = dir.listFiles();
-        } catch (Exception ignored) {}
-        if (files == null) return;
-
-        for (File f : files) {
-            if (f == null) continue;
-            if (f.isDirectory()) {
-                scanDirectoryForPdfs(f, seenPaths, pdfList, query, context, depth + 1);
-            } else {
-                addFileIfPdf(f, seenPaths, pdfList, query, context);
-            }
-        }
-    }
-
-    private void addFileIfPdf(File f, Set<String> seenPaths, List<DocumentEntity> pdfList, String query, Context context) {
-        if (f == null || !f.exists() || !f.isFile() || f.length() <= 0) return;
-        String name = f.getName();
-        if (!name.toLowerCase(Locale.ROOT).endsWith(".pdf")) return;
-
-        String path = f.getAbsolutePath();
-        String dedupeKey = path.toLowerCase(Locale.ROOT);
-        if (seenPaths.contains(dedupeKey)) return;
-        seenPaths.add(dedupeKey);
-
-        DocumentEntity entity = new DocumentEntity();
-        entity.id = -Math.abs((long) path.hashCode());
-        entity.title = name;
-        entity.format = "PDF";
-        entity.quality = "NORMAL";
-        entity.pageCount = 0;
-        entity.fileSizeBytes = f.length();
-        entity.fileUri = Uri.fromFile(f).toString();
-        entity.createdAt = f.lastModified() > 0 ? f.lastModified() : System.currentTimeMillis();
-        entity.updatedAt = entity.createdAt;
-
-        if (query == null || query.trim().isEmpty()
-                || entity.title.toLowerCase(Locale.getDefault()).contains(query.toLowerCase(Locale.getDefault()).trim())) {
-            pdfList.add(entity);
-        }
     }
 
     @Override

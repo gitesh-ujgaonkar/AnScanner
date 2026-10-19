@@ -50,4 +50,13 @@ public class LibraryPagerAdapter extends FragmentStateAdapter {
             deviceDocsFragment.scrollToTop();
         }
     }
+
+    public void reloadCurrentTab() {
+        if (scannedDocsFragment != null && scannedDocsFragment.isAdded()) {
+            scannedDocsFragment.reload();
+        }
+        if (deviceDocsFragment != null && deviceDocsFragment.isAdded()) {
+            deviceDocsFragment.reload();
+        }
+    }
 }
