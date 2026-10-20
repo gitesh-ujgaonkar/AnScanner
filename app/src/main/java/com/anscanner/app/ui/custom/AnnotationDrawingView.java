@@ -24,7 +24,15 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.graphics.ColorUtils;
 
+import com.anscanner.app.model.annotation.AnnotationItem;
+import com.anscanner.app.model.annotation.StrokeAnnotation;
 import com.anscanner.app.util.FontUtils;
+import com.anscanner.app.util.HapticHelper;
+import java.util.Collections;
+
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -59,42 +67,27 @@ public class AnnotationDrawingView extends View {
         void onSelectionCleared();
     }
 
-    public static class Stroke implements Serializable {
+    public static class Stroke extends com.anscanner.app.model.annotation.StrokeAnnotation {
         private static final long serialVersionUID = 1L;
 
-        public final Path path;
-        public final int color;
-        public final float strokeWidth;
-        public final boolean isHighlighter;
-
         public Stroke(Path path, int color, float strokeWidth, boolean isHighlighter) {
-            this.path = path;
-            this.color = color;
-            this.strokeWidth = strokeWidth;
-            this.isHighlighter = isHighlighter;
+            super(path, color, strokeWidth, isHighlighter);
+        }
+
+        public Stroke(Path path, int color, float strokeWidth, boolean isHighlighter, long timestamp) {
+            super(path, color, strokeWidth, isHighlighter, timestamp);
+        }
+
+        public Stroke(Path path, int color, float strokeWidth, boolean isHighlighter, long timestamp, List<PointF> points) {
+            super(path, color, strokeWidth, isHighlighter, timestamp, points);
         }
 
         @NonNull
+        @Override
         public Stroke copy() {
-            return new Stroke(new Path(this.path), this.color, this.strokeWidth, this.isHighlighter);
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-            Stroke stroke = (Stroke) o;
-            return color == stroke.color &&
-                    Float.compare(stroke.strokeWidth, strokeWidth) == 0 &&
-                    isHighlighter == stroke.isHighlighter;
-        }
-
-        @Override
-        public int hashCode() {
-            int result = color;
-            result = 31 * result + (strokeWidth != +0.0f ? Float.floatToIntBits(strokeWidth) : 0);
-            result = 31 * result + (isHighlighter ? 1 : 0);
-            return result;
+            Stroke copy = new Stroke(new Path(this.path), this.color, this.strokeWidth, this.isHighlighter, this.getTimestamp(), this.points);
+            copy.setSelected(this.isSelected());
+            return copy;
         }
     }
 
@@ -120,84 +113,92 @@ public class AnnotationDrawingView extends View {
             if (this.position != null) {
                 item.position = new PointF(this.position.x, this.position.y);
             }
+            item.setRotationAngle(this.getRotationAngle());
+            return item;
+        }
+
+        public JSONObject toJson() throws JSONException {
+            JSONObject j = new JSONObject();
+            j.put("text", text);
+            j.put("x", (double) x);
+            j.put("y", (double) y);
+            j.put("textSize", (double) textSize);
+            j.put("textColor", textColor);
+            j.put("fontFamily", fontFamily != null ? fontFamily : "sans");
+            j.put("hasBackground", hasBackground);
+            j.put("backgroundColor", backgroundColor);
+            j.put("rotationAngle", (double) getRotationAngle());
+            return j;
+        }
+
+        public static TextItem fromJson(JSONObject j) {
+            String text = j.optString("text", "");
+            float x = (float) j.optDouble("x", 0.0);
+            float y = (float) j.optDouble("y", 0.0);
+            float textSize = (float) j.optDouble("textSize", 24.0);
+            int textColor = j.optInt("textColor", Color.WHITE);
+            TextItem item = new TextItem(text, x, y, textColor, textSize);
+            item.setFontFamily(j.optString("fontFamily", "sans"));
+            item.hasBackground = j.optBoolean("hasBackground", true);
+            item.backgroundColor = j.optInt("backgroundColor", Color.parseColor("#B3000000"));
+            item.setRotationAngle((float) j.optDouble("rotationAngle", 0.0));
             return item;
         }
     }
 
-    public static class SignatureItem implements Serializable {
+    public static class SignatureItem extends com.anscanner.app.model.annotation.SignatureAnnotation {
         private static final long serialVersionUID = 1L;
 
-        public Bitmap bitmap;
-        public float x; // Document space X
-        public float y; // Document space Y
-        public float width; // Document space width
-        public float height; // Document space height
-        public int tintColor = Color.BLACK; // Default solid black
-        public boolean isSelected = false;
-
         public SignatureItem(Bitmap bitmap, float x, float y, float width, float height) {
-            this.bitmap = bitmap;
-            this.x = x;
-            this.y = y;
-            this.width = width;
-            this.height = height;
-            this.tintColor = Color.BLACK;
+            super(bitmap, x, y, width, height);
         }
 
         @NonNull
+        @Override
         public SignatureItem copy() {
             SignatureItem item = new SignatureItem(this.bitmap, this.x, this.y, this.width, this.height);
             item.tintColor = this.tintColor;
             item.isSelected = this.isSelected;
+            item.setRotationAngle(this.getRotationAngle());
             return item;
         }
 
-        public RectF getBoundingBox(float density) {
-            float pad = 6f * density;
-            return new RectF(x - pad, y - pad, x + width + pad, y + height + pad);
+        public JSONObject toJson() throws JSONException {
+            JSONObject j = new JSONObject();
+            j.put("x", (double) x);
+            j.put("y", (double) y);
+            j.put("width", (double) width);
+            j.put("height", (double) height);
+            j.put("tintColor", tintColor);
+            j.put("rotationAngle", (double) getRotationAngle());
+            if (bitmap != null && !bitmap.isRecycled()) {
+                try {
+                    java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+                    bitmap.compress(Bitmap.CompressFormat.PNG, 100, baos);
+                    j.put("bitmapBase64", android.util.Base64.encodeToString(baos.toByteArray(), android.util.Base64.NO_WRAP));
+                } catch (Exception ignored) {}
+            }
+            return j;
         }
 
-        public boolean contains(float docX, float docY, float density) {
-            return getBoundingBox(density).contains(docX, docY);
-        }
-
-        public RectF getResizeHandleRect(float density) {
-            RectF box = getBoundingBox(density);
-            float handleRadius = 14f * density;
-            return new RectF(
-                    box.right - handleRadius,
-                    box.bottom - handleRadius,
-                    box.right + handleRadius,
-                    box.bottom + handleRadius
-            );
-        }
-
-        public boolean containsResizeHandle(float docX, float docY, float density) {
-            return getResizeHandleRect(density).contains(docX, docY);
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-            SignatureItem that = (SignatureItem) o;
-            return Float.compare(that.x, x) == 0 &&
-                    Float.compare(that.y, y) == 0 &&
-                    Float.compare(that.width, width) == 0 &&
-                    Float.compare(that.height, height) == 0 &&
-                    tintColor == that.tintColor &&
-                    (bitmap == that.bitmap);
-        }
-
-        @Override
-        public int hashCode() {
-            int result = bitmap != null ? bitmap.hashCode() : 0;
-            result = 31 * result + (x != +0.0f ? Float.floatToIntBits(x) : 0);
-            result = 31 * result + (y != +0.0f ? Float.floatToIntBits(y) : 0);
-            result = 31 * result + (width != +0.0f ? Float.floatToIntBits(width) : 0);
-            result = 31 * result + (height != +0.0f ? Float.floatToIntBits(height) : 0);
-            result = 31 * result + tintColor;
-            return result;
+        public static SignatureItem fromJson(JSONObject j) {
+            float x = (float) j.optDouble("x", 0.0);
+            float y = (float) j.optDouble("y", 0.0);
+            float width = (float) j.optDouble("width", 100.0);
+            float height = (float) j.optDouble("height", 50.0);
+            int tintColor = j.optInt("tintColor", Color.BLACK);
+            float rotationAngle = (float) j.optDouble("rotationAngle", 0.0);
+            Bitmap bm = null;
+            if (j.has("bitmapBase64")) {
+                try {
+                    byte[] bytes = android.util.Base64.decode(j.getString("bitmapBase64"), android.util.Base64.NO_WRAP);
+                    bm = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
+                } catch (Exception ignored) {}
+            }
+            SignatureItem item = new SignatureItem(bm, x, y, width, height);
+            item.tintColor = tintColor;
+            item.setRotationAngle(rotationAngle);
+            return item;
         }
     }
 
@@ -205,8 +206,10 @@ public class AnnotationDrawingView extends View {
      * Immutable snapshot container for all vector annotations on a page.
      */
     public static class AnnotationState implements Serializable {
-        private static final long serialVersionUID = 1L;
+        private static final long serialVersionUID = 2L;
 
+        @NonNull
+        public final List<AnnotationItem> items;
         @NonNull
         public final List<Stroke> strokes;
         @NonNull
@@ -215,7 +218,26 @@ public class AnnotationDrawingView extends View {
         public final List<SignatureItem> signatureItems;
 
         public AnnotationState() {
-            this(new ArrayList<>(), new ArrayList<>(), new ArrayList<>());
+            this(new ArrayList<>());
+        }
+
+        public AnnotationState(@NonNull List<AnnotationItem> items) {
+            this.items = new ArrayList<>(items);
+            List<Stroke> sList = new ArrayList<>();
+            List<TextItem> tList = new ArrayList<>();
+            List<SignatureItem> sigList = new ArrayList<>();
+            for (AnnotationItem item : this.items) {
+                if (item instanceof Stroke) {
+                    sList.add((Stroke) item);
+                } else if (item instanceof TextItem) {
+                    tList.add((TextItem) item);
+                } else if (item instanceof SignatureItem) {
+                    sigList.add((SignatureItem) item);
+                }
+            }
+            this.strokes = sList;
+            this.textItems = tList;
+            this.signatureItems = sigList;
         }
 
         public AnnotationState(@NonNull List<Stroke> strokes,
@@ -224,31 +246,28 @@ public class AnnotationDrawingView extends View {
             this.strokes = new ArrayList<>(strokes);
             this.textItems = new ArrayList<>(textItems);
             this.signatureItems = new ArrayList<>(signatureItems);
+            List<AnnotationItem> all = new ArrayList<>(strokes.size() + textItems.size() + signatureItems.size());
+            all.addAll(strokes);
+            all.addAll(signatureItems);
+            all.addAll(textItems);
+            this.items = all;
         }
 
         @NonNull
         public AnnotationState copy() {
-            List<Stroke> sCopy = new ArrayList<>(strokes.size());
-            for (Stroke s : strokes) {
-                sCopy.add(s.copy());
+            List<AnnotationItem> copied = new ArrayList<>(items.size());
+            for (AnnotationItem it : items) {
+                copied.add(it.copy());
             }
-            List<TextItem> tCopy = new ArrayList<>(textItems.size());
-            for (TextItem t : textItems) {
-                tCopy.add(t.copy());
-            }
-            List<SignatureItem> sigCopy = new ArrayList<>(signatureItems.size());
-            for (SignatureItem sig : signatureItems) {
-                sigCopy.add(sig.copy());
-            }
-            return new AnnotationState(sCopy, tCopy, sigCopy);
+            return new AnnotationState(copied);
         }
 
         public boolean isEmpty() {
-            return strokes.isEmpty() && textItems.isEmpty() && signatureItems.isEmpty();
+            return items.isEmpty();
         }
 
         public int size() {
-            return strokes.size() + textItems.size() + signatureItems.size();
+            return items.size();
         }
 
         @Override
@@ -256,17 +275,91 @@ public class AnnotationDrawingView extends View {
             if (this == o) return true;
             if (o == null || getClass() != o.getClass()) return false;
             AnnotationState that = (AnnotationState) o;
-            return strokes.equals(that.strokes) &&
-                    textItems.equals(that.textItems) &&
-                    signatureItems.equals(that.signatureItems);
+            return items.equals(that.items);
         }
 
         @Override
         public int hashCode() {
-            int result = strokes.hashCode();
-            result = 31 * result + textItems.hashCode();
-            result = 31 * result + signatureItems.hashCode();
-            return result;
+            return items.hashCode();
+        }
+
+        public JSONObject toJson() {
+            JSONObject j = new JSONObject();
+            try {
+                JSONArray itemsArr = new JSONArray();
+                for (AnnotationItem item : items) {
+                    if (item instanceof TextItem) {
+                        JSONObject tj = ((TextItem) item).toJson();
+                        tj.put("itemType", "text");
+                        itemsArr.put(tj);
+                    } else if (item instanceof SignatureItem) {
+                        JSONObject sj = ((SignatureItem) item).toJson();
+                        sj.put("itemType", "signature");
+                        itemsArr.put(sj);
+                    } else if (item instanceof Stroke) {
+                        JSONObject stj = ((Stroke) item).toJson();
+                        stj.put("itemType", "stroke");
+                        itemsArr.put(stj);
+                    }
+                }
+                j.put("items", itemsArr);
+
+                // Backward-compatible fallback arrays
+                JSONArray textArr = new JSONArray();
+                for (TextItem t : textItems) {
+                    textArr.put(t.toJson());
+                }
+                j.put("textItems", textArr);
+
+                JSONArray sigArr = new JSONArray();
+                for (SignatureItem s : signatureItems) {
+                    sigArr.put(s.toJson());
+                }
+                j.put("signatureItems", sigArr);
+            } catch (Exception ignored) {}
+            return j;
+        }
+
+        public static AnnotationState fromJson(@Nullable JSONObject j) {
+            if (j == null) return new AnnotationState();
+            if (j.has("items")) {
+                try {
+                    JSONArray arr = j.getJSONArray("items");
+                    List<AnnotationItem> list = new ArrayList<>(arr.length());
+                    for (int i = 0; i < arr.length(); i++) {
+                        JSONObject obj = arr.getJSONObject(i);
+                        String type = obj.optString("itemType", obj.optString("type", ""));
+                        if ("text".equals(type)) {
+                            list.add(TextItem.fromJson(obj));
+                        } else if ("signature".equals(type)) {
+                            list.add(SignatureItem.fromJson(obj));
+                        } else if ("stroke".equals(type)) {
+                            StrokeAnnotation sa = StrokeAnnotation.fromJson(obj);
+                            list.add(new Stroke(sa.path, sa.color, sa.strokeWidth, sa.isHighlighter, sa.getTimestamp(), sa.points));
+                        }
+                    }
+                    return new AnnotationState(list);
+                } catch (Exception ignored) {}
+            }
+            List<TextItem> texts = new ArrayList<>();
+            if (j.has("textItems")) {
+                try {
+                    JSONArray arr = j.getJSONArray("textItems");
+                    for (int i = 0; i < arr.length(); i++) {
+                        texts.add(TextItem.fromJson(arr.getJSONObject(i)));
+                    }
+                } catch (Exception ignored) {}
+            }
+            List<SignatureItem> sigs = new ArrayList<>();
+            if (j.has("signatureItems")) {
+                try {
+                    JSONArray arr = j.getJSONArray("signatureItems");
+                    for (int i = 0; i < arr.length(); i++) {
+                        sigs.add(SignatureItem.fromJson(arr.getJSONObject(i)));
+                    }
+                } catch (Exception ignored) {}
+            }
+            return new AnnotationState(new ArrayList<>(), texts, sigs);
         }
     }
 
@@ -290,10 +383,24 @@ public class AnnotationDrawingView extends View {
     private int documentHeight = 0;
 
     // Collections
+    private final List<AnnotationItem> annotationItems = new ArrayList<>();
     private final List<Stroke> strokes = new ArrayList<>();
     private final List<TextItem> textItems = new ArrayList<>();
     private final List<SignatureItem> signatureItems = new ArrayList<>();
     private final List<AnnotationAction> actionHistory = new ArrayList<>();
+
+    public List<AnnotationItem> getAnnotationItems() {
+        return Collections.unmodifiableList(annotationItems);
+    }
+
+    @Nullable
+    public AnnotationItem getSelectedItem() {
+        for (int i = annotationItems.size() - 1; i >= 0; i--) {
+            AnnotationItem item = annotationItems.get(i);
+            if (item.isSelected()) return item;
+        }
+        return null;
+    }
 
     // Drawing in-progress
     private final Path currentPath = new Path();
@@ -305,6 +412,7 @@ public class AnnotationDrawingView extends View {
     private final Paint selectionBoxPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint handleFillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint handleStrokePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint rotateIconPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
     private ToolMode currentToolMode = ToolMode.NONE;
     private int currentColor = Color.parseColor("#68D391"); // Default Mint Green
@@ -312,11 +420,17 @@ public class AnnotationDrawingView extends View {
     private float lastDocX;
     private float lastDocY;
 
-    // Selection & Drag/Resize state
+    // Selection & Drag/Resize/Rotate state
     private TextItem activeDraggingText = null;
     private SignatureItem activeDraggingSignature = null;
     private TextItem activeResizingText = null;
     private SignatureItem activeResizingSignature = null;
+    private TextItem activeRotatingText = null;
+    private SignatureItem activeRotatingSignature = null;
+    private float lastSnappedAngle = -1f;
+    private boolean isTwoFingerRotating = false;
+    private float initialTwoFingerAngle = 0f;
+    private float initialObjectAngle = 0f;
     private float dragOffsetX = 0f;
     private float dragOffsetY = 0f;
     private float initialTouchX = 0f;
@@ -379,6 +493,11 @@ public class AnnotationDrawingView extends View {
         handleStrokePaint.setStyle(Paint.Style.STROKE);
         handleStrokePaint.setColor(Color.parseColor("#10B981"));
         handleStrokePaint.setStrokeWidth(2.5f * getResources().getDisplayMetrics().density);
+
+        rotateIconPaint.setStyle(Paint.Style.STROKE);
+        rotateIconPaint.setColor(Color.parseColor("#10B981"));
+        rotateIconPaint.setStrokeWidth(2f * getResources().getDisplayMetrics().density);
+        rotateIconPaint.setStrokeCap(Paint.Cap.ROUND);
     }
 
     /**
@@ -506,6 +625,7 @@ public class AnnotationDrawingView extends View {
         item.boundingBox.set(item.getBoundingBox(density));
 
         textItems.add(item);
+        annotationItems.add(item);
         actionHistory.add(new AnnotationAction(ActionType.TEXT, item));
         currentToolMode = ToolMode.TEXT;
         notifyActionAdded();
@@ -612,6 +732,7 @@ public class AnnotationDrawingView extends View {
         item.isSelected = true;
 
         signatureItems.add(item);
+        annotationItems.add(item);
         actionHistory.add(new AnnotationAction(ActionType.SIGNATURE, item));
         notifyActionAdded();
         invalidate();
@@ -637,17 +758,41 @@ public class AnnotationDrawingView extends View {
     }
 
     public void clearSelection() {
+        for (AnnotationItem item : annotationItems) item.setSelected(false);
         for (TextItem item : textItems) item.isSelected = false;
         for (SignatureItem item : signatureItems) item.isSelected = false;
         activeDraggingText = null;
         activeDraggingSignature = null;
         activeResizingText = null;
         activeResizingSignature = null;
+        activeRotatingText = null;
+        activeRotatingSignature = null;
+        isTwoFingerRotating = false;
+        lastSnappedAngle = -1f;
     }
 
     public void deleteSelectedItem() {
+        AnnotationItem sel = getSelectedItem();
+        if (sel != null) {
+            annotationItems.remove(sel);
+            strokes.remove(sel);
+            textItems.remove(sel);
+            signatureItems.remove(sel);
+            for (int i = actionHistory.size() - 1; i >= 0; i--) {
+                if (actionHistory.get(i).item == sel) {
+                    actionHistory.remove(i);
+                    break;
+                }
+            }
+            clearSelection();
+            notifyActionAdded();
+            invalidate();
+            if (itemSelectionListener != null) itemSelectionListener.onSelectionCleared();
+            return;
+        }
         TextItem selText = getSelectedTextItem();
         if (selText != null) {
+            annotationItems.remove(selText);
             textItems.remove(selText);
             notifyActionAdded();
             invalidate();
@@ -656,6 +801,7 @@ public class AnnotationDrawingView extends View {
         }
         SignatureItem selSig = getSelectedSignatureItem();
         if (selSig != null) {
+            annotationItems.remove(selSig);
             signatureItems.remove(selSig);
             notifyActionAdded();
             invalidate();
@@ -664,14 +810,16 @@ public class AnnotationDrawingView extends View {
     }
 
     public void undo() {
-        if (!actionHistory.isEmpty()) {
-            AnnotationAction last = actionHistory.remove(actionHistory.size() - 1);
-            if (last.type == ActionType.STROKE) {
-                strokes.remove(last.item);
-            } else if (last.type == ActionType.TEXT) {
-                textItems.remove(last.item);
-            } else if (last.type == ActionType.SIGNATURE) {
-                signatureItems.remove(last.item);
+        if (!annotationItems.isEmpty()) {
+            AnnotationItem last = annotationItems.remove(annotationItems.size() - 1);
+            strokes.remove(last);
+            textItems.remove(last);
+            signatureItems.remove(last);
+            for (int i = actionHistory.size() - 1; i >= 0; i--) {
+                if (actionHistory.get(i).item == last) {
+                    actionHistory.remove(i);
+                    break;
+                }
             }
             clearSelection();
             invalidate();
@@ -680,6 +828,7 @@ public class AnnotationDrawingView extends View {
     }
 
     public void clear() {
+        annotationItems.clear();
         strokes.clear();
         textItems.clear();
         signatureItems.clear();
@@ -692,16 +841,13 @@ public class AnnotationDrawingView extends View {
 
     @NonNull
     public AnnotationState getAnnotationState() {
-        List<Stroke> sCopy = new ArrayList<>(strokes.size());
-        for (Stroke s : strokes) sCopy.add(s.copy());
-        List<TextItem> tCopy = new ArrayList<>(textItems.size());
-        for (TextItem t : textItems) tCopy.add(t.copy());
-        List<SignatureItem> sigCopy = new ArrayList<>(signatureItems.size());
-        for (SignatureItem sig : signatureItems) sigCopy.add(sig.copy());
-        return new AnnotationState(sCopy, tCopy, sigCopy);
+        List<AnnotationItem> copy = new ArrayList<>(annotationItems.size());
+        for (AnnotationItem item : annotationItems) copy.add(item.copy());
+        return new AnnotationState(copy);
     }
 
     public void setAnnotationState(@Nullable AnnotationState state) {
+        annotationItems.clear();
         strokes.clear();
         textItems.clear();
         signatureItems.clear();
@@ -710,20 +856,22 @@ public class AnnotationDrawingView extends View {
         clearSelection();
 
         if (state != null) {
-            for (Stroke s : state.strokes) {
-                Stroke sc = s.copy();
-                strokes.add(sc);
-                actionHistory.add(new AnnotationAction(ActionType.STROKE, sc));
-            }
-            for (TextItem t : state.textItems) {
-                TextItem tc = t.copy();
-                textItems.add(tc);
-                actionHistory.add(new AnnotationAction(ActionType.TEXT, tc));
-            }
-            for (SignatureItem sig : state.signatureItems) {
-                SignatureItem sigc = sig.copy();
-                signatureItems.add(sigc);
-                actionHistory.add(new AnnotationAction(ActionType.SIGNATURE, sigc));
+            for (AnnotationItem item : state.items) {
+                AnnotationItem copy = item.copy();
+                annotationItems.add(copy);
+                if (copy instanceof Stroke) {
+                    Stroke sc = (Stroke) copy;
+                    strokes.add(sc);
+                    actionHistory.add(new AnnotationAction(ActionType.STROKE, sc));
+                } else if (copy instanceof TextItem) {
+                    TextItem tc = (TextItem) copy;
+                    textItems.add(tc);
+                    actionHistory.add(new AnnotationAction(ActionType.TEXT, tc));
+                } else if (copy instanceof SignatureItem) {
+                    SignatureItem sigc = (SignatureItem) copy;
+                    signatureItems.add(sigc);
+                    actionHistory.add(new AnnotationAction(ActionType.SIGNATURE, sigc));
+                }
             }
         }
         invalidate();
@@ -739,64 +887,94 @@ public class AnnotationDrawingView extends View {
             return state != null ? state.copy() : null;
         }
 
-        // 1. Transform strokes
+        float density = context != null ? context.getResources().getDisplayMetrics().density : 2.0f;
+        List<AnnotationItem> transformedItems = new ArrayList<>(state.items.size());
+
         float[] vec = new float[]{1f, 0f};
         matrix.mapVectors(vec);
         float scale = Math.max(0.01f, (float) Math.hypot(vec[0], vec[1]));
+        float matrixRotationDeg = (float) Math.toDegrees(Math.atan2(vec[1], vec[0]));
 
-        List<Stroke> newStrokes = new ArrayList<>(state.strokes.size());
-        for (Stroke s : state.strokes) {
-            Path newPath = new Path(s.path);
-            newPath.transform(matrix);
-            float newStrokeWidth = Math.max(1f, s.strokeWidth * scale);
-            newStrokes.add(new Stroke(newPath, s.color, newStrokeWidth, s.isHighlighter));
-        }
-
-        // 2. Transform text items
-        float density = context != null ? context.getResources().getDisplayMetrics().density : 2.0f;
         Paint measurePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
-        List<TextItem> newTexts = new ArrayList<>(state.textItems.size());
-        for (TextItem t : state.textItems) {
-            float[] pt = new float[]{t.x, t.y};
-            matrix.mapPoints(pt);
+        for (AnnotationItem item : state.items) {
+            if (item instanceof Stroke) {
+                Stroke s = (Stroke) item;
+                Path newPath = new Path(s.path);
+                newPath.transform(matrix);
+                float newStrokeWidth = Math.max(1f, s.strokeWidth * scale);
+                Stroke sc = new Stroke(newPath, s.color, newStrokeWidth, s.isHighlighter, s.getTimestamp(), s.points);
+                transformedItems.add(sc);
+            } else if (item instanceof TextItem) {
+                TextItem t = (TextItem) item;
+                float cx = (t.boundingBox.width() > 0) ? t.boundingBox.centerX() : (t.x + t.bounds.width() / 2f);
+                float cy = (t.boundingBox.height() > 0) ? t.boundingBox.centerY() : (t.y - t.bounds.height() / 2f);
+                float[] centerPt = new float[]{cx, cy};
+                matrix.mapPoints(centerPt);
 
-            float[] textVec = new float[]{0f, t.textSize};
-            matrix.mapVectors(textVec);
-            float newTextSize = Math.max(8f * density, (float) Math.hypot(textVec[0], textVec[1]));
+                float[] textVec = new float[]{0f, t.textSize};
+                matrix.mapVectors(textVec);
+                float newTextSize = Math.max(8f * density, (float) Math.hypot(textVec[0], textVec[1]));
 
-            TextItem item = new TextItem(t.text, pt[0], pt[1], t.color, newTextSize);
-            item.setFontFamily(t.fontFamily);
-            item.hasBackground = t.hasBackground;
-            item.backgroundColor = t.backgroundColor;
-            item.isSelected = false;
+                measurePaint.setTextSize(newTextSize);
+                measurePaint.setTypeface(getTypefaceForFont(context, t.fontFamily));
+                measurePaint.setFakeBoldText("bold_condensed".equalsIgnoreCase(t.fontFamily) || "sans".equalsIgnoreCase(t.fontFamily));
+                Rect textBounds = new Rect();
+                measurePaint.getTextBounds(t.text, 0, t.text.length(), textBounds);
 
-            measurePaint.setTextSize(newTextSize);
-            measurePaint.setTypeface(getTypefaceForFont(context, item.fontFamily));
-            measurePaint.setFakeBoldText("bold_condensed".equalsIgnoreCase(item.fontFamily) || "sans".equalsIgnoreCase(item.fontFamily));
-            measurePaint.getTextBounds(item.text, 0, item.text.length(), item.bounds);
+                float pad = 10f * density;
+                float boxWidth = textBounds.width() + 2 * pad;
+                float boxHeight = textBounds.height() + 2 * pad;
 
-            newTexts.add(item);
+                float newBoxLeft = centerPt[0] - boxWidth / 2f;
+                float newBoxBottom = centerPt[1] + boxHeight / 2f;
+                float newX = newBoxLeft + pad;
+                float newY = newBoxBottom - pad;
+
+                TextItem tc = new TextItem(t.text, newX, newY, t.color, newTextSize);
+                tc.setFontFamily(t.fontFamily);
+                tc.hasBackground = t.hasBackground;
+                tc.backgroundColor = t.backgroundColor;
+                tc.isSelected = false;
+                tc.bounds.set(textBounds);
+                tc.boundingBox.set(newBoxLeft, newBoxBottom - boxHeight, newBoxLeft + boxWidth, newBoxBottom);
+                float newAngle = ((t.getRotationAngle() + matrixRotationDeg) % 360f + 360f) % 360f;
+                tc.setRotationAngle(newAngle);
+                tc.setTimestamp(t.getTimestamp());
+                transformedItems.add(tc);
+            } else if (item instanceof SignatureItem) {
+                SignatureItem sig = (SignatureItem) item;
+                float cx = sig.x + sig.width / 2f;
+                float cy = sig.y + sig.height / 2f;
+                float[] centerPt = new float[]{cx, cy};
+                matrix.mapPoints(centerPt);
+
+                float newW = sig.width * scale;
+                float newH = sig.height * scale;
+                float newX = centerPt[0] - newW / 2f;
+                float newY = centerPt[1] - newH / 2f;
+
+                SignatureItem sc = new SignatureItem(
+                        sig.bitmap,
+                        newX,
+                        newY,
+                        Math.max(10f * density, newW),
+                        Math.max(10f * density, newH)
+                );
+                sc.tintColor = sig.tintColor;
+                sc.isSelected = false;
+                float newAngle = ((sig.getRotationAngle() + matrixRotationDeg) % 360f + 360f) % 360f;
+                sc.setRotationAngle(newAngle);
+                sc.setTimestamp(sig.getTimestamp());
+                transformedItems.add(sc);
+            } else {
+                AnnotationItem copy = item.copy();
+                copy.transform(matrix);
+                transformedItems.add(copy);
+            }
         }
 
-        // 3. Transform signature items
-        List<SignatureItem> newSigs = new ArrayList<>(state.signatureItems.size());
-        for (SignatureItem sig : state.signatureItems) {
-            RectF rect = new RectF(sig.x, sig.y, sig.x + sig.width, sig.y + sig.height);
-            matrix.mapRect(rect);
-            SignatureItem item = new SignatureItem(
-                    sig.bitmap,
-                    rect.left,
-                    rect.top,
-                    Math.max(10f * density, rect.width()),
-                    Math.max(10f * density, rect.height())
-            );
-            item.tintColor = sig.tintColor;
-            item.isSelected = false;
-            newSigs.add(item);
-        }
-
-        return new AnnotationState(newStrokes, newTexts, newSigs);
+        return new AnnotationState(transformedItems);
     }
 
     /**
@@ -835,63 +1013,77 @@ public class AnnotationDrawingView extends View {
         Canvas canvas = new Canvas(outputBitmap);
         float density = context != null ? context.getResources().getDisplayMetrics().density : 2.0f;
 
-        // 1. Completed strokes
         Paint strokePaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.DITHER_FLAG);
         strokePaint.setStyle(Paint.Style.STROKE);
         strokePaint.setStrokeJoin(Paint.Join.ROUND);
         strokePaint.setStrokeCap(Paint.Cap.ROUND);
-        for (Stroke s : state.strokes) {
-            strokePaint.setColor(s.color);
-            strokePaint.setStrokeWidth(s.strokeWidth);
-            canvas.drawPath(s.path, strokePaint);
-        }
 
-        // 2. Signatures
         Paint sigP = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
-        for (SignatureItem sig : state.signatureItems) {
-            if (sig.bitmap != null && !sig.bitmap.isRecycled()) {
-                if (sig.tintColor != 0) {
-                    sigP.setColorFilter(new PorterDuffColorFilter(sig.tintColor, PorterDuff.Mode.SRC_IN));
-                } else {
-                    sigP.setColorFilter(null);
-                }
-                RectF dst = new RectF(sig.x, sig.y, sig.x + sig.width, sig.y + sig.height);
-                canvas.drawBitmap(sig.bitmap, null, dst, sigP);
-            }
-        }
-
-        // 3. Text items
         Paint flatTextPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         Paint flatBgPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         flatBgPaint.setStyle(Paint.Style.FILL);
 
-        for (TextItem txt : state.textItems) {
-            flatTextPaint.setTextSize(txt.textSize);
-            flatTextPaint.setTypeface(getTypefaceForFont(context, txt.fontFamily));
-            flatTextPaint.setFakeBoldText("bold_condensed".equalsIgnoreCase(txt.fontFamily) || "sans".equalsIgnoreCase(txt.fontFamily));
-            flatTextPaint.setColor(txt.color);
+        // Render all elements sequentially from bottom to top
+        for (AnnotationItem item : state.items) {
+            if (item instanceof Stroke) {
+                Stroke s = (Stroke) item;
+                strokePaint.setColor(s.color);
+                strokePaint.setStrokeWidth(s.strokeWidth);
+                canvas.drawPath(s.path, strokePaint);
+            } else if (item instanceof SignatureItem) {
+                SignatureItem sig = (SignatureItem) item;
+                if (sig.bitmap != null && !sig.bitmap.isRecycled()) {
+                    canvas.save();
+                    float cx = sig.x + sig.width / 2f;
+                    float cy = sig.y + sig.height / 2f;
+                    canvas.rotate(sig.getRotationAngle(), cx, cy);
 
-            Rect bounds = new Rect();
-            flatTextPaint.getTextBounds(txt.text, 0, txt.text.length(), bounds);
-            txt.bounds.set(bounds);
+                    if (sig.tintColor != 0) {
+                        sigP.setColorFilter(new PorterDuffColorFilter(sig.tintColor, PorterDuff.Mode.SRC_IN));
+                    } else {
+                        sigP.setColorFilter(null);
+                    }
+                    RectF dst = new RectF(sig.x, sig.y, sig.x + sig.width, sig.y + sig.height);
+                    canvas.drawBitmap(sig.bitmap, null, dst, sigP);
+                    canvas.restore();
+                }
+            } else if (item instanceof TextItem) {
+                TextItem txt = (TextItem) item;
+                flatTextPaint.setTextSize(txt.textSize);
+                flatTextPaint.setTypeface(getTypefaceForFont(context, txt.fontFamily));
+                flatTextPaint.setFakeBoldText("bold_condensed".equalsIgnoreCase(txt.fontFamily) || "sans".equalsIgnoreCase(txt.fontFamily));
+                flatTextPaint.setColor(txt.color);
 
-            if (txt.hasBackground) {
-                flatBgPaint.setColor(txt.backgroundColor);
+                Rect bounds = new Rect();
+                flatTextPaint.getTextBounds(txt.text, 0, txt.text.length(), bounds);
+                txt.bounds.set(bounds);
                 RectF pillRect = txt.getBoundingBox(density);
-                canvas.drawRoundRect(pillRect, 6f * density, 6f * density, flatBgPaint);
+
+                canvas.save();
+                float cx = pillRect.centerX();
+                float cy = pillRect.centerY();
+                canvas.rotate(txt.getRotationAngle(), cx, cy);
+
+                if (txt.hasBackground) {
+                    flatBgPaint.setColor(txt.backgroundColor);
+                    canvas.drawRoundRect(pillRect, 6f * density, 6f * density, flatBgPaint);
+                }
+                canvas.drawText(txt.text, txt.x, txt.y, flatTextPaint);
+                canvas.restore();
+            } else {
+                item.draw(canvas);
             }
-            canvas.drawText(txt.text, txt.x, txt.y, flatTextPaint);
         }
 
         return outputBitmap;
     }
 
     public boolean isEmpty() {
-        return strokes.isEmpty() && textItems.isEmpty() && signatureItems.isEmpty() && currentPath.isEmpty();
+        return annotationItems.isEmpty() && currentPath.isEmpty();
     }
 
     public int getActionCount() {
-        return actionHistory.size();
+        return annotationItems.size();
     }
 
     public interface OnActionAddedListener {
@@ -949,19 +1141,52 @@ public class AnnotationDrawingView extends View {
 
         updateMatrix();
 
-        // ── 1. Multi-Touch Gesture Conflict (2-Finger Zoom While Drawing) ──
+        // ── 1. Multi-Touch Gesture Handling (Rotation & Zoom) ──
         if (event.getPointerCount() >= 2) {
-            isMultiTouching = true;
-            currentPath.reset();
-            if (targetImageView != null) {
-                targetImageView.dispatchTouchEvent(event);
+            TextItem selText = getSelectedTextItem();
+            SignatureItem selSig = getSelectedSignatureItem();
+            if (selText != null || selSig != null) {
+                float p0x = event.getX(0), p0y = event.getY(0);
+                float p1x = event.getX(1), p1y = event.getY(1);
+                float currentTwoFingerAngle = (float) Math.toDegrees(Math.atan2(p1y - p0y, p1x - p0x));
+                if (action == MotionEvent.ACTION_POINTER_DOWN || !isTwoFingerRotating) {
+                    isTwoFingerRotating = true;
+                    initialTwoFingerAngle = currentTwoFingerAngle;
+                    initialObjectAngle = selText != null ? selText.getRotationAngle() : selSig.getRotationAngle();
+                    disallowParentIntercept(true);
+                    return true;
+                } else if (action == MotionEvent.ACTION_MOVE && isTwoFingerRotating) {
+                    float delta = currentTwoFingerAngle - initialTwoFingerAngle;
+                    float rawAngle = ((initialObjectAngle + delta) % 360f + 360f) % 360f;
+                    float snapped = applyAngleSnapping(rawAngle);
+                    if (selText != null) {
+                        selText.setRotationAngle(snapped);
+                    } else {
+                        selSig.setRotationAngle(snapped);
+                    }
+                    invalidate();
+                    disallowParentIntercept(true);
+                    return true;
+                }
+            } else {
+                isMultiTouching = true;
+                currentPath.reset();
+                if (targetImageView != null) {
+                    targetImageView.dispatchTouchEvent(event);
+                }
+                disallowParentIntercept(true);
+                invalidate();
+                return true;
             }
-            disallowParentIntercept(true);
-            invalidate();
-            return true;
         }
 
         if (action == MotionEvent.ACTION_POINTER_UP) {
+            if (isTwoFingerRotating) {
+                isTwoFingerRotating = false;
+                notifyActionAdded();
+                invalidate();
+                return true;
+            }
             // Discard residual drag after 2-finger zoom to avoid stray lines
             isMultiTouching = true;
             return true;
@@ -1000,8 +1225,23 @@ public class AnnotationDrawingView extends View {
                 downDocY = docY;
                 disallowParentIntercept(true);
 
-                // A. Check if touched resize handle of selected text
+                // A. Check if touched rotation handle of selected text
                 TextItem selText = getSelectedTextItem();
+                if (selText != null && selText.containsRotateHandle(docX, docY, density)) {
+                    activeRotatingText = selText;
+                    lastSnappedAngle = -1f;
+                    return true;
+                }
+
+                // B. Check if touched rotation handle of selected signature
+                SignatureItem selSig = getSelectedSignatureItem();
+                if (selSig != null && selSig.containsRotateHandle(docX, docY, density)) {
+                    activeRotatingSignature = selSig;
+                    lastSnappedAngle = -1f;
+                    return true;
+                }
+
+                // C. Check if touched resize handle of selected text
                 if (selText != null && selText.containsResizeHandle(docX, docY, density)) {
                     activeResizingText = selText;
                     initialTouchX = docX;
@@ -1010,8 +1250,7 @@ public class AnnotationDrawingView extends View {
                     return true;
                 }
 
-                // B. Check if touched resize handle of selected signature
-                SignatureItem selSig = getSelectedSignatureItem();
+                // D. Check if touched resize handle of selected signature
                 if (selSig != null && selSig.containsResizeHandle(docX, docY, density)) {
                     activeResizingSignature = selSig;
                     initialTouchX = docX;
@@ -1021,37 +1260,37 @@ public class AnnotationDrawingView extends View {
                     return true;
                 }
 
-                // C. Check if touched any text item
-                for (int i = textItems.size() - 1; i >= 0; i--) {
-                    TextItem txt = textItems.get(i);
-                    if (txt.contains(docX, docY, density)) {
-                        pendingTouchText = txt;
-                        if (currentToolMode == ToolMode.TEXT || txt.isSelected) {
-                            clearSelection();
-                            txt.isSelected = true;
-                            activeDraggingText = txt;
-                            dragOffsetX = docX - txt.x;
-                            dragOffsetY = docY - txt.y;
-                            invalidate();
+                // Traverse annotationItems in REVERSE (top-most / newest to bottom-most / oldest)
+                for (int i = annotationItems.size() - 1; i >= 0; i--) {
+                    AnnotationItem item = annotationItems.get(i);
+                    if (item instanceof TextItem) {
+                        TextItem txt = (TextItem) item;
+                        if (txt.contains(docX, docY, density)) {
+                            pendingTouchText = txt;
+                            if (currentToolMode == ToolMode.TEXT || txt.isSelected) {
+                                clearSelection();
+                                txt.isSelected = true;
+                                activeDraggingText = txt;
+                                dragOffsetX = docX - txt.x;
+                                dragOffsetY = docY - txt.y;
+                                invalidate();
+                            }
+                            return true;
                         }
-                        return true;
-                    }
-                }
-
-                // D. Check if touched any signature item
-                for (int i = signatureItems.size() - 1; i >= 0; i--) {
-                    SignatureItem sig = signatureItems.get(i);
-                    if (sig.contains(docX, docY, density)) {
-                        pendingTouchSignature = sig;
-                        if (currentToolMode == ToolMode.SIGNATURE || sig.isSelected) {
-                            clearSelection();
-                            sig.isSelected = true;
-                            activeDraggingSignature = sig;
-                            dragOffsetX = docX - sig.x;
-                            dragOffsetY = docY - sig.y;
-                            invalidate();
+                    } else if (item instanceof SignatureItem) {
+                        SignatureItem sig = (SignatureItem) item;
+                        if (sig.contains(docX, docY, density)) {
+                            pendingTouchSignature = sig;
+                            if (currentToolMode == ToolMode.SIGNATURE || sig.isSelected) {
+                                clearSelection();
+                                sig.isSelected = true;
+                                activeDraggingSignature = sig;
+                                dragOffsetX = docX - sig.x;
+                                dragOffsetY = docY - sig.y;
+                                invalidate();
+                            }
+                            return true;
                         }
-                        return true;
                     }
                 }
 
@@ -1076,6 +1315,30 @@ public class AnnotationDrawingView extends View {
             case MotionEvent.ACTION_MOVE:
                 disallowParentIntercept(true);
                 float distMove = (float) Math.hypot(event.getX() - downScreenX, event.getY() - downScreenY);
+
+                // Rotating Text
+                if (activeRotatingText != null) {
+                    float cx = activeRotatingText.boundingBox.centerX();
+                    float cy = activeRotatingText.boundingBox.centerY();
+                    float rawAngle = (float) Math.toDegrees(Math.atan2(docY - cy, docX - cx)) + 90f;
+                    rawAngle = ((rawAngle % 360f) + 360f) % 360f;
+                    float snapped = applyAngleSnapping(rawAngle);
+                    activeRotatingText.setRotationAngle(snapped);
+                    invalidate();
+                    return true;
+                }
+
+                // Rotating Signature
+                if (activeRotatingSignature != null) {
+                    float cx = activeRotatingSignature.x + activeRotatingSignature.width / 2f;
+                    float cy = activeRotatingSignature.y + activeRotatingSignature.height / 2f;
+                    float rawAngle = (float) Math.toDegrees(Math.atan2(docY - cy, docX - cx)) + 90f;
+                    rawAngle = ((rawAngle % 360f) + 360f) % 360f;
+                    float snapped = applyAngleSnapping(rawAngle);
+                    activeRotatingSignature.setRotationAngle(snapped);
+                    invalidate();
+                    return true;
+                }
 
                 // Resizing Text
                 if (activeResizingText != null) {
@@ -1175,7 +1438,9 @@ public class AnnotationDrawingView extends View {
                 float distUp = (float) Math.hypot(event.getX() - downScreenX, event.getY() - downScreenY);
                 boolean isTap = distUp < (10f * density);
                 boolean wasManipulating = (activeDraggingText != null || activeDraggingSignature != null
-                        || activeResizingText != null || activeResizingSignature != null);
+                        || activeResizingText != null || activeResizingSignature != null
+                        || activeRotatingText != null || activeRotatingSignature != null
+                        || isTwoFingerRotating);
 
                 if (wasManipulating) {
                     notifyActionAdded();
@@ -1185,6 +1450,10 @@ public class AnnotationDrawingView extends View {
                 activeDraggingSignature = null;
                 activeResizingText = null;
                 activeResizingSignature = null;
+                activeRotatingText = null;
+                activeRotatingSignature = null;
+                isTwoFingerRotating = false;
+                lastSnappedAngle = -1f;
 
                 if (isTap) {
                     if (pendingTouchText != null) {
@@ -1247,6 +1516,7 @@ public class AnnotationDrawingView extends View {
                     int finalColor = isHighlighter ? ColorUtils.setAlphaComponent(currentColor, 102) : currentColor;
                     Stroke stroke = new Stroke(new Path(currentPath), finalColor, strokeW, isHighlighter);
                     strokes.add(stroke);
+                    annotationItems.add(stroke);
                     actionHistory.add(new AnnotationAction(ActionType.STROKE, stroke));
                     notifyActionAdded();
                     currentPath.reset();
@@ -1270,15 +1540,62 @@ public class AnnotationDrawingView extends View {
         canvas.save();
         canvas.concat(currentMatrix);
 
-        // 1. Draw completed strokes
-        for (Stroke s : strokes) {
-            Paint p = s.isHighlighter ? highlighterPaint : penPaint;
-            p.setColor(s.color);
-            p.setStrokeWidth(s.strokeWidth);
-            canvas.drawPath(s.path, p);
+        float density = getResources().getDisplayMetrics().density;
+
+        // 1. Render all annotation elements sequentially from bottom (oldest) to top (newest)
+        for (AnnotationItem item : annotationItems) {
+            if (item instanceof Stroke) {
+                Stroke s = (Stroke) item;
+                Paint p = s.isHighlighter ? highlighterPaint : penPaint;
+                p.setColor(s.color);
+                p.setStrokeWidth(s.strokeWidth);
+                canvas.drawPath(s.path, p);
+            } else if (item instanceof SignatureItem) {
+                SignatureItem sig = (SignatureItem) item;
+                if (sig.bitmap != null && !sig.bitmap.isRecycled()) {
+                    canvas.save();
+                    float cx = sig.x + sig.width / 2f;
+                    float cy = sig.y + sig.height / 2f;
+                    canvas.rotate(sig.getRotationAngle(), cx, cy);
+
+                    if (sig.tintColor != 0) {
+                        signaturePaint.setColorFilter(new PorterDuffColorFilter(sig.tintColor, PorterDuff.Mode.SRC_IN));
+                    } else {
+                        signaturePaint.setColorFilter(null);
+                    }
+                    RectF dst = new RectF(sig.x, sig.y, sig.x + sig.width, sig.y + sig.height);
+                    canvas.drawBitmap(sig.bitmap, null, dst, signaturePaint);
+                    canvas.restore();
+                }
+            } else if (item instanceof TextItem) {
+                TextItem txt = (TextItem) item;
+                textPaint.setTextSize(txt.textSize);
+                textPaint.setTypeface(getTypefaceForFont(getContext(), txt.fontFamily));
+                textPaint.setFakeBoldText("bold_condensed".equalsIgnoreCase(txt.fontFamily) || "sans".equalsIgnoreCase(txt.fontFamily));
+                textPaint.getTextBounds(txt.text, 0, txt.text.length(), txt.bounds);
+
+                RectF pillRect = txt.getBoundingBox(density);
+                txt.boundingBox.set(pillRect);
+
+                canvas.save();
+                float cx = pillRect.centerX();
+                float cy = pillRect.centerY();
+                canvas.rotate(txt.getRotationAngle(), cx, cy);
+
+                if (txt.hasBackground) {
+                    textBackgroundPaint.setColor(txt.backgroundColor);
+                    canvas.drawRoundRect(pillRect, 6f * density, 6f * density, textBackgroundPaint);
+                }
+
+                textPaint.setColor(txt.color);
+                canvas.drawText(txt.text, txt.x, txt.y, textPaint);
+                canvas.restore();
+            } else {
+                item.draw(canvas);
+            }
         }
 
-        // 2. Draw active in-progress stroke
+        // 2. Draw active in-progress stroke on top of completed items
         if (!currentPath.isEmpty()) {
             boolean isHighlighter = (currentToolMode == ToolMode.HIGHLIGHTER);
             Paint p = isHighlighter ? highlighterPaint : penPaint;
@@ -1289,44 +1606,28 @@ public class AnnotationDrawingView extends View {
             canvas.drawPath(currentPath, p);
         }
 
-        // 3. Draw signatures
-        float density = getResources().getDisplayMetrics().density;
-        for (SignatureItem sig : signatureItems) {
-            if (sig.bitmap != null && !sig.bitmap.isRecycled()) {
-                if (sig.tintColor != 0) {
-                    signaturePaint.setColorFilter(new PorterDuffColorFilter(sig.tintColor, PorterDuff.Mode.SRC_IN));
-                } else {
-                    signaturePaint.setColorFilter(null);
-                }
+        // 3. Render selection bounding box and handles ONLY for the active item
+        AnnotationItem selectedItem = getSelectedItem();
+        if (selectedItem != null) {
+            if (selectedItem instanceof TextItem) {
+                TextItem txt = (TextItem) selectedItem;
+                canvas.save();
+                float cx = txt.boundingBox.centerX();
+                float cy = txt.boundingBox.centerY();
+                canvas.rotate(txt.getRotationAngle(), cx, cy);
+                drawBoundingBoxAndHandles(canvas, txt.boundingBox, density);
+                canvas.restore();
+            } else if (selectedItem instanceof SignatureItem) {
+                SignatureItem sig = (SignatureItem) selectedItem;
+                canvas.save();
+                float cx = sig.x + sig.width / 2f;
+                float cy = sig.y + sig.height / 2f;
+                canvas.rotate(sig.getRotationAngle(), cx, cy);
                 RectF dst = new RectF(sig.x, sig.y, sig.x + sig.width, sig.y + sig.height);
-                canvas.drawBitmap(sig.bitmap, null, dst, signaturePaint);
-
-                if (sig.isSelected) {
-                    drawBoundingBoxAndHandles(canvas, dst, density);
-                }
-            }
-        }
-
-        // 4. Draw text items
-        for (TextItem txt : textItems) {
-            textPaint.setTextSize(txt.textSize);
-            textPaint.setTypeface(getTypefaceForFont(getContext(), txt.fontFamily));
-            textPaint.setFakeBoldText("bold_condensed".equalsIgnoreCase(txt.fontFamily) || "sans".equalsIgnoreCase(txt.fontFamily));
-            textPaint.getTextBounds(txt.text, 0, txt.text.length(), txt.bounds);
-
-            RectF pillRect = txt.getBoundingBox(density);
-            txt.boundingBox.set(pillRect);
-
-            if (txt.hasBackground) {
-                textBackgroundPaint.setColor(txt.backgroundColor);
-                canvas.drawRoundRect(pillRect, 6f * density, 6f * density, textBackgroundPaint);
-            }
-
-            textPaint.setColor(txt.color);
-            canvas.drawText(txt.text, txt.x, txt.y, textPaint);
-
-            if (txt.isSelected) {
-                drawBoundingBoxAndHandles(canvas, pillRect, density);
+                drawBoundingBoxAndHandles(canvas, dst, density);
+                canvas.restore();
+            } else {
+                selectedItem.drawSelectionHandles(canvas, density);
             }
         }
 
@@ -1336,12 +1637,30 @@ public class AnnotationDrawingView extends View {
     private void drawBoundingBoxAndHandles(Canvas canvas, RectF box, float density) {
         canvas.drawRoundRect(box, 4f * density, 4f * density, selectionBoxPaint);
 
-        // Corner resize handle at bottom-right
+        // 1. Top stalk extending 24dp above top center
+        float stalkLength = 24f * density;
+        float topCenterX = box.centerX();
+        float topCenterY = box.top;
+        float stalkEndY = topCenterY - stalkLength;
+        canvas.drawLine(topCenterX, topCenterY, topCenterX, stalkEndY, handleStrokePaint);
+
+        // 2. Rotation handle circle at top of stalk
+        float rotRadius = 12f * density;
+        canvas.drawCircle(topCenterX, stalkEndY, rotRadius, handleFillPaint);
+        canvas.drawCircle(topCenterX, stalkEndY, rotRadius, handleStrokePaint);
+
+        // 3. Subtle curved rotate icon ↻ inside the handle circle
+        float iconR = 5f * density;
+        RectF arcBox = new RectF(topCenterX - iconR, stalkEndY - iconR, topCenterX + iconR, stalkEndY + iconR);
+        canvas.drawArc(arcBox, 45f, 270f, false, rotateIconPaint);
+        drawRotateArrowhead(canvas, topCenterX, stalkEndY, iconR, density);
+
+        // 4. Corner resize handle at bottom-right
         float handleRadius = 12f * density;
         canvas.drawCircle(box.right, box.bottom, handleRadius, handleFillPaint);
         canvas.drawCircle(box.right, box.bottom, handleRadius, handleStrokePaint);
 
-        // Subtle corner anchor dots
+        // 5. Subtle corner anchor dots
         float dotRadius = 4f * density;
         canvas.drawCircle(box.left, box.top, dotRadius, handleFillPaint);
         canvas.drawCircle(box.left, box.top, dotRadius, handleStrokePaint);
@@ -1349,6 +1668,36 @@ public class AnnotationDrawingView extends View {
         canvas.drawCircle(box.right, box.top, dotRadius, handleStrokePaint);
         canvas.drawCircle(box.left, box.bottom, dotRadius, handleFillPaint);
         canvas.drawCircle(box.left, box.bottom, dotRadius, handleStrokePaint);
+    }
+
+    private void drawRotateArrowhead(Canvas canvas, float cx, float cy, float r, float density) {
+        float angleRad = (float) Math.toRadians(45);
+        float ax = cx + (float) (r * Math.cos(angleRad));
+        float ay = cy + (float) (r * Math.sin(angleRad));
+
+        Path arrow = new Path();
+        float arrowSize = 3.5f * density;
+        arrow.moveTo(ax, ay - arrowSize);
+        arrow.lineTo(ax, ay);
+        arrow.lineTo(ax + arrowSize, ay);
+        canvas.drawPath(arrow, rotateIconPaint);
+    }
+
+    private float applyAngleSnapping(float rawAngle) {
+        float[] targets = new float[]{0f, 90f, 180f, 270f, 360f};
+        for (float t : targets) {
+            float diff = Math.abs(rawAngle - t);
+            if (diff <= 5.0f || diff >= 355.0f) {
+                float snapped = (t == 360f) ? 0f : t;
+                if (lastSnappedAngle != snapped) {
+                    lastSnappedAngle = snapped;
+                    HapticHelper.snapTick(this);
+                }
+                return snapped;
+            }
+        }
+        lastSnappedAngle = -1f;
+        return rawAngle;
     }
 
     public static Typeface getTypefaceForFont(@Nullable String fontFamily) {
@@ -1391,20 +1740,70 @@ public class AnnotationDrawingView extends View {
         }
 
         Canvas canvas = new Canvas(outputBitmap);
+        float density = getResources().getDisplayMetrics().density;
 
-        // 1. Flatten completed strokes
         Paint strokePaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.DITHER_FLAG);
         strokePaint.setStyle(Paint.Style.STROKE);
         strokePaint.setStrokeJoin(Paint.Join.ROUND);
         strokePaint.setStrokeCap(Paint.Cap.ROUND);
 
-        for (Stroke s : strokes) {
-            strokePaint.setColor(s.color);
-            strokePaint.setStrokeWidth(s.strokeWidth);
-            canvas.drawPath(s.path, strokePaint);
+        Paint sigP = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+        Paint flatTextPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        Paint flatBgPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        flatBgPaint.setStyle(Paint.Style.FILL);
+
+        // Render elements sequentially from bottom to top
+        for (AnnotationItem item : annotationItems) {
+            if (item instanceof Stroke) {
+                Stroke s = (Stroke) item;
+                strokePaint.setColor(s.color);
+                strokePaint.setStrokeWidth(s.strokeWidth);
+                canvas.drawPath(s.path, strokePaint);
+            } else if (item instanceof SignatureItem) {
+                SignatureItem sig = (SignatureItem) item;
+                if (sig.bitmap != null && !sig.bitmap.isRecycled()) {
+                    canvas.save();
+                    float cx = sig.x + sig.width / 2f;
+                    float cy = sig.y + sig.height / 2f;
+                    canvas.rotate(sig.getRotationAngle(), cx, cy);
+
+                    if (sig.tintColor != 0) {
+                        sigP.setColorFilter(new PorterDuffColorFilter(sig.tintColor, PorterDuff.Mode.SRC_IN));
+                    }
+                    RectF dst = new RectF(sig.x, sig.y, sig.x + sig.width, sig.y + sig.height);
+                    canvas.drawBitmap(sig.bitmap, null, dst, sigP);
+                    canvas.restore();
+                }
+            } else if (item instanceof TextItem) {
+                TextItem txt = (TextItem) item;
+                flatTextPaint.setTextSize(txt.textSize);
+                flatTextPaint.setTypeface(getTypefaceForFont(getContext(), txt.fontFamily));
+                flatTextPaint.setFakeBoldText("bold_condensed".equalsIgnoreCase(txt.fontFamily) || "sans".equalsIgnoreCase(txt.fontFamily));
+                flatTextPaint.setColor(txt.color);
+
+                Rect bounds = new Rect();
+                flatTextPaint.getTextBounds(txt.text, 0, txt.text.length(), bounds);
+                txt.bounds.set(bounds);
+                RectF pillRect = txt.getBoundingBox(density);
+
+                canvas.save();
+                float cx = pillRect.centerX();
+                float cy = pillRect.centerY();
+                canvas.rotate(txt.getRotationAngle(), cx, cy);
+
+                if (txt.hasBackground) {
+                    flatBgPaint.setColor(txt.backgroundColor);
+                    canvas.drawRoundRect(pillRect, 6f * density, 6f * density, flatBgPaint);
+                }
+
+                canvas.drawText(txt.text, txt.x, txt.y, flatTextPaint);
+                canvas.restore();
+            } else {
+                item.draw(canvas);
+            }
         }
 
-        // 1b. Flatten in-progress stroke if present
+        // In-progress stroke if present
         if (!currentPath.isEmpty()) {
             boolean isHighlighter = (currentToolMode == ToolMode.HIGHLIGHTER);
             int c = isHighlighter ? ColorUtils.setAlphaComponent(currentColor, 85) : currentColor;
@@ -1412,44 +1811,6 @@ public class AnnotationDrawingView extends View {
             strokePaint.setColor(c);
             strokePaint.setStrokeWidth(w);
             canvas.drawPath(currentPath, strokePaint);
-        }
-
-        // 2. Flatten signatures
-        for (SignatureItem sig : signatureItems) {
-            if (sig.bitmap != null && !sig.bitmap.isRecycled()) {
-                Paint sigP = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
-                if (sig.tintColor != 0) {
-                    sigP.setColorFilter(new PorterDuffColorFilter(sig.tintColor, PorterDuff.Mode.SRC_IN));
-                }
-                RectF dst = new RectF(sig.x, sig.y, sig.x + sig.width, sig.y + sig.height);
-                canvas.drawBitmap(sig.bitmap, null, dst, sigP);
-            }
-        }
-
-        // 3. Flatten text annotations
-        float density = getResources().getDisplayMetrics().density;
-        Paint flatTextPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-
-        Paint flatBgPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        flatBgPaint.setStyle(Paint.Style.FILL);
-
-        for (TextItem txt : textItems) {
-            flatTextPaint.setTextSize(txt.textSize);
-            flatTextPaint.setTypeface(getTypefaceForFont(getContext(), txt.fontFamily));
-            flatTextPaint.setFakeBoldText("bold_condensed".equalsIgnoreCase(txt.fontFamily) || "sans".equalsIgnoreCase(txt.fontFamily));
-            flatTextPaint.setColor(txt.color);
-
-            Rect bounds = new Rect();
-            flatTextPaint.getTextBounds(txt.text, 0, txt.text.length(), bounds);
-            txt.bounds.set(bounds);
-
-            if (txt.hasBackground) {
-                flatBgPaint.setColor(txt.backgroundColor);
-                RectF pillRect = txt.getBoundingBox(density);
-                canvas.drawRoundRect(pillRect, 6f * density, 6f * density, flatBgPaint);
-            }
-
-            canvas.drawText(txt.text, txt.x, txt.y, flatTextPaint);
         }
 
         return outputBitmap;

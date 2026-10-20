@@ -13,8 +13,12 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.anscanner.app.R;
 import com.anscanner.app.data.entity.DocumentEntity;
 import com.anscanner.app.databinding.ItemDateHeaderBinding;
+import com.anscanner.app.databinding.ItemDocumentDraftBinding;
 import com.anscanner.app.databinding.ItemDocumentRowBinding;
+import com.anscanner.app.model.draft.DraftManager;
+import java.io.File;
 import com.anscanner.app.service.CacheManager;
+import com.anscanner.app.service.PdfThumbnailLoader;
 
 import android.os.Handler;
 import android.os.Looper;
@@ -28,15 +32,19 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class DocumentListAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
+    public static final String PAYLOAD_SELECTION = "payload_selection";
+
     private static final int TYPE_HEADER = 0;
     private static final int TYPE_DOCUMENT = 1;
+    private static final int TYPE_DRAFT = 2;
+
+    private final ExecutorService thumbnailExecutor = Executors.newFixedThreadPool(2);
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
     private List<Object> items = new ArrayList<>();
     private final Context context;
     private final DocumentClickListener listener;
     private final SimpleDateFormat dateFormat;
-    private final ExecutorService imageExecutor = Executors.newSingleThreadExecutor();
-    private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
     private boolean isMultiSelectMode = false;
     private final LinkedHashMap<String, DocumentEntity> selectedDocuments = new LinkedHashMap<>();
@@ -51,6 +59,8 @@ public class DocumentListAdapter extends RecyclerView.Adapter<RecyclerView.ViewH
         void onDocumentRemoveAppOnly(DocumentEntity document);
         void onDocumentDeletePermanently(DocumentEntity document);
         void onSelectionModeChanged(boolean isMultiSelect, int selectedCount);
+        default void onDraftClick(DraftManager.DraftSession draft) {}
+        default void onDraftDeleteClick(DraftManager.DraftSession draft) {}
     }
 
     public DocumentListAdapter(Context context, DocumentClickListener listener) {
@@ -69,7 +79,7 @@ public class DocumentListAdapter extends RecyclerView.Adapter<RecyclerView.ViewH
         if (initialDoc.fileUri != null) {
             selectedDocuments.put(initialDoc.fileUri, initialDoc);
         }
-        notifyDataSetChanged();
+        notifyItemRangeChanged(0, getItemCount(), PAYLOAD_SELECTION);
         if (listener != null) {
             listener.onSelectionModeChanged(true, selectedDocuments.size());
         }
@@ -79,7 +89,7 @@ public class DocumentListAdapter extends RecyclerView.Adapter<RecyclerView.ViewH
         if (!isMultiSelectMode) return;
         isMultiSelectMode = false;
         selectedDocuments.clear();
-        notifyDataSetChanged();
+        notifyItemRangeChanged(0, getItemCount(), PAYLOAD_SELECTION);
         if (listener != null) {
             listener.onSelectionModeChanged(false, 0);
         }
@@ -94,7 +104,7 @@ public class DocumentListAdapter extends RecyclerView.Adapter<RecyclerView.ViewH
                 }
             }
         }
-        notifyDataSetChanged();
+        notifyItemRangeChanged(0, getItemCount(), PAYLOAD_SELECTION);
         if (listener != null) {
             listener.onSelectionModeChanged(true, selectedDocuments.size());
         }
@@ -102,7 +112,7 @@ public class DocumentListAdapter extends RecyclerView.Adapter<RecyclerView.ViewH
 
     public void clearSelection() {
         selectedDocuments.clear();
-        notifyDataSetChanged();
+        notifyItemRangeChanged(0, getItemCount(), PAYLOAD_SELECTION);
         if (listener != null) {
             listener.onSelectionModeChanged(true, 0);
         }
@@ -115,7 +125,21 @@ public class DocumentListAdapter extends RecyclerView.Adapter<RecyclerView.ViewH
         } else {
             selectedDocuments.put(doc.fileUri, doc);
         }
-        notifyDataSetChanged();
+        int index = -1;
+        for (int i = 0; i < items.size(); i++) {
+            if (items.get(i) instanceof DocumentEntity) {
+                DocumentEntity d = (DocumentEntity) items.get(i);
+                if (doc.fileUri.equals(d.fileUri)) {
+                    index = i;
+                    break;
+                }
+            }
+        }
+        if (index != -1) {
+            notifyItemChanged(index, PAYLOAD_SELECTION);
+        } else {
+            notifyItemRangeChanged(0, getItemCount(), PAYLOAD_SELECTION);
+        }
         if (listener != null) {
             listener.onSelectionModeChanged(true, selectedDocuments.size());
         }
@@ -177,9 +201,20 @@ public class DocumentListAdapter extends RecyclerView.Adapter<RecyclerView.ViewH
     /**
      * Checks if there are any documents left in the adapter.
      */
+    public boolean removeDraftItem() {
+        for (int i = 0; i < items.size(); i++) {
+            if (items.get(i) instanceof DraftManager.DraftSession) {
+                items.remove(i);
+                notifyItemRemoved(i);
+                return true;
+            }
+        }
+        return false;
+    }
+
     public boolean isEmpty() {
         for (Object item : items) {
-            if (item instanceof DocumentEntity) {
+            if (item instanceof DocumentEntity || item instanceof DraftManager.DraftSession) {
                 return false;
             }
         }
@@ -188,8 +223,11 @@ public class DocumentListAdapter extends RecyclerView.Adapter<RecyclerView.ViewH
 
     @Override
     public int getItemViewType(int position) {
-        if (items.get(position) instanceof String) {
+        Object item = items.get(position);
+        if (item instanceof String) {
             return TYPE_HEADER;
+        } else if (item instanceof DraftManager.DraftSession) {
+            return TYPE_DRAFT;
         }
         return TYPE_DOCUMENT;
     }
@@ -200,6 +238,8 @@ public class DocumentListAdapter extends RecyclerView.Adapter<RecyclerView.ViewH
         LayoutInflater inflater = LayoutInflater.from(parent.getContext());
         if (viewType == TYPE_HEADER) {
             return new HeaderViewHolder(ItemDateHeaderBinding.inflate(inflater, parent, false));
+        } else if (viewType == TYPE_DRAFT) {
+            return new DraftViewHolder(ItemDocumentDraftBinding.inflate(inflater, parent, false));
         } else {
             return new DocumentViewHolder(ItemDocumentRowBinding.inflate(inflater, parent, false));
         }
@@ -209,8 +249,27 @@ public class DocumentListAdapter extends RecyclerView.Adapter<RecyclerView.ViewH
     public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int position) {
         if (holder instanceof HeaderViewHolder) {
             ((HeaderViewHolder) holder).bind((String) items.get(position));
+        } else if (holder instanceof DraftViewHolder) {
+            ((DraftViewHolder) holder).bind((DraftManager.DraftSession) items.get(position));
         } else if (holder instanceof DocumentViewHolder) {
             ((DocumentViewHolder) holder).bind((DocumentEntity) items.get(position));
+        }
+    }
+
+    @Override
+    public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int position, @NonNull List<Object> payloads) {
+        if (!payloads.isEmpty() && payloads.contains(PAYLOAD_SELECTION)) {
+            if (holder instanceof DocumentViewHolder) {
+                DocumentViewHolder docHolder = (DocumentViewHolder) holder;
+                Object item = items.get(position);
+                if (item instanceof DocumentEntity) {
+                    DocumentEntity doc = (DocumentEntity) item;
+                    boolean isSelected = isMultiSelectMode && doc.fileUri != null && selectedDocuments.containsKey(doc.fileUri);
+                    docHolder.bindSelectionState(isSelected, isMultiSelectMode);
+                }
+            }
+        } else {
+            super.onBindViewHolder(holder, position, payloads);
         }
     }
 
@@ -347,7 +406,15 @@ public class DocumentListAdapter extends RecyclerView.Adapter<RecyclerView.ViewH
             binding.tvDocFormat.setText(document.format.toUpperCase(Locale.getDefault()));
 
             boolean isSelected = isMultiSelectMode && document.fileUri != null && selectedDocuments.containsKey(document.fileUri);
-            if (isMultiSelectMode) {
+            bindSelectionState(isSelected, isMultiSelectMode);
+
+            // Safe thumbnail loading via PdfThumbnailLoader:
+            // Prevents "BitmapDrawable created with null Bitmap" and handles SecurityException gracefully
+            PdfThumbnailLoader.loadThumbnail(context, binding.ivDocThumb, document);
+        }
+
+        void bindSelectionState(boolean isSelected, boolean isMultiSelect) {
+            if (isMultiSelect) {
                 binding.cbSelected.setVisibility(View.VISIBLE);
                 binding.cbSelected.setChecked(isSelected);
                 binding.btnMore.setVisibility(View.GONE);
@@ -359,40 +426,66 @@ public class DocumentListAdapter extends RecyclerView.Adapter<RecyclerView.ViewH
                 binding.cardDocument.setStrokeColor(ContextCompat.getColor(context, R.color.border_subtle));
                 binding.cardDocument.setStrokeWidth((int) (1 * context.getResources().getDisplayMetrics().density));
             }
+        }
+    }
+    class DraftViewHolder extends RecyclerView.ViewHolder {
+        private final ItemDocumentDraftBinding binding;
+        private final SimpleDateFormat draftDateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault());
 
-            // 1. Clear ImageView at the start to prevent recycled views from showing wrong image
-            binding.ivDocThumb.setImageBitmap(null);
+        DraftViewHolder(ItemDocumentDraftBinding binding) {
+            super(binding.getRoot());
+            this.binding = binding;
+        }
 
-            // 2. Read the permanent thumbnail path from the database record
-            final String thumbnailPath = document.thumbnailPath;
-            if (thumbnailPath != null && !thumbnailPath.isEmpty()) {
-                binding.ivDocThumb.setTag(thumbnailPath);
+        void bind(DraftManager.DraftSession draft) {
+            String formattedDate = draftDateFormat.format(new Date(draft.timestamp));
+            binding.tvDraftTitle.setText("Draft - " + formattedDate);
 
-                // 3. Use single-thread Executor to decode in background using BitmapFactory.Options
-                imageExecutor.execute(() -> {
-                    Bitmap thumbnail = CacheManager.decodeSampledBitmap(thumbnailPath, 112, 112);
+            int pageCount = (draft.pagePaths != null) ? draft.pagePaths.size() : 1;
+            String pagesText = pageCount + (pageCount == 1 ? " page" : " pages") + " · Unsaved";
+            binding.tvDraftPages.setText(pagesText);
 
-                    // 4. Post decoded Bitmap back to main UI thread
-                    mainHandler.post(() -> {
-                        if (thumbnailPath.equals(binding.ivDocThumb.getTag())) {
-                            if (thumbnail != null) {
-                                binding.ivDocThumb.setScaleType(android.widget.ImageView.ScaleType.CENTER_CROP);
-                                binding.ivDocThumb.setImageBitmap(thumbnail);
-                            } else {
-                                binding.ivDocThumb.setScaleType(android.widget.ImageView.ScaleType.CENTER_INSIDE);
-                                binding.ivDocThumb.setImageResource(R.drawable.ic_pdf_placeholder);
+            String thumbPath = null;
+            if (draft.pagePaths != null && !draft.pagePaths.isEmpty()) {
+                thumbPath = draft.pagePaths.get(0);
+            } else if (draft.originalPagePaths != null && !draft.originalPagePaths.isEmpty()) {
+                thumbPath = draft.originalPagePaths.get(0);
+            }
+
+            binding.ivDraftThumb.setImageResource(R.drawable.bg_card);
+            if (thumbPath != null && new File(thumbPath).exists()) {
+                final String path = thumbPath;
+                binding.ivDraftThumb.setTag(path);
+                thumbnailExecutor.execute(() -> {
+                    Bitmap bmp = CacheManager.loadThumbnail(path, 160);
+                    if (bmp != null) {
+                        mainHandler.post(() -> {
+                            if (path.equals(binding.ivDraftThumb.getTag())) {
+                                binding.ivDraftThumb.setImageBitmap(bmp);
                             }
-                        } else {
-                            if (thumbnail != null && !thumbnail.isRecycled()) {
-                                thumbnail.recycle();
-                            }
-                        }
-                    });
+                        });
+                    }
                 });
+            }
+
+            binding.cardDraft.setOnClickListener(v -> {
+                if (listener != null) {
+                    listener.onDraftClick(draft);
+                }
+            });
+
+            binding.btnDeleteDraft.setOnClickListener(v -> {
+                if (listener != null) {
+                    listener.onDraftDeleteClick(draft);
+                }
+            });
+
+            if (isMultiSelectMode) {
+                binding.cardDraft.setAlpha(0.5f);
+                binding.btnDeleteDraft.setEnabled(false);
             } else {
-                binding.ivDocThumb.setTag(null);
-                binding.ivDocThumb.setScaleType(android.widget.ImageView.ScaleType.CENTER_INSIDE);
-                binding.ivDocThumb.setImageResource(R.drawable.ic_pdf_placeholder);
+                binding.cardDraft.setAlpha(1.0f);
+                binding.btnDeleteDraft.setEnabled(true);
             }
         }
     }

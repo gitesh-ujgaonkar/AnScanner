@@ -61,9 +61,18 @@
 -dontwarn com.google.mlkit.**
 -dontwarn com.google.android.gms.vision.**
 
-# ── TensorFlow Lite & Support ──────────────────────────────────────────────
+# ── Strip Debug & Verbose Logging from Release APK ────────────────────────
+-assumenosideeffects class android.util.Log {
+    public static boolean isLoggable(java.lang.String, int);
+    public static int v(...);
+    public static int d(...);
+}
+
+# ── TensorFlow Lite / Google LiteRT & Support ─────────────────────────────
 -keep class org.tensorflow.lite.** { *; }
 -dontwarn org.tensorflow.lite.**
+-keep class com.google.ai.edge.litert.** { *; }
+-dontwarn com.google.ai.edge.litert.**
 
 # ── OpenCV Android SDK ─────────────────────────────────────────────────────
 -keep class org.opencv.** { *; }

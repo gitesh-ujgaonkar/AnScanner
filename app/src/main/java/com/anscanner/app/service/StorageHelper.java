@@ -1,5 +1,6 @@
 package com.anscanner.app.service;
 
+import android.content.ClipData;
 import android.content.ContentResolver;
 import android.content.ContentValues;
 import android.content.Context;
@@ -295,6 +296,9 @@ public final class StorageHelper {
         shareIntent.setType(mimeType);
         shareIntent.putExtra(Intent.EXTRA_STREAM, contentUri);
         shareIntent.putExtra(Intent.EXTRA_SUBJECT, title);
+        if (contentUri != null) {
+            shareIntent.setClipData(ClipData.newRawUri(title, contentUri));
+        }
         shareIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
         return Intent.createChooser(shareIntent, "Share " + title);
     }

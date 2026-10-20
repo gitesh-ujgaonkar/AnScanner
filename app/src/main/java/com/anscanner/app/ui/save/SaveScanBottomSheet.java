@@ -22,6 +22,7 @@ import com.anscanner.app.service.CacheManager;
 import com.anscanner.app.service.PdfGenerator;
 import com.anscanner.app.service.ReviewHelper;
 import com.anscanner.app.service.StorageHelper;
+import com.anscanner.app.util.HapticHelper;
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment;
 import java.io.File;
 import java.text.SimpleDateFormat;
@@ -239,6 +240,7 @@ public class SaveScanBottomSheet extends BottomSheetDialogFragment {
                     final Uri finalUri = savedUri;
                     mainHandler.post(() -> {
                         if (!isAdded()) return;
+                        HapticHelper.confirmTap(binding != null ? binding.getRoot() : null);
                         Toast.makeText(appContext, R.string.save_success, Toast.LENGTH_SHORT).show();
                         Intent shareIntent = StorageHelper.createShareIntent(finalUri, isPdf ? "application/pdf" : "image/jpeg", fileName);
                         startActivity(Intent.createChooser(shareIntent, "Share via"));

@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/cardPage"
+    android:layout_width="match_parent"
+    android:layout_height="140dp"
+    android:layout_margin="5dp"
+    android:clickable="true"
+    android:focusable="true"
+    android:foreground="?attr/selectableItemBackground"
+    app:cardBackgroundColor="@color/surface_card"
+    app:cardCornerRadius="10dp"
+    app:cardElevation="2dp"
+    app:cardPreventCornerOverlap="false"
+    app:strokeColor="@color/accent_mint"
+    app:strokeWidth="2dp">
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+        <ImageView
+            android:id="@+id/ivThumbnail"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@color/surface_card"
+            android:contentDescription="@string/cd_page_thumbnail"
+            android:scaleType="fitCenter" />
+
+        <View
+            android:id="@+id/viewUnselectedOverlay"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="#40000000"
+            android:visibility="gone" />
+
+        <!-- Checkmark Badge Top-Right -->
+        <FrameLayout
+            android:id="@+id/flSelectionBadge"
+            android:layout_width="26dp"
+            android:layout_height="26dp"
+            android:layout_gravity="top|end"
+            android:layout_margin="6dp">
+
+            <ImageView
+                android:id="@+id/ivSelectionIndicator"
+                android:layout_width="22dp"
+                android:layout_height="22dp"
+                android:layout_gravity="center"
+                android:background="@drawable/bg_selection_circle_selected"
+                android:padding="3dp"
+                android:src="@drawable/ic_check"
+                app:tint="@color/text_on_accent"
+                android:contentDescription="@string/cd_select_page" />
+        </FrameLayout>
+
+        <!-- Page Number Pill Bottom-Start -->
+        <TextView
+            android:id="@+id/tvPageNumber"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom|start"
+            android:layout_margin="6dp"
+            android:background="@drawable/bg_title_pill"
+            android:paddingHorizontal="7dp"
+            android:paddingVertical="2dp"
+            android:textColor="@color/text_primary"
+            android:textSize="11sp"
+            android:fontFamily="sans-serif-medium"
+            tools:text="1" />
+
+        <!-- Loading Spinner for thumbnail rendering -->
+        <ProgressBar
+            android:id="@+id/pbThumbnailLoading"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:layout_gravity="center"
+            android:indeterminateTint="@color/accent_mint"
+            android:visibility="gone" />
+
+    </FrameLayout>
+</com.google.android.material.card.MaterialCardView>

@@ -1,0 +1,197 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="@color/surface_card"
+    android:paddingBottom="24dp">
+
+    <!-- Top Drag Handle -->
+    <View
+        android:layout_width="@dimen/bottom_sheet_drag_handle_width"
+        android:layout_height="@dimen/bottom_sheet_drag_handle_height"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginTop="12dp"
+        android:layout_marginBottom="14dp"
+        android:background="@drawable/bg_title_pill"
+        android:backgroundTint="@color/text_muted" />
+
+    <!-- Header: Title, Subtitle, and Close Button -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:paddingHorizontal="20dp"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="8dp">
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/tvSplitTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/split_title"
+                android:textAppearance="@style/TextAppearance.AnScanner.Headline"
+                android:textColor="@color/text_primary" />
+
+            <TextView
+                android:id="@+id/tvDocumentSubtitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:textAppearance="@style/TextAppearance.AnScanner.Subtitle"
+                android:textColor="@color/text_secondary"
+                android:ellipsize="middle"
+                android:singleLine="true"
+                tools:text="Document.pdf • 5 pages" />
+        </LinearLayout>
+
+        <ImageButton
+            android:id="@+id/btnClose"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/cd_close"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_close"
+            app:tint="@color/text_secondary" />
+    </LinearLayout>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/divider"
+        android:layout_marginBottom="10dp" />
+
+    <!-- Selection Bar: Counter and Select All Toggle -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:paddingHorizontal="20dp"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="8dp">
+
+        <TextView
+            android:id="@+id/tvSelectionCounter"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:fontFamily="sans-serif-medium"
+            android:textColor="@color/accent_mint"
+            android:textSize="13sp"
+            tools:text="3 of 5 pages selected" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnSelectAll"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:minHeight="0dp"
+            android:paddingHorizontal="10dp"
+            android:paddingVertical="0dp"
+            android:text="@string/export_images_select_all"
+            android:textColor="@color/text_primary"
+            android:textSize="12sp"
+            app:icon="@drawable/ic_select_all"
+            app:iconPadding="4dp"
+            app:iconSize="16dp"
+            app:iconTint="@color/accent_mint" />
+    </LinearLayout>
+
+    <!-- Pages Thumbnail Grid -->
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="16dp">
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/rvPages"
+            android:layout_width="match_parent"
+            android:layout_height="220dp"
+            android:clipToPadding="false"
+            android:paddingHorizontal="15dp"
+            android:scrollbars="vertical" />
+
+        <ProgressBar
+            android:id="@+id/pbGridLoading"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:layout_gravity="center"
+            android:indeterminateTint="@color/accent_mint"
+            android:visibility="gone" />
+    </FrameLayout>
+
+    <!-- Progress Layout (Visible during splitting/extracting) -->
+    <LinearLayout
+        android:id="@+id/layoutProgress"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingHorizontal="20dp"
+        android:layout_marginBottom="12dp"
+        android:visibility="gone">
+
+        <com.google.android.material.progressindicator.LinearProgressIndicator
+            android:id="@+id/progressSplit"
+            android:layout_width="match_parent"
+            android:layout_height="6dp"
+            android:indeterminate="true"
+            app:indicatorColor="@color/accent_mint"
+            app:trackColor="@color/surface_card"
+            app:trackCornerRadius="3dp" />
+
+        <TextView
+            android:id="@+id/tvProgressStatus"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:textAppearance="@style/TextAppearance.AnScanner.Caption"
+            android:textColor="@color/text_secondary"
+            android:text="@string/split_progress_extracting" />
+    </LinearLayout>
+
+    <!-- Action Buttons -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingHorizontal="20dp">
+
+        <!-- Primary Action: Extract Selected Pages -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnExtractPages"
+            style="@style/Widget.AnScanner.Button.Primary"
+            android:layout_width="match_parent"
+            android:layout_height="50dp"
+            android:text="@string/split_extract_selected"
+            app:icon="@drawable/ic_split_pdf"
+            app:iconTint="@color/text_on_accent"
+            app:iconGravity="textStart"
+            app:iconPadding="8dp" />
+
+        <!-- Secondary Action: Split into Single Pages -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnSplitAll"
+            style="@style/Widget.Material3.Button.OutlinedButton"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_marginTop="8dp"
+            android:text="@string/split_all_single"
+            android:textColor="@color/text_primary"
+            app:icon="@drawable/ic_organize_pages"
+            app:iconTint="@color/text_primary"
+            app:iconGravity="textStart"
+            app:iconPadding="8dp"
+            app:strokeColor="@color/border_subtle" />
+
+    </LinearLayout>
+
+</LinearLayout>

@@ -60,6 +60,13 @@ public class DocumentOverlayView extends View {
     // Target corner positions (in screen coordinates)
     private PointF[] targetCorners = null;
 
+    // Tap-to-focus animation and state
+    private PointF focusPoint = null;
+    private float focusRingRadius = 0f;
+    private int focusRingAlpha = 0;
+    private android.animation.ValueAnimator focusAnimator = null;
+    private final Paint focusRingPaint;
+
     // Analysis image dimensions (for coordinate mapping)
     private int analysisWidth = 0;
     private int analysisHeight = 0;
@@ -135,6 +142,12 @@ public class DocumentOverlayView extends View {
         idBadgeTextPaint.setFakeBoldText(true);
 
         idCardPath = new Path();
+
+        // Focus indicator styling
+        focusRingPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        focusRingPaint.setColor(ContextCompat.getColor(context, R.color.accent_mint));
+        focusRingPaint.setStyle(Paint.Style.STROKE);
+        focusRingPaint.setStrokeWidth(2.5f * density);
     }
 
     /**
@@ -306,12 +319,9 @@ public class DocumentOverlayView extends View {
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
 
-        if (scanMode == MODE_ID_CARD) {
+                if (scanMode == MODE_ID_CARD) {
             drawIdCardGuide(canvas);
-            return;
-        }
-
-        if (currentCorners != null && targetCorners != null) {
+        } else if (currentCorners != null && targetCorners != null) {
             // Smooth interpolation toward target
             for (int i = 0; i < 4; i++) {
                 currentCorners[i].x += (targetCorners[i].x - currentCorners[i].x) * SMOOTH_FACTOR;
@@ -359,6 +369,12 @@ public class DocumentOverlayView extends View {
         } else {
             // No document detected — draw a light scrim
             canvas.drawRect(0, 0, getWidth(), getHeight(), scrimPaint);
+        }
+        // Draw Tap-to-Focus visual ring indicator
+        if (focusPoint != null && focusRingAlpha > 0) {
+            focusRingPaint.setAlpha(focusRingAlpha);
+            canvas.drawCircle(focusPoint.x, focusPoint.y, focusRingRadius, focusRingPaint);
+            canvas.drawCircle(focusPoint.x, focusPoint.y, 2.5f * density, focusRingPaint);
         }
     }
 
@@ -410,5 +426,61 @@ public class DocumentOverlayView extends View {
         canvas.drawLine(left, bottom - cardRadius, left, bottom - bracketLen, idGuideBracketPaint);
 
 
+    }
+    public void showFocusIndicator(float x, float y) {
+        focusPoint = new PointF(x, y);
+        if (focusAnimator != null && focusAnimator.isRunning()) {
+            focusAnimator.cancel();
+        }
+        final float startRadius = 45f * density;
+        final float endRadius = 30f * density;
+        focusAnimator = android.animation.ValueAnimator.ofFloat(0f, 1f);
+        focusAnimator.setDuration(800);
+        focusAnimator.setInterpolator(new android.view.animation.DecelerateInterpolator());
+        focusAnimator.addUpdateListener(animation -> {
+            float frac = (float) animation.getAnimatedValue();
+            focusRingRadius = startRadius - (startRadius - endRadius) * frac;
+            if (frac < 0.6f) {
+                focusRingAlpha = 255;
+            } else {
+                focusRingAlpha = Math.round(255 * (1f - (frac - 0.6f) / 0.4f));
+            }
+            postInvalidateOnAnimation();
+        });
+        focusAnimator.addListener(new android.animation.AnimatorListenerAdapter() {
+            @Override
+            public void onAnimationEnd(android.animation.Animator animation) {
+                focusPoint = null;
+                focusRingAlpha = 0;
+                postInvalidateOnAnimation();
+            }
+        });
+        focusAnimator.start();
+    }
+
+    public PointF getDetectedCenterPoint() {
+        if (scanMode == MODE_ID_CARD && !idCardRect.isEmpty()) {
+            return new PointF(idCardRect.centerX(), idCardRect.centerY());
+        }
+        if (currentCorners != null && currentCorners.length == 4) {
+            float sumX = 0f;
+            float sumY = 0f;
+            for (PointF p : currentCorners) {
+                sumX += p.x;
+                sumY += p.y;
+            }
+            return new PointF(sumX / 4f, sumY / 4f);
+        }
+        int w = getWidth();
+        int h = getHeight();
+        if (w > 0 && h > 0) {
+            return new PointF(w / 2f, h / 2f);
+        }
+        return null;
+    }
+
+    @Override
+    public boolean performClick() {
+        return super.performClick();
     }
 }

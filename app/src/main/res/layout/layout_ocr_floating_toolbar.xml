@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/cardOcrToolbar"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    app:cardBackgroundColor="@color/surface_elevated"
+    app:cardCornerRadius="22dp"
+    app:cardElevation="8dp"
+    app:strokeColor="@color/divider"
+    app:strokeWidth="1dp">
+
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingHorizontal="6dp"
+        android:paddingVertical="4dp">
+
+        <!-- Copy Selected Button -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnFloatingCopy"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:paddingHorizontal="8dp"
+            android:text="@string/ocr_copy"
+            android:textColor="@color/text_primary"
+            android:textSize="12sp"
+            app:cornerRadius="18dp"
+            app:icon="@drawable/ic_copy"
+            app:iconSize="16dp"
+            app:iconTint="@color/accent_mint" />
+
+        <View
+            android:layout_width="1dp"
+            android:layout_height="20dp"
+            android:background="@color/divider" />
+
+        <!-- Select All Button -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnFloatingSelectAll"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:paddingHorizontal="8dp"
+            android:text="@string/ocr_select_all"
+            android:textColor="@color/text_primary"
+            android:textSize="12sp"
+            app:cornerRadius="18dp"
+            app:icon="@drawable/ic_select_all"
+            app:iconSize="16dp"
+            app:iconTint="@color/accent_mint" />
+
+        <View
+            android:layout_width="1dp"
+            android:layout_height="20dp"
+            android:background="@color/divider" />
+
+        <!-- Share Selected Button -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnFloatingShare"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:paddingHorizontal="8dp"
+            android:text="@string/ocr_share"
+            android:textColor="@color/text_primary"
+            android:textSize="12sp"
+            app:cornerRadius="18dp"
+            app:icon="@drawable/ic_share"
+            app:iconSize="16dp"
+            app:iconTint="@color/accent_mint" />
+
+        <View
+            android:layout_width="1dp"
+            android:layout_height="20dp"
+            android:background="@color/divider" />
+
+        <!-- View All Text Modal Button -->
+        <ImageButton
+            android:id="@+id/btnFloatingViewAll"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/ocr_view_extracted_text"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_ocr_text"
+            app:tint="@color/accent_mint" />
+
+    </LinearLayout>
+
+</com.google.android.material.card.MaterialCardView>

@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/cardMergeDoc"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginHorizontal="20dp"
+    android:layout_marginVertical="4dp"
+    app:cardBackgroundColor="@color/surface_card"
+    app:cardCornerRadius="10dp"
+    app:cardElevation="1dp"
+    app:strokeColor="@color/border_subtle"
+    app:strokeWidth="1dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:padding="12dp">
+
+        <!-- Document Type Icon -->
+        <ImageView
+            android:id="@+id/ivDocIcon"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:background="@drawable/bg_title_pill"
+            android:padding="8dp"
+            android:src="@drawable/ic_library"
+            app:tint="@color/accent_mint"
+            android:contentDescription="@string/cd_page_thumbnail" />
+
+        <!-- Title & Subtitle Info -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
+            android:layout_marginEnd="8dp"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/tvDocTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:ellipsize="middle"
+                android:fontFamily="sans-serif-medium"
+                android:singleLine="true"
+                android:textColor="@color/text_primary"
+                android:textSize="14sp"
+                tools:text="Invoice_March_2026.pdf" />
+
+            <TextView
+                android:id="@+id/tvDocDetails"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:textColor="@color/text_secondary"
+                android:textSize="12sp"
+                tools:text="3 pages • 1.2 MB" />
+        </LinearLayout>
+
+        <!-- Remove Item Button -->
+        <ImageButton
+            android:id="@+id/btnRemove"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/cd_delete_page"
+            android:padding="6dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_close"
+            app:tint="@color/text_muted" />
+
+        <!-- Drag Reorder Handle -->
+        <ImageView
+            android:id="@+id/ivDragHandle"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_marginStart="4dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/cd_drag_page"
+            android:padding="6dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_drag_handle"
+            app:tint="@color/text_secondary" />
+
+    </LinearLayout>
+</com.google.android.material.card.MaterialCardView>

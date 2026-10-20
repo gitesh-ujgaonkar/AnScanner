@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:paddingHorizontal="16dp"
+    android:paddingTop="12dp"
+    android:paddingBottom="24dp">
+
+    <!-- Bottom Sheet Drag Handle -->
+    <View
+        android:layout_width="36dp"
+        android:layout_height="4dp"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginBottom="12dp"
+        android:background="@drawable/ic_drag_handle"
+        android:backgroundTint="@color/text_secondary" />
+
+    <!-- Header Title & Action Buttons -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:layout_marginBottom="12dp">
+
+        <TextView
+            android:id="@+id/tvBottomSheetTitle"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/ocr_title"
+            android:textColor="@color/text_primary"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnBottomSheetCopy"
+            style="@style/Widget.Material3.Button.TonalButton"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:layout_marginEnd="6dp"
+            android:paddingHorizontal="10dp"
+            android:text="@string/ocr_dialog_copy"
+            android:textSize="12sp"
+            app:cornerRadius="18dp"
+            app:icon="@drawable/ic_copy"
+            app:iconSize="14dp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnBottomSheetShare"
+            style="@style/Widget.Material3.Button.TonalButton"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:layout_marginEnd="6dp"
+            android:paddingHorizontal="10dp"
+            android:text="@string/ocr_dialog_share"
+            android:textSize="12sp"
+            app:cornerRadius="18dp"
+            app:icon="@drawable/ic_share"
+            app:iconSize="14dp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnBottomSheetEdit"
+            style="@style/Widget.Material3.Button"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:backgroundTint="@color/accent_mint"
+            android:paddingHorizontal="10dp"
+            android:text="@string/ocr_edit"
+            android:textColor="@color/text_on_accent"
+            android:textSize="12sp"
+            app:cornerRadius="18dp"
+            app:icon="@drawable/ic_edit"
+            app:iconSize="14dp"
+            app:iconTint="@color/text_on_accent" />
+
+    </LinearLayout>
+
+    <!-- Scrollable Extracted Text View -->
+    <androidx.core.widget.NestedScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:maxHeight="400dp"
+        android:fillViewport="true">
+
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:padding="8dp">
+
+            <TextView
+                android:id="@+id/tvBottomSheetContent"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:lineSpacingExtra="4dp"
+                android:textColor="@color/text_primary"
+                android:textIsSelectable="true"
+                android:textSize="14sp" />
+
+            <EditText
+                android:id="@+id/etBottomSheetContent"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_card"
+                android:gravity="top|start"
+                android:inputType="textMultiLine"
+                android:lineSpacingExtra="4dp"
+                android:minLines="6"
+                android:padding="12dp"
+                android:textColor="@color/text_primary"
+                android:textSize="14sp"
+                android:visibility="gone" />
+
+        </FrameLayout>
+
+    </androidx.core.widget.NestedScrollView>
+
+</LinearLayout>

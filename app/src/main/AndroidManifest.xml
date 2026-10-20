@@ -20,7 +20,7 @@
 
     <application
         android:name=".AnScannerApp"
-        android:allowBackup="true"
+        android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:label="@string/app_name"
@@ -43,7 +43,7 @@
         <!-- ── Main Activity Alias / Router ──────────────────────────── -->
         <activity
             android:name=".MainActivity"
-            android:exported="true"
+            android:exported="false"
             android:theme="@style/Theme.AnScanner.Splash" />
 
         <!-- ── Screen 0: Onboarding ──────────────────────────────────── -->

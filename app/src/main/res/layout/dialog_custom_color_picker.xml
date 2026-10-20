@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="20dp">
+
+    <!-- Color Preview & Hex Display Row -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingBottom="16dp">
+
+        <!-- Live Color Preview Box -->
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="2dp"
+            app:strokeColor="@color/border_subtle"
+            app:strokeWidth="1.5dp">
+            <View
+                android:id="@+id/viewColorPreview"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@color/accent_mint" />
+        </com.google.android.material.card.MaterialCardView>
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="14dp"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Selected Color"
+                android:textColor="@color/text_secondary"
+                android:textSize="12sp" />
+
+            <TextView
+                android:id="@+id/tvHexCode"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:fontFamily="monospace"
+                android:text="#FF10B981"
+                android:textColor="@color/text_primary"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- 1. Hue Slider (Rainbow Gradient) -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Hue"
+        android:textColor="@color/text_secondary"
+        android:textSize="12sp" />
+
+    <SeekBar
+        android:id="@+id/seekBarHue"
+        android:layout_width="match_parent"
+        android:layout_height="32dp"
+        android:max="360"
+        android:progress="160"
+        android:progressTint="@android:color/transparent"
+        android:thumbTint="@color/accent_mint" />
+
+    <!-- 2. Saturation Slider -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="Saturation"
+        android:textColor="@color/text_secondary"
+        android:textSize="12sp" />
+
+    <SeekBar
+        android:id="@+id/seekBarSaturation"
+        android:layout_width="match_parent"
+        android:layout_height="32dp"
+        android:max="100"
+        android:progress="80"
+        android:thumbTint="@color/accent_mint" />
+
+    <!-- 3. Brightness / Value Slider -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="Brightness"
+        android:textColor="@color/text_secondary"
+        android:textSize="12sp" />
+
+    <SeekBar
+        android:id="@+id/seekBarValue"
+        android:layout_width="match_parent"
+        android:layout_height="32dp"
+        android:max="100"
+        android:progress="90"
+        android:thumbTint="@color/accent_mint" />
+
+    <!-- 4. Opacity / Alpha Slider -->
+    <TextView
+        android:id="@+id/tvAlphaLabel"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="Opacity / Alpha"
+        android:textColor="@color/text_secondary"
+        android:textSize="12sp" />
+
+    <SeekBar
+        android:id="@+id/seekBarAlpha"
+        android:layout_width="match_parent"
+        android:layout_height="32dp"
+        android:max="255"
+        android:progress="255"
+        android:thumbTint="@color/accent_mint" />
+
+    <!-- Preset Swatches Header -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:layout_marginBottom="8dp"
+        android:text="Quick Presets"
+        android:textColor="@color/text_muted"
+        android:textSize="11sp" />
+
+    <!-- Preset Swatches Container -->
+    <LinearLayout
+        android:id="@+id/layoutPresetSwatches"
+        android:layout_width="match_parent"
+        android:layout_height="36dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal" />
+
+</LinearLayout>

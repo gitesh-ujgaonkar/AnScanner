@@ -33,6 +33,12 @@ import androidx.camera.core.ImageCapture;
 import androidx.camera.core.ImageCaptureException;
 import androidx.camera.core.ImageProxy;
 import androidx.camera.core.Preview;
+import androidx.camera.core.FocusMeteringAction;
+import androidx.camera.core.MeteringPoint;
+import androidx.camera.core.MeteringPointFactory;
+import androidx.camera.core.resolutionselector.AspectRatioStrategy;
+import androidx.camera.core.resolutionselector.ResolutionSelector;
+import androidx.camera.core.resolutionselector.ResolutionStrategy;
 import androidx.camera.lifecycle.ProcessCameraProvider;
 import androidx.core.content.ContextCompat;
 
@@ -47,6 +53,8 @@ import com.anscanner.app.service.CrashManager;
 import com.anscanner.app.service.PdfGenerator;
 import com.anscanner.app.service.StorageHelper;
 import com.anscanner.app.ui.crop.CropPreviewActivity;
+import com.anscanner.app.model.draft.DraftManager;
+import com.anscanner.app.util.HapticHelper;
 import com.anscanner.app.ui.editor.UnifiedEditorActivity;
 import com.anscanner.app.ui.library.LibraryActivity;
 import com.anscanner.app.ui.review.ReviewScanActivity;
@@ -253,6 +261,8 @@ public class CameraActivity extends AppCompatActivity {
         // Check and prompt to upload crash log if a previous crash occurred
         CrashManager.checkAndPromptCrashLog(this);
 
+        // DO NOT force test mode on this device:
+        // RequestConfiguration.Builder().setTestDeviceIds(...)
         MobileAds.initialize(this, initializationStatus -> {});
         AdRequest adRequest = new AdRequest.Builder().build();
         binding.adView.loadAd(adRequest);
@@ -352,7 +362,24 @@ public class CameraActivity extends AppCompatActivity {
         binding.btnIdCardRetakeFront.setOnClickListener(v -> resetIdCardToStep1());
 
         // Mode selector listener
-        binding.toggleMode.addOnButtonCheckedListener((group, checkedId, isChecked) -> {
+                // Tap-to-focus & document metering
+        android.view.GestureDetector gestureDetector = new android.view.GestureDetector(this,
+                new android.view.GestureDetector.SimpleOnGestureListener() {
+                    @Override
+                    public boolean onSingleTapUp(android.view.MotionEvent e) {
+                        triggerFocusAndMetering(e.getX(), e.getY(), true);
+                        return true;
+                    }
+                });
+        binding.overlayView.setOnTouchListener((v, event) -> {
+            gestureDetector.onTouchEvent(event);
+            if (event.getAction() == android.view.MotionEvent.ACTION_UP) {
+                v.performClick();
+            }
+            return true;
+        });
+
+binding.toggleMode.addOnButtonCheckedListener((group, checkedId, isChecked) -> {
             if (!isChecked) return;
             if (checkedId == R.id.btnModeDocument) {
                 switchScanMode(SCAN_MODE_DOCUMENT);
@@ -422,6 +449,7 @@ public class CameraActivity extends AppCompatActivity {
             setResult(RESULT_OK, resultIntent);
             finish();
         } else {
+            DraftManager.clearDraft(this);
             Intent editorIntent = new Intent(this, UnifiedEditorActivity.class);
             editorIntent.putStringArrayListExtra(UnifiedEditorActivity.EXTRA_PAGE_PATHS, new ArrayList<>(batchPagePaths));
             editorIntent.putStringArrayListExtra(UnifiedEditorActivity.EXTRA_ORIGINAL_PAGE_PATHS, new ArrayList<>(batchPagePaths));
@@ -454,6 +482,7 @@ public class CameraActivity extends AppCompatActivity {
             setResult(RESULT_OK, resultIntent);
             finish();
         } else {
+            DraftManager.clearDraft(this);
             // Direct to ReviewScanActivity with the clean A4 ID composite
             Intent reviewIntent = new Intent(CameraActivity.this, ReviewScanActivity.class);
             ArrayList<String> pages = new ArrayList<>();
@@ -495,27 +524,8 @@ public class CameraActivity extends AppCompatActivity {
         if (appUpdateHelper != null) {
             appUpdateHelper.onResume();
         }
-        checkDraftBanner();
     }
 
-    private void checkDraftBanner() {
-        if (binding == null || binding.layoutDraftBanner == null) return;
-        boolean hasDraft = com.anscanner.app.model.draft.DraftManager.hasActiveDraft(this);
-        if (hasDraft) {
-            binding.layoutDraftBanner.getRoot().setVisibility(View.VISIBLE);
-            binding.layoutDraftBanner.btnDraftResume.setOnClickListener(v -> {
-                Intent resumeIntent = com.anscanner.app.model.draft.DraftManager.createResumeIntent(this);
-                startActivity(resumeIntent);
-            });
-            binding.layoutDraftBanner.btnDraftDiscard.setOnClickListener(v -> {
-                com.anscanner.app.model.draft.DraftManager.clearDraft(this);
-                binding.layoutDraftBanner.getRoot().setVisibility(View.GONE);
-                Toast.makeText(this, R.string.draft_discarded, Toast.LENGTH_SHORT).show();
-            });
-        } else {
-            binding.layoutDraftBanner.getRoot().setVisibility(View.GONE);
-        }
-    }
 
     private void setupInAppUpdate() {
         boolean triggeredFromNotification = getIntent() != null
@@ -613,15 +623,31 @@ public class CameraActivity extends AppCompatActivity {
                         ? binding.previewView.getDisplay().getRotation()
                         : getWindowManager().getDefaultDisplay().getRotation();
 
-                // 1) Preview
+                // 1) Preview: lightweight 1080p strategy to preserve 60fps viewfinder
+                ResolutionSelector previewResolutionSelector = new ResolutionSelector.Builder()
+                        .setResolutionStrategy(new ResolutionStrategy(
+                                new Size(1440, 1080),
+                                ResolutionStrategy.FALLBACK_RULE_CLOSEST_LOWER_THEN_HIGHER
+                        ))
+                        .setAspectRatioStrategy(AspectRatioStrategy.RATIO_4_3_FALLBACK_AUTO_STRATEGY)
+                        .build();
+
                 Preview preview = new Preview.Builder()
+                        .setResolutionSelector(previewResolutionSelector)
                         .setTargetRotation(rotation)
                         .build();
                 preview.setSurfaceProvider(binding.previewView.getSurfaceProvider());
 
-                // 2) ImageCapture (full resolution for final scan)
+                // 2) ImageCapture: maximum sensor quality & highest hardware resolution
+                ResolutionSelector captureResolutionSelector = new ResolutionSelector.Builder()
+                        .setAllowedResolutionMode(ResolutionSelector.PREFER_HIGHER_RESOLUTION_OVER_CAPTURE_RATE)
+                        .setResolutionStrategy(ResolutionStrategy.HIGHEST_AVAILABLE_STRATEGY)
+                        .setAspectRatioStrategy(AspectRatioStrategy.RATIO_4_3_FALLBACK_AUTO_STRATEGY)
+                        .build();
+
                 imageCapture = new ImageCapture.Builder()
                         .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
+                        .setResolutionSelector(captureResolutionSelector)
                         .setTargetRotation(rotation)
                         .build();
 
@@ -640,6 +666,9 @@ public class CameraActivity extends AppCompatActivity {
                 provider.unbindAll();
                 camera = provider.bindToLifecycle(
                         this, selector, preview, imageCapture, imageAnalysis);
+
+                // Initial autofocus & auto-exposure metering when preview starts
+                binding.previewView.post(this::triggerDocumentMetering);
 
             } catch (ExecutionException | InterruptedException e) {
                 Toast.makeText(this, R.string.camera_init_error, Toast.LENGTH_SHORT).show();
@@ -732,6 +761,40 @@ public class CameraActivity extends AppCompatActivity {
         }
     }
 
+    // ── Tap-to-Focus & Document Metering ──────────────────────────────────
+
+    private void triggerDocumentMetering() {
+        if (binding == null || camera == null) return;
+        android.graphics.PointF center = binding.overlayView.getDetectedCenterPoint();
+        if (center != null) {
+            triggerFocusAndMetering(center.x, center.y, false);
+        } else {
+            float cx = binding.previewView.getWidth() / 2f;
+            float cy = binding.previewView.getHeight() / 2f;
+            if (cx > 0 && cy > 0) {
+                triggerFocusAndMetering(cx, cy, false);
+            }
+        }
+    }
+
+    private void triggerFocusAndMetering(float x, float y, boolean showIndicator) {
+        if (camera == null || binding == null) return;
+        try {
+            MeteringPointFactory factory = binding.previewView.getMeteringPointFactory();
+            MeteringPoint point = factory.createPoint(x, y);
+            FocusMeteringAction action = new FocusMeteringAction.Builder(
+                    point, FocusMeteringAction.FLAG_AF | FocusMeteringAction.FLAG_AE)
+                    .setAutoCancelDuration(3, java.util.concurrent.TimeUnit.SECONDS)
+                    .build();
+            camera.getCameraControl().startFocusAndMetering(action);
+            if (showIndicator && binding.overlayView != null) {
+                binding.overlayView.showFocusIndicator(x, y);
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "Focus and metering error", e);
+        }
+    }
+
     // ── Capture ──────────────────────────────────────────────────────────
 
     private void takePhoto() {
@@ -740,6 +803,9 @@ public class CameraActivity extends AppCompatActivity {
         // Snapshot current mode and detected corners before capture
         final int mode = currentScanMode;
         final Point[] captureCorners = lastDetectedCorners;
+
+        // Trigger autofocus and auto-exposure on the detected document bounds or center before capture
+        triggerDocumentMetering();
 
         imageCapture.takePicture(ContextCompat.getMainExecutor(this),
                 new ImageCapture.OnImageCapturedCallback() {
@@ -976,6 +1042,7 @@ public class CameraActivity extends AppCompatActivity {
                         setResult(RESULT_OK, resultIntent);
                         finish();
                     } else {
+                        DraftManager.clearDraft(CameraActivity.this);
                         Intent editorIntent = new Intent(CameraActivity.this, UnifiedEditorActivity.class);
                         editorIntent.putStringArrayListExtra(UnifiedEditorActivity.EXTRA_PAGE_PATHS, savedPaths);
                         editorIntent.putStringArrayListExtra(UnifiedEditorActivity.EXTRA_ORIGINAL_PAGE_PATHS, savedPaths);
@@ -1048,6 +1115,9 @@ public class CameraActivity extends AppCompatActivity {
                 intent.putExtra(EXTRA_DETECTED_CORNERS, cornerArray);
             }
 
+            if (!isAppendMode && !isAddingPage) {
+                DraftManager.clearDraft(CameraActivity.this);
+            }
             if (isAddingPage) {
                 // Launch for result — CropPreview will setResult() back,
                 // cropForResultLauncher relays it to ReviewScanActivity

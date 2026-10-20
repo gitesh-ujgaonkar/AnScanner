@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/cardPage"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_margin="5dp"
+    app:cardBackgroundColor="@color/surface_card"
+    app:cardCornerRadius="10dp"
+    app:cardElevation="3dp"
+    app:strokeColor="@color/divider"
+    app:strokeWidth="1dp">
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:padding="6dp">
+
+        <!-- Page Preview Image Container -->
+        <FrameLayout
+            android:id="@+id/containerThumbnail"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:background="@color/background_secondary"
+            app:layout_constraintDimensionRatio="1:1.35"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent">
+
+            <ImageView
+                android:id="@+id/ivThumbnail"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:scaleType="fitCenter"
+                android:contentDescription="@string/cd_select_page"
+                tools:background="#FFFFFF" />
+
+            <ProgressBar
+                android:id="@+id/pbLoading"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:layout_gravity="center"
+                android:indeterminateTint="@color/accent_mint" />
+
+            <!-- Page Number Badge -->
+            <TextView
+                android:id="@+id/tvPageBadge"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="top|start"
+                android:layout_margin="4dp"
+                android:background="@drawable/bg_title_pill"
+                android:paddingHorizontal="7dp"
+                android:paddingVertical="2dp"
+                android:textColor="@color/accent_mint"
+                android:textSize="11sp"
+                android:textStyle="bold"
+                tools:text="Page 1" />
+
+            <!-- Drag Handle Hint Icon -->
+            <ImageView
+                android:id="@+id/ivDragHandle"
+                android:layout_width="20dp"
+                android:layout_height="20dp"
+                android:layout_gravity="top|end"
+                android:layout_margin="4dp"
+                android:src="@drawable/ic_drag_handle"
+                android:contentDescription="@string/cd_drag_page"
+                app:tint="@color/text_secondary"
+                android:alpha="0.8" />
+        </FrameLayout>
+
+        <!-- Subtle Action Buttons Bar -->
+        <LinearLayout
+            android:id="@+id/layoutPageActions"
+            android:layout_width="0dp"
+            android:layout_height="36dp"
+            android:layout_marginTop="4dp"
+            android:gravity="center"
+            android:orientation="horizontal"
+            app:layout_constraintTop_toBottomOf="@id/containerThumbnail"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent">
+
+            <!-- Rotate 90 deg Button -->
+            <ImageButton
+                android:id="@+id/btnRotate"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:layout_marginEnd="6dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/cd_rotate_page"
+                android:scaleType="centerInside"
+                android:src="@drawable/ic_rotate"
+                app:tint="@color/text_primary" />
+
+            <!-- Delete Page Button -->
+            <ImageButton
+                android:id="@+id/btnDelete"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:layout_marginStart="6dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/cd_delete_page"
+                android:scaleType="centerInside"
+                android:src="@drawable/ic_delete"
+                app:tint="?attr/colorError" />
+        </LinearLayout>
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+</com.google.android.material.card.MaterialCardView>

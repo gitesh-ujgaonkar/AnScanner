@@ -124,17 +124,20 @@ public final class ImageProcessor {
 
         Mat srcMat = new Mat();
         Mat warped = new Mat();
+        MatOfPoint2f srcPts = null;
+        MatOfPoint2f dstPts = null;
+        Mat transform = null;
 
         try {
             Utils.bitmapToMat(src, srcMat);
 
             // Source points (ordered document corners: TL, TR, BR, BL)
-            MatOfPoint2f srcPts = new MatOfPoint2f(
+            srcPts = new MatOfPoint2f(
                     ordered[0], ordered[1], ordered[2], ordered[3]
             );
 
             // Destination points: flat rectangle [0, 0, target_width, target_height]
-            MatOfPoint2f dstPts = new MatOfPoint2f(
+            dstPts = new MatOfPoint2f(
                     new Point(0, 0),
                     new Point(targetWidth, 0),
                     new Point(targetWidth, targetHeight),
@@ -142,7 +145,7 @@ public final class ImageProcessor {
             );
 
             // Compute and apply the perspective transform
-            Mat transform = Imgproc.getPerspectiveTransform(srcPts, dstPts);
+            transform = Imgproc.getPerspectiveTransform(srcPts, dstPts);
             Imgproc.warpPerspective(srcMat, warped, transform,
                     new Size(targetWidth, targetHeight),
                     Imgproc.INTER_LINEAR,
@@ -153,16 +156,21 @@ public final class ImageProcessor {
             Bitmap result = Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888);
             Utils.matToBitmap(warped, result);
 
-            srcPts.release();
-            dstPts.release();
-            transform.release();
-
             return result;
 
         } catch (Exception e) {
             Log.e(TAG, "Perspective warp failed", e);
             return src.copy(src.getConfig(), true);
         } finally {
+            if (srcPts != null) {
+                srcPts.release();
+            }
+            if (dstPts != null) {
+                dstPts.release();
+            }
+            if (transform != null) {
+                transform.release();
+            }
             srcMat.release();
             warped.release();
         }
@@ -220,28 +228,29 @@ public final class ImageProcessor {
         int h = src.getHeight();
         if (w <= 0 || h <= 0) return null;
 
-        int[] pixels = new int[w * h];
-        src.getPixels(pixels, 0, w, 0, 0, w, h);
-
         // Step 1: Downsample by 4x to estimate local paper background illumination.
         // We take the max luminance in each 4x4 block to sample the paper background
         // while ignoring dark text pixels (preventing halos around text).
+        // Uses a small 4-row band buffer (~64KB for a 4K image) to prevent allocating a full-frame 48MB primitive array.
         int dw = (w + 3) / 4;
         int dh = (h + 3) / 4;
         int[] bgGrid = new int[dw * dh];
+        int[] bandPixels = new int[w * 4];
 
         for (int gy = 0; gy < dh; gy++) {
             int yStart = gy * 4;
-            int yEnd = Math.min(h, yStart + 4);
+            int bandH = Math.min(h, yStart + 4) - yStart;
+            src.getPixels(bandPixels, 0, w, 0, yStart, w, bandH);
+
             int gRowOffset = gy * dw;
             for (int gx = 0; gx < dw; gx++) {
                 int xStart = gx * 4;
                 int xEnd = Math.min(w, xStart + 4);
                 int maxLuma = 0;
-                for (int py = yStart; py < yEnd; py++) {
+                for (int py = 0; py < bandH; py++) {
                     int pRowOffset = py * w;
                     for (int px = xStart; px < xEnd; px++) {
-                        int c = pixels[pRowOffset + px];
+                        int c = bandPixels[pRowOffset + px];
                         int r = (c >> 16) & 0xFF;
                         int g = (c >> 8) & 0xFF;
                         int b = c & 0xFF;
@@ -326,16 +335,20 @@ public final class ImageProcessor {
             }
         }
 
-        // Step 4: Bilinear upscale background illumination and normalize RGB
-        int[] outPixels = new int[w * h];
+        // Step 4: Bilinear upscale background illumination and normalize RGB row-by-row
+        // Uses a single reused row buffer (~16KB for a 4K image) to prevent allocating a full-frame 48MB primitive array.
+        Bitmap result = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
+        int[] rowPixels = new int[w];
+
         for (int y = 0; y < h; y++) {
+            src.getPixels(rowPixels, 0, w, 0, y, w, 1);
+
             float gy = (float) y / 4.0f;
             int y0 = (int) gy;
             int y1 = Math.min(dh - 1, y0 + 1);
             float fy = gy - y0;
             int y0Offset = y0 * dw;
             int y1Offset = y1 * dw;
-            int pRowOffset = y * w;
 
             for (int x = 0; x < w; x++) {
                 float gx = (float) x / 4.0f;
@@ -352,7 +365,7 @@ public final class ImageProcessor {
                         + (b01 * (1.0f - fx) + b11 * fx) * fy);
                 if (bgLuma < 1) bgLuma = 1;
 
-                int c = pixels[pRowOffset + x];
+                int c = rowPixels[x];
                 int r = (c >> 16) & 0xFF;
                 int g = (c >> 8) & 0xFF;
                 int b = c & 0xFF;
@@ -368,20 +381,20 @@ public final class ImageProcessor {
 
                 // Paper pixels (>215) straight to pure white
                 if (rBoost >= 254 && gBoost >= 254 && bBoost >= 254) {
-                    outPixels[pRowOffset + x] = 0xFFFFFFFF;
+                    rowPixels[x] = 0xFFFFFFFF;
                 } else {
                     // Boost saturation ~1.25x for colored inks, highlighters, and stamps
                     int gray = (rBoost * 77 + gBoost * 150 + bBoost * 29) >> 8;
                     int rFinal = Math.max(0, Math.min(255, gray + (int) ((rBoost - gray) * 1.25f)));
                     int gFinal = Math.max(0, Math.min(255, gray + (int) ((gBoost - gray) * 1.25f)));
                     int bFinal = Math.max(0, Math.min(255, gray + (int) ((bBoost - gray) * 1.25f)));
-                    outPixels[pRowOffset + x] = 0xFF000000 | (rFinal << 16) | (gFinal << 8) | bFinal;
+                    rowPixels[x] = 0xFF000000 | (rFinal << 16) | (gFinal << 8) | bFinal;
                 }
             }
+
+            result.setPixels(rowPixels, 0, w, 0, y, w, 1);
         }
 
-        Bitmap result = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
-        result.setPixels(outPixels, 0, w, 0, 0, w, h);
         return result;
     }
 

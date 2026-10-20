@@ -43,6 +43,8 @@ public class SettingsFragment extends Fragment {
     private SharedPreferences prefs;
     private ExecutorService executor;
     private AppUpdateHelper appUpdateHelper;
+    private int versionTapCount = 0;
+    private long lastVersionTapTime = 0L;
 
     @Nullable
     @Override
@@ -102,7 +104,23 @@ public class SettingsFragment extends Fragment {
         boolean isUpdateAvailable = AppUpdateHelper.isUpdateKnownAvailable(requireContext());
         binding.tvUpdateBadge.setVisibility(isUpdateAvailable ? View.VISIBLE : View.GONE);
 
-        binding.rowAppVersion.setOnClickListener(v -> checkAndLaunchUpdate());
+        // Version click with secret 5-tap developer trigger for Ad Inspector
+        binding.rowAppVersion.setOnClickListener(v -> {
+            long now = System.currentTimeMillis();
+            if (now - lastVersionTapTime < 600) {
+                versionTapCount++;
+                if (versionTapCount >= 5) {
+                    versionTapCount = 0;
+                    Toast.makeText(requireContext(), "Developer Mode: Opening Ad Inspector…", Toast.LENGTH_SHORT).show();
+                    com.anscanner.app.service.AdCacheManager.openAdInspector(requireContext());
+                    return;
+                }
+            } else {
+                versionTapCount = 1;
+            }
+            lastVersionTapTime = now;
+            checkAndLaunchUpdate();
+        });
     }
 
     private void updateThemeDisplay() {

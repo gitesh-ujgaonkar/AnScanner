@@ -22,6 +22,10 @@ import com.anscanner.app.data.AppDatabase;
 import com.anscanner.app.data.dao.DocumentDao;
 import com.anscanner.app.data.entity.DocumentEntity;
 import com.anscanner.app.databinding.FragmentDocumentListBinding;
+import com.anscanner.app.model.draft.DraftManager;
+import com.anscanner.app.util.HapticHelper;
+import com.google.android.material.snackbar.Snackbar;
+import java.util.Locale;
 import com.anscanner.app.service.FilePropertiesHelper;
 import com.anscanner.app.service.StorageHelper;
 import com.anscanner.app.ui.pdf.MergePdfBottomSheet;
@@ -191,6 +195,15 @@ public class ScannedDocsFragment extends Fragment implements
 
             List<Object> items = new ArrayList<>();
 
+            // Inject active draft at position 0 if present
+            boolean matchDraft = (query == null || query.trim().isEmpty() || "draft".contains(query.trim().toLowerCase(Locale.ROOT)));
+            if (matchDraft && DraftManager.getInstance(appContext).hasActiveDraft()) {
+                DraftManager.DraftSession draft = DraftManager.getInstance(appContext).loadDraft();
+                if (draft != null && !draft.pagePaths.isEmpty()) {
+                    items.add(0, draft);
+                }
+            }
+
             if (query != null && !query.trim().isEmpty()) {
                 List<DocumentEntity> allDocs = filterAndCleanDocs(appContext, documentDao.searchByTitle("%" + query.trim() + "%"));
                 if (!allDocs.isEmpty()) {
@@ -246,6 +259,36 @@ public class ScannedDocsFragment extends Fragment implements
                 }
             });
         });
+    }
+
+    @Override
+    public void onDraftClick(DraftManager.DraftSession draft) {
+        Intent intent = DraftManager.createResumeIntent(requireContext());
+        startActivity(intent);
+    }
+
+    @Override
+    public void onDraftDeleteClick(DraftManager.DraftSession draft) {
+        new MaterialAlertDialogBuilder(requireContext())
+                .setTitle(R.string.draft_confirm_delete_title)
+                .setMessage(R.string.draft_confirm_delete_msg)
+                .setPositiveButton(R.string.action_discard, (dialog, which) -> {
+                    HapticHelper.warningPulse(binding != null ? binding.getRoot() : null);
+                    DraftManager.getInstance(requireContext()).clearDraftAsync(() -> {
+                        if (adapter != null) {
+                            adapter.removeDraftItem();
+                            if (adapter.isEmpty()) {
+                                binding.tvEmptyTitle.setText(R.string.library_empty_title);
+                                binding.tvEmptySubtitle.setText(R.string.library_empty_subtitle);
+                                binding.emptyState.setVisibility(View.VISIBLE);
+                                binding.rvDocuments.setVisibility(View.GONE);
+                            }
+                        }
+                    });
+                    Snackbar.make(binding.getRoot(), R.string.draft_discarded, Snackbar.LENGTH_SHORT).show();
+                })
+                .setNegativeButton(R.string.action_cancel, null)
+                .show();
     }
 
     @Override
@@ -376,6 +419,7 @@ public class ScannedDocsFragment extends Fragment implements
                 .setTitle(getString(R.string.library_delete_permanently_confirm, document.title))
                 .setMessage(R.string.library_delete_permanently_message)
                 .setPositiveButton(R.string.action_delete_permanently, (dialog, which) -> {
+                    HapticHelper.warningPulse(binding != null ? binding.getRoot() : null);
                     deleteDocumentPermanently(document);
                 })
                 .setNegativeButton(R.string.action_cancel, null)

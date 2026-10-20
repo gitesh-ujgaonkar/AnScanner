@@ -38,6 +38,14 @@ public class AnScannerApp extends Application {
         // ── Schedule Background Periodic Update Check Worker ─────────────
         com.anscanner.app.worker.UpdateCheckWorker.schedulePeriodicCheck(this);
 
+        // DO NOT force test mode on this device:
+        // RequestConfiguration.Builder().setTestDeviceIds(...)
+        // ── Initialize Google Mobile Ads & AdCacheManager ───────────────────
+        com.google.android.gms.ads.MobileAds.initialize(this, initializationStatus -> {
+            Log.i(TAG, "Google Mobile Ads initialized");
+            com.anscanner.app.service.AdCacheManager.getInstance().init(this);
+        });
+
         // ── OpenCV Initialized ───────────────────────────────────────────
         Log.i(TAG, "AnScanner Application initialized");
     }

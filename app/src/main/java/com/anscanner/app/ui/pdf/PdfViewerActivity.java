@@ -78,9 +78,12 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Locale;
 import java.util.UUID;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * Production-standard Multi-format Document Viewer Activity supporting PDF and JPG/PNG documents.
@@ -117,6 +120,7 @@ public class PdfViewerActivity extends AppCompatActivity {
     private String documentTitle = "Document";
     private long documentId = -1L;
     private int pageCount = 0;
+    private final ExecutorService viewerExecutor = Executors.newSingleThreadExecutor();
 
     private final ActivityResultLauncher<Intent> organizePagesLauncher =
             registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
@@ -463,13 +467,38 @@ public class PdfViewerActivity extends AppCompatActivity {
             String uriExtra = intent.getStringExtra(EXTRA_PDF_URI);
             String customTitle = intent.getStringExtra(EXTRA_DOCUMENT_TITLE);
 
-            if (Intent.ACTION_VIEW.equals(intent.getAction()) && intent.getData() != null) {
-                resolvedUri = intent.getData();
+            boolean isActionView = Intent.ACTION_VIEW.equals(intent.getAction());
+            boolean isInternal = (getCallingPackage() != null && getCallingPackage().equals(getPackageName()))
+                    || (getPackageName().equals(intent.getPackage()) && !isActionView);
+
+            if (isActionView && intent.getData() != null) {
+                // If launched externally via ACTION_VIEW, strictly use intent.getData()
+                Uri dataUri = intent.getData();
+                if (isSafeUri(dataUri)) {
+                    resolvedUri = dataUri;
+                } else {
+                    Log.w(TAG, "Blocked unsafe file URI in ACTION_VIEW");
+                    showError();
+                    return;
+                }
             } else if (uriExtra != null) {
-                resolvedUri = Uri.parse(uriExtra);
+                Uri parsedUri = Uri.parse(uriExtra);
+                if (isInternal || isSafeUri(parsedUri)) {
+                    resolvedUri = parsedUri;
+                } else {
+                    Log.w(TAG, "Blocked unsafe file URI in EXTRA_PDF_URI");
+                    showError();
+                    return;
+                }
             } else if (pathExtra != null) {
-                resolvedFile = new File(pathExtra);
-                resolvedUri = Uri.fromFile(resolvedFile);
+                if (isInternal) {
+                    resolvedFile = new File(pathExtra);
+                    resolvedUri = Uri.fromFile(resolvedFile);
+                } else {
+                    Log.w(TAG, "Ignored EXTRA_PDF_PATH from unverified external intent");
+                    showError();
+                    return;
+                }
             }
 
             // 2. Resolve document title
@@ -603,7 +632,7 @@ public class PdfViewerActivity extends AppCompatActivity {
 
     private void unlockAndOpenPdf(String password) {
         binding.pbLoading.setVisibility(View.VISIBLE);
-        new Thread(() -> {
+        viewerExecutor.execute(() -> {
             File tempLocked = null;
             try {
                 tempLocked = new File(getCacheDir(), "temp_locked_" + System.currentTimeMillis() + ".pdf");
@@ -655,11 +684,11 @@ public class PdfViewerActivity extends AppCompatActivity {
                     tempLocked.delete();
                 }
             }
-        }).start();
+        });
     }
 
     private void loadImageDocument() {
-        new Thread(() -> {
+        viewerExecutor.execute(() -> {
             try {
                 Bitmap bitmap = null;
                 if (resolvedUri != null) {
@@ -705,7 +734,7 @@ public class PdfViewerActivity extends AppCompatActivity {
                 Log.e(TAG, "Failed to load image document", e);
                 runOnUiThread(this::showError);
             }
-        }).start();
+        });
     }
 
     private void updatePageIndicator(int currentPage) {
@@ -834,7 +863,7 @@ public class PdfViewerActivity extends AppCompatActivity {
             final int initialIndex = binding.pdfView.getCurrentPage();
             binding.pbLoading.setVisibility(View.VISIBLE);
 
-            new Thread(() -> {
+            viewerExecutor.execute(() -> {
                 ArrayList<String> allPages = null;
                 if (resolvedUri != null) {
                     allPages = CropPreviewActivity.extractAllPagesFromPdf(PdfViewerActivity.this, resolvedUri);
@@ -860,7 +889,7 @@ public class PdfViewerActivity extends AppCompatActivity {
                         Toast.makeText(PdfViewerActivity.this, R.string.error_generic, Toast.LENGTH_SHORT).show();
                     }
                 });
-            }).start();
+            });
         } else if (currentImageBitmap != null) {
             String tempPath = CacheManager.saveTempBitmap(
                     this, currentImageBitmap, UUID.randomUUID().toString());
@@ -1096,7 +1125,7 @@ public class PdfViewerActivity extends AppCompatActivity {
     private void extractTextFromPdfPage(int pageIndex) {
         binding.pbLoading.setVisibility(View.VISIBLE);
 
-        new Thread(() -> {
+        viewerExecutor.execute(() -> {
             Bitmap pageBitmap = null;
             ParcelFileDescriptor ocrPfd = null;
             PdfRenderer ocrRenderer = null;
@@ -1148,7 +1177,7 @@ public class PdfViewerActivity extends AppCompatActivity {
                     try { ocrPfd.close(); } catch (Exception ignored) {}
                 }
             }
-        }).start();
+        });
     }
 
     private void extractTextFromImage(Bitmap imageBitmap) {
@@ -1257,12 +1286,60 @@ public class PdfViewerActivity extends AppCompatActivity {
 
         try {
             Uri shareUri = targetUri;
-            if ("file".equalsIgnoreCase(targetUri.getScheme()) && targetUri.getPath() != null) {
+            boolean isFileUri = "file".equalsIgnoreCase(targetUri.getScheme());
+            boolean isNonMediaStoreContent = "content".equalsIgnoreCase(targetUri.getScheme())
+                    && (targetUri.getAuthority() == null || !targetUri.getAuthority().startsWith("media"));
+
+            if (isFileUri || resolvedFile != null || isNonMediaStoreContent) {
+                File shareDir = new File(getCacheDir(), "shared_export");
+                if (!shareDir.exists()) {
+                    shareDir.mkdirs();
+                }
+
+                String shareFileName = (documentTitle != null && !documentTitle.trim().isEmpty())
+                        ? documentTitle.trim() : "shared_document";
+                if (isImageDocument()) {
+                    if (!shareFileName.toLowerCase(Locale.US).endsWith(".jpg")
+                            && !shareFileName.toLowerCase(Locale.US).endsWith(".jpeg")
+                            && !shareFileName.toLowerCase(Locale.US).endsWith(".png")) {
+                        shareFileName += ".jpg";
+                    }
+                } else {
+                    if (!shareFileName.toLowerCase(Locale.US).endsWith(".pdf")) {
+                        shareFileName += ".pdf";
+                    }
+                }
+
+                File destFile = new File(shareDir, shareFileName);
+                if (isFileUri || resolvedFile != null) {
+                    File srcFile = resolvedFile != null ? resolvedFile : new File(targetUri.getPath());
+                    if (!destFile.getAbsolutePath().equals(srcFile.getAbsolutePath())) {
+                        try (InputStream in = new FileInputStream(srcFile);
+                             OutputStream out = new FileOutputStream(destFile)) {
+                            byte[] buf = new byte[8192];
+                            int len;
+                            while ((len = in.read(buf)) > 0) {
+                                out.write(buf, 0, len);
+                            }
+                            out.flush();
+                        }
+                    }
+                } else {
+                    try (InputStream in = getContentResolver().openInputStream(targetUri);
+                         OutputStream out = new FileOutputStream(destFile)) {
+                        if (in != null) {
+                            byte[] buf = new byte[8192];
+                            int len;
+                            while ((len = in.read(buf)) > 0) {
+                                out.write(buf, 0, len);
+                            }
+                            out.flush();
+                        }
+                    }
+                }
+
                 shareUri = androidx.core.content.FileProvider.getUriForFile(
-                        this, getPackageName() + ".provider", new File(targetUri.getPath()));
-            } else if (resolvedFile != null && ("file".equalsIgnoreCase(targetUri.getScheme()) || targetUri.getScheme() == null)) {
-                shareUri = androidx.core.content.FileProvider.getUriForFile(
-                        this, getPackageName() + ".provider", resolvedFile);
+                        this, getPackageName() + ".provider", destFile);
             }
 
             String mimeType = isImageDocument() ? "image/jpeg" : "application/pdf";
@@ -1273,6 +1350,33 @@ public class PdfViewerActivity extends AppCompatActivity {
             Log.e(TAG, "Failed to share document", e);
             Toast.makeText(this, R.string.error_generic, Toast.LENGTH_SHORT).show();
         }
+    }
+
+    /**
+     * Protects against internal path traversal or arbitrary private file access
+     * when URIs are received from third-party or untrusted external intents.
+     */
+    private boolean isSafeUri(Uri uri) {
+        if (uri == null) return false;
+        if ("file".equalsIgnoreCase(uri.getScheme())) {
+            String path = uri.getPath();
+            if (path == null) return false;
+            try {
+                File targetFile = new File(path).getCanonicalFile();
+                File dataDir = getApplicationInfo().dataDir != null ? new File(getApplicationInfo().dataDir).getCanonicalFile() : null;
+                File filesDir = getFilesDir() != null ? getFilesDir().getCanonicalFile() : null;
+                File appPrivateRoot = (dataDir != null) ? dataDir : (filesDir != null ? filesDir.getParentFile() : null);
+
+                if (appPrivateRoot != null && targetFile.getPath().startsWith(appPrivateRoot.getPath())) {
+                    Log.w(TAG, "Blocked access to internal private app path: " + targetFile.getPath());
+                    return false;
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "Failed to resolve canonical path for URI security validation", e);
+                return false;
+            }
+        }
+        return true;
     }
 
     private void showExportImagesDialog() {
@@ -1318,7 +1422,7 @@ public class PdfViewerActivity extends AppCompatActivity {
             final int initialIndex = binding.pdfView.getCurrentPage();
             binding.pbLoading.setVisibility(View.VISIBLE);
 
-            new Thread(() -> {
+            viewerExecutor.execute(() -> {
                 ArrayList<String> allPages = null;
                 if (resolvedUri != null) {
                     allPages = CropPreviewActivity.extractAllPagesFromPdf(PdfViewerActivity.this, resolvedUri);
@@ -1345,7 +1449,7 @@ public class PdfViewerActivity extends AppCompatActivity {
                         Toast.makeText(PdfViewerActivity.this, R.string.error_generic, Toast.LENGTH_SHORT).show();
                     }
                 });
-            }).start();
+            });
         } else if (currentImageBitmap != null) {
             String tempPath = CacheManager.saveTempBitmap(
                     this, currentImageBitmap, UUID.randomUUID().toString());
@@ -1431,6 +1535,9 @@ public class PdfViewerActivity extends AppCompatActivity {
 
     @Override
     protected void onDestroy() {
+        if (viewerExecutor != null && !viewerExecutor.isShutdown()) {
+            viewerExecutor.shutdownNow();
+        }
         if (indicatorHandler != null) {
             indicatorHandler.removeCallbacksAndMessages(null);
         }

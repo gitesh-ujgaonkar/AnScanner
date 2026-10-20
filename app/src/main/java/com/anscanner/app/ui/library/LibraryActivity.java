@@ -127,7 +127,6 @@ public class LibraryActivity extends AppCompatActivity implements MergePdfBottom
         // Prompt user if a crash occurred previously
         CrashManager.checkAndPromptCrashLog(this);
 
-        MobileAds.initialize(this, initializationStatus -> {});
         AdRequest adRequest = new AdRequest.Builder().build();
         binding.adView.loadAd(adRequest);
 
@@ -153,26 +152,6 @@ public class LibraryActivity extends AppCompatActivity implements MergePdfBottom
         super.onResume();
         if (binding.adView != null) {
             binding.adView.resume();
-        }
-        checkDraftBanner();
-    }
-
-    private void checkDraftBanner() {
-        if (binding == null || binding.layoutDraftBanner == null) return;
-        boolean hasDraft = com.anscanner.app.model.draft.DraftManager.hasActiveDraft(this);
-        if (hasDraft) {
-            binding.layoutDraftBanner.getRoot().setVisibility(View.VISIBLE);
-            binding.layoutDraftBanner.btnDraftResume.setOnClickListener(v -> {
-                Intent resumeIntent = com.anscanner.app.model.draft.DraftManager.createResumeIntent(this);
-                startActivity(resumeIntent);
-            });
-            binding.layoutDraftBanner.btnDraftDiscard.setOnClickListener(v -> {
-                com.anscanner.app.model.draft.DraftManager.clearDraft(this);
-                binding.layoutDraftBanner.getRoot().setVisibility(View.GONE);
-                Toast.makeText(this, R.string.draft_discarded, Toast.LENGTH_SHORT).show();
-            });
-        } else {
-            binding.layoutDraftBanner.getRoot().setVisibility(View.GONE);
         }
     }
 

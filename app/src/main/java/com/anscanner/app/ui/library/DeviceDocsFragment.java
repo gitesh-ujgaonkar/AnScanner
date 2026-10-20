@@ -4,7 +4,9 @@ import android.Manifest;
 import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
+import android.provider.MediaStore;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -25,6 +27,7 @@ import com.anscanner.app.data.entity.DocumentEntity;
 import com.anscanner.app.databinding.FragmentDocumentListBinding;
 import com.anscanner.app.service.DevicePdfScanner;
 import com.anscanner.app.service.FilePropertiesHelper;
+import com.anscanner.app.service.PdfThumbnailLoader;
 import com.anscanner.app.service.StorageHelper;
 import com.anscanner.app.ui.pdf.MergePdfBottomSheet;
 import com.anscanner.app.ui.pdf.OrganizePagesActivity;
@@ -40,7 +43,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
- * Tab fragment displaying public PDF documents discovered from the device using MediaStore API.
+ * Tab fragment displaying public PDF documents discovered from the device using MediaStore API
+ * and policy-safe SAF tree folder sync on modern Android (API 33-36).
  * Scoped Storage compliant without MANAGE_EXTERNAL_STORAGE.
  */
 public class DeviceDocsFragment extends Fragment implements
@@ -54,6 +58,7 @@ public class DeviceDocsFragment extends Fragment implements
     private DocumentListAdapter adapter;
     private ExecutorService executor;
     private String currentSearchQuery = "";
+    private boolean userDismissedSyncBanner = false;
 
     private final ActivityResultLauncher<String> requestPermissionLauncher =
             registerForActivityResult(new ActivityResultContracts.RequestPermission(), isGranted -> {
@@ -75,6 +80,30 @@ public class DeviceDocsFragment extends Fragment implements
                     intent.putExtra(PdfViewerActivity.EXTRA_PDF_URI, uri.toString());
                     intent.putExtra(PdfViewerActivity.EXTRA_DOCUMENT_TITLE, StorageHelper.queryFileName(requireContext(), uri));
                     startActivity(intent);
+                }
+            });
+
+    private final ActivityResultLauncher<Intent> syncFolderLauncher =
+            registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
+                if (result.getResultCode() == android.app.Activity.RESULT_OK && result.getData() != null) {
+                    Intent data = result.getData();
+                    Uri treeUri = data.getData();
+                    if (treeUri != null && isAdded()) {
+                        try {
+                            int takeFlags = data.getFlags()
+                                    & (Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+                            requireContext().getContentResolver().takePersistableUriPermission(
+                                    treeUri, takeFlags != 0 ? takeFlags : Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                        } catch (Exception e) {
+                            Log.w(TAG, "Failed taking persistable permission for: " + treeUri, e);
+                        }
+                        DevicePdfScanner.saveSyncedFolderUri(requireContext(), treeUri);
+                        if (binding != null && binding.cardSyncBanner != null) {
+                            binding.cardSyncBanner.setVisibility(View.GONE);
+                        }
+                        loadDevicePdfs(currentSearchQuery);
+                        Toast.makeText(requireContext(), R.string.sync_folder_success, Toast.LENGTH_SHORT).show();
+                    }
                 }
             });
 
@@ -100,6 +129,12 @@ public class DeviceDocsFragment extends Fragment implements
         binding.swipeRefreshLayout.setProgressBackgroundColorSchemeColor(
                 ContextCompat.getColor(requireContext(), R.color.surface_card));
         binding.swipeRefreshLayout.setOnRefreshListener(() -> loadDevicePdfs(currentSearchQuery));
+
+        binding.btnSyncBannerAction.setOnClickListener(v -> launchSyncDownloadsPicker());
+        binding.btnDismissSyncBanner.setOnClickListener(v -> {
+            userDismissedSyncBanner = true;
+            binding.cardSyncBanner.setVisibility(View.GONE);
+        });
 
         binding.btnCloseSelection.setOnClickListener(v -> {
             if (adapter != null) adapter.exitMultiSelect();
@@ -175,6 +210,20 @@ public class DeviceDocsFragment extends Fragment implements
         }
     }
 
+    private void launchSyncDownloadsPicker() {
+        try {
+            Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                intent.putExtra(android.provider.DocumentsContract.EXTRA_INITIAL_URI,
+                        MediaStore.Downloads.EXTERNAL_CONTENT_URI);
+            }
+            syncFolderLauncher.launch(intent);
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to launch folder picker", e);
+            openDocumentPicker();
+        }
+    }
+
     private void showPermissionDeniedState() {
         if (binding == null) return;
         if (binding.swipeRefreshLayout.isRefreshing()) {
@@ -186,9 +235,11 @@ public class DeviceDocsFragment extends Fragment implements
         binding.btnEmptyAction.setVisibility(View.VISIBLE);
         binding.btnEmptyAction.setOnClickListener(v ->
                 requestPermissionLauncher.launch(Manifest.permission.READ_EXTERNAL_STORAGE));
+        binding.btnEmptySecondary.setVisibility(View.GONE);
         binding.emptyState.setVisibility(View.VISIBLE);
         binding.rvDocuments.setVisibility(View.GONE);
         binding.btnBrowseBottom.setVisibility(View.GONE);
+        binding.cardSyncBanner.setVisibility(View.GONE);
     }
 
     private void loadDevicePdfs(String query) {
@@ -216,23 +267,36 @@ public class DeviceDocsFragment extends Fragment implements
                 if (items.isEmpty()) {
                     binding.tvEmptyTitle.setText(R.string.tab_all_device_pdfs);
                     binding.tvEmptySubtitle.setText(R.string.library_empty_device_pdfs);
-                    binding.btnEmptyAction.setText(R.string.action_browse_pdf);
+                    binding.btnEmptyAction.setText(R.string.action_sync_downloads_full);
                     binding.btnEmptyAction.setVisibility(View.VISIBLE);
-                    binding.btnEmptyAction.setOnClickListener(v -> openDocumentPicker());
+                    binding.btnEmptyAction.setOnClickListener(v -> launchSyncDownloadsPicker());
+
+                    binding.btnEmptySecondary.setText(R.string.action_browse_pdf);
+                    binding.btnEmptySecondary.setVisibility(View.VISIBLE);
+                    binding.btnEmptySecondary.setOnClickListener(v -> openDocumentPicker());
+
                     binding.emptyState.setVisibility(View.VISIBLE);
                     binding.rvDocuments.setVisibility(View.GONE);
                     binding.btnBrowseBottom.setVisibility(View.GONE);
+                    binding.cardSyncBanner.setVisibility(View.GONE);
                 } else {
                     binding.emptyState.setVisibility(View.GONE);
                     binding.rvDocuments.setVisibility(View.VISIBLE);
                     binding.btnBrowseBottom.setVisibility(View.VISIBLE);
                     binding.btnBrowseBottom.setOnClickListener(v -> openDocumentPicker());
+
+                    // Show folder sync banner if few items are found and user hasn't synced or dismissed
+                    if (!userDismissedSyncBanner && !DevicePdfScanner.hasSyncedFolder(requireContext()) && pdfList.size() <= 3) {
+                        binding.cardSyncBanner.setVisibility(View.VISIBLE);
+                    } else {
+                        binding.cardSyncBanner.setVisibility(View.GONE);
+                    }
                 }
 
                 // Asynchronously generate thumbnails for any items missing cached thumbnails
                 Context ctx = getContext();
                 if (ctx != null) {
-                    DevicePdfScanner.generateThumbnailsAsync(ctx, pdfList, () -> {
+                    PdfThumbnailLoader.generateThumbnailsAsync(ctx, pdfList, () -> {
                         if (isAdded() && adapter != null) {
                             adapter.notifyDataSetChanged();
                         }
@@ -251,12 +315,18 @@ public class DeviceDocsFragment extends Fragment implements
                 if (adapter.isEmpty()) {
                     binding.tvEmptyTitle.setText(R.string.tab_all_device_pdfs);
                     binding.tvEmptySubtitle.setText(R.string.library_empty_device_pdfs);
-                    binding.btnEmptyAction.setText(R.string.action_browse_pdf);
+                    binding.btnEmptyAction.setText(R.string.action_sync_downloads_full);
                     binding.btnEmptyAction.setVisibility(View.VISIBLE);
-                    binding.btnEmptyAction.setOnClickListener(v -> openDocumentPicker());
+                    binding.btnEmptyAction.setOnClickListener(v -> launchSyncDownloadsPicker());
+
+                    binding.btnEmptySecondary.setText(R.string.action_browse_pdf);
+                    binding.btnEmptySecondary.setVisibility(View.VISIBLE);
+                    binding.btnEmptySecondary.setOnClickListener(v -> openDocumentPicker());
+
                     binding.emptyState.setVisibility(View.VISIBLE);
                     binding.rvDocuments.setVisibility(View.GONE);
                     binding.btnBrowseBottom.setVisibility(View.GONE);
+                    binding.cardSyncBanner.setVisibility(View.GONE);
                 }
             }
         });
@@ -362,6 +432,7 @@ public class DeviceDocsFragment extends Fragment implements
         if (isMultiSelect) {
             binding.cardSelectionBar.setVisibility(View.VISIBLE);
             binding.btnBrowseBottom.setVisibility(View.GONE);
+            binding.cardSyncBanner.setVisibility(View.GONE);
             binding.tvSelectionCount.setText(getString(R.string.selection_count_format, selectedCount));
             binding.btnMergeSelection.setEnabled(selectedCount >= 2);
             binding.btnMergeSelection.setAlpha(selectedCount >= 2 ? 1.0f : 0.5f);
@@ -371,6 +442,9 @@ public class DeviceDocsFragment extends Fragment implements
         } else {
             binding.cardSelectionBar.setVisibility(View.GONE);
             binding.btnMergeSelection.setEnabled(false);
+            if (!userDismissedSyncBanner && !DevicePdfScanner.hasSyncedFolder(requireContext()) && getDocumentCount() <= 3) {
+                binding.cardSyncBanner.setVisibility(View.VISIBLE);
+            }
         }
     }
 
@@ -446,12 +520,18 @@ public class DeviceDocsFragment extends Fragment implements
                 if (adapter.isEmpty() && binding != null) {
                     binding.tvEmptyTitle.setText(R.string.tab_all_device_pdfs);
                     binding.tvEmptySubtitle.setText(R.string.library_empty_device_pdfs);
-                    binding.btnEmptyAction.setText(R.string.action_browse_pdf);
+                    binding.btnEmptyAction.setText(R.string.action_sync_downloads_full);
                     binding.btnEmptyAction.setVisibility(View.VISIBLE);
-                    binding.btnEmptyAction.setOnClickListener(v -> openDocumentPicker());
+                    binding.btnEmptyAction.setOnClickListener(v -> launchSyncDownloadsPicker());
+
+                    binding.btnEmptySecondary.setText(R.string.action_browse_pdf);
+                    binding.btnEmptySecondary.setVisibility(View.VISIBLE);
+                    binding.btnEmptySecondary.setOnClickListener(v -> openDocumentPicker());
+
                     binding.emptyState.setVisibility(View.VISIBLE);
                     binding.rvDocuments.setVisibility(View.GONE);
                     binding.btnBrowseBottom.setVisibility(View.GONE);
+                    binding.cardSyncBanner.setVisibility(View.GONE);
                 }
                 Toast.makeText(requireContext(), R.string.library_deleted_permanently, Toast.LENGTH_SHORT).show();
             });

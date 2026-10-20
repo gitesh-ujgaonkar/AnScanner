@@ -109,18 +109,6 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
 
-    <include
-        android:id="@+id/layoutDraftBanner"
-        layout="@layout/layout_draft_banner"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginHorizontal="@dimen/spacing_lg"
-        android:layout_marginBottom="@dimen/spacing_md"
-        android:visibility="gone"
-        app:layout_constraintBottom_toTopOf="@id/adView"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent" />
-
     <com.google.android.gms.ads.AdView
         android:id="@+id/adView"
         android:layout_width="match_parent"

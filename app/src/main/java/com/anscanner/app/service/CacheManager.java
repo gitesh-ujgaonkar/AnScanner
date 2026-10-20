@@ -37,7 +37,7 @@ public final class CacheManager {
     private static final String THUMBNAILS_DIR = "thumbnails";
 
     /** JPEG compression quality for temporary cache files (0-100) */
-    private static final int TEMP_JPEG_QUALITY = 90;
+    private static final int TEMP_JPEG_QUALITY = 95;
 
     /** JPEG compression quality for thumbnails */
     private static final int THUMBNAIL_JPEG_QUALITY = 75;
@@ -130,7 +130,10 @@ public final class CacheManager {
             Log.e(TAG, "Bitmap file not found: " + filePath);
             return null;
         }
-        return BitmapFactory.decodeFile(filePath);
+        BitmapFactory.Options opts = new BitmapFactory.Options();
+        opts.inSampleSize = 1;
+        opts.inScaled = false;
+        return BitmapFactory.decodeFile(filePath, opts);
     }
 
     /**

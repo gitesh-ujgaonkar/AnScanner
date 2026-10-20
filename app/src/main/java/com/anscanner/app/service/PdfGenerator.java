@@ -467,7 +467,10 @@ public final class PdfGenerator {
      */
     private static Bitmap loadBitmapFromPath(String path) {
         try {
-            return BitmapFactory.decodeFile(path);
+            BitmapFactory.Options opts = new BitmapFactory.Options();
+            opts.inSampleSize = 1;
+            opts.inScaled = false;
+            return BitmapFactory.decodeFile(path, opts);
         } catch (Exception e) {
             Log.e(TAG, "Error loading bitmap from " + path, e);
             return null;

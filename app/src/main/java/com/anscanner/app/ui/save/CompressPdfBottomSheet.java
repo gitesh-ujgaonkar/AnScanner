@@ -23,6 +23,7 @@ import com.anscanner.app.data.entity.DocumentEntity;
 import com.anscanner.app.databinding.BottomSheetCompressPdfBinding;
 import com.anscanner.app.service.PdfGenerator;
 import com.anscanner.app.service.StorageHelper;
+import com.anscanner.app.util.HapticHelper;
 import com.anscanner.app.ui.pdf.PdfViewerActivity;
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment;
 
@@ -263,6 +264,7 @@ public class CompressPdfBottomSheet extends BottomSheetDialogFragment {
 
                     mainHandler.post(() -> {
                         if (!isAdded()) return;
+                        HapticHelper.confirmTap(binding != null ? binding.getRoot() : null);
                         Toast.makeText(appContext, R.string.compress_success, Toast.LENGTH_SHORT).show();
 
                         // Auto-Open: Route directly to internal PdfViewerActivity

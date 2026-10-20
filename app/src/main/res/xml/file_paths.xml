@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths>
-    <files-path name="internal_files" path="." />
-    <cache-path name="internal_cache" path="." />
-    <external-path name="external_storage" path="." />
+    <!-- Temporary sharing cache -->
+    <cache-path name="shared_export" path="shared_export/" />
+    <!-- Public thumbnail and document shares -->
+    <files-path name="export_docs" path="exports/" />
 </paths>

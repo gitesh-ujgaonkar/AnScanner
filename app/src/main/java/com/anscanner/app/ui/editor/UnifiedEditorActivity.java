@@ -48,6 +48,7 @@ import androidx.viewpager2.widget.ViewPager2;
 import com.anscanner.app.R;
 import com.anscanner.app.databinding.ActivityUnifiedEditorBinding;
 import com.anscanner.app.model.draft.DraftManager;
+import com.anscanner.app.util.HapticHelper;
 import com.anscanner.app.model.draft.EditHistoryManager;
 import com.anscanner.app.model.draft.ScanEditState;
 import com.anscanner.app.model.ocr.OcrPage;
@@ -482,6 +483,17 @@ public class UnifiedEditorActivity extends AppCompatActivity {
             viewModel.setAddingPage(isAddingPage);
             viewModel.setFromReview(isFromReview);
 
+            for (int i = 0; i < pagePaths.size(); i++) {
+                EditHistoryManager pageHm = pageHistoryMap.get(i);
+                if (pageHm != null && pageHm.getCurrentState() != null) {
+                    ScanEditState s = pageHm.getCurrentState();
+                    lastRenderedBitmapState.put(i, s);
+                    if (s.getNormalizedCropPoints() != null) {
+                        viewModel.setNormalizedCornersForPage(i, s.getNormalizedCropPoints());
+                    }
+                }
+            }
+
             EditHistoryManager hm = getHistoryManager(pageIndex);
             ScanEditState state = hm.getCurrentState();
             if (state != null) {
@@ -664,6 +676,7 @@ public class UnifiedEditorActivity extends AppCompatActivity {
             }
         }
         restoreLensOverlayState(savedInstanceState);
+        updateUndoButtonState();
     }
 
     private void restoreLensOverlayState(@Nullable Bundle savedInstanceState) {
@@ -2462,6 +2475,7 @@ public class UnifiedEditorActivity extends AppCompatActivity {
                     .setTitle(R.string.review_delete_page_confirm)
                     .setMessage("Deleting this page will discard the document session. Proceed?")
                     .setPositiveButton(R.string.action_delete, (dialog, which) -> {
+                        HapticHelper.warningPulse(binding != null ? binding.getRoot() : null);
                         DraftManager.clearDraft(this);
                         finish();
                     })
@@ -2474,6 +2488,7 @@ public class UnifiedEditorActivity extends AppCompatActivity {
                 .setTitle(getString(R.string.delete_page_confirm_title, pageIndex + 1))
                 .setMessage(R.string.delete_page_confirm_message)
                 .setPositiveButton(R.string.action_delete, (dialog, which) -> {
+                    HapticHelper.warningPulse(binding != null ? binding.getRoot() : null);
                     pagePaths.remove(pageIndex);
                     if (pageIndex < originalPagePaths.size()) {
                         originalPagePaths.remove(pageIndex);
@@ -2747,7 +2762,8 @@ public class UnifiedEditorActivity extends AppCompatActivity {
     }
 
     private void handleExit() {
-        if (!isFromReview && !isAddingPage && hasEdits()) {
+        if (!isFromReview && !isAddingPage && !pagePaths.isEmpty()) {
+            commitAllActiveAnnotations();
             DraftManager.saveDraftSync(this, originalPagePaths, pagePaths, pageHistoryMap, pageIndex, editorMode);
         }
         if (isFromReview || isAddingPage) {
@@ -2768,7 +2784,8 @@ public class UnifiedEditorActivity extends AppCompatActivity {
     @Override
     protected void onPause() {
         super.onPause();
-        if (!isFinishing() && !isAddingPage && !isFromReview && hasEdits()) {
+        if (!isFinishing() && !isAddingPage && !isFromReview && !pagePaths.isEmpty()) {
+            commitAllActiveAnnotations();
             DraftManager.saveDraftAsync(this, originalPagePaths, pagePaths, pageHistoryMap, pageIndex, editorMode);
         }
     }

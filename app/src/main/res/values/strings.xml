@@ -244,6 +244,11 @@
     <string name="permission_grant">Grant Permission</string>
     <string name="permission_open_settings">Open Settings</string>
     <string name="action_browse_pdf">Browse Device PDF</string>
+    <string name="sync_downloads_title">Sync Downloads Folder</string>
+    <string name="sync_downloads_subtitle">Android 13+ restricts background crawling. Sync Downloads for full PDF access.</string>
+    <string name="action_sync_downloads">Sync</string>
+    <string name="action_sync_downloads_full">Sync Downloads Folder</string>
+    <string name="sync_folder_success">Folder synced successfully</string>
 
     <!-- ── File Properties Dialog ───────────────────────────────────── -->
     <string name="action_ok">OK</string>
@@ -373,6 +378,10 @@
     <string name="action_resume">Resume</string>
     <string name="action_discard">Discard</string>
     <string name="draft_discarded">Draft discarded</string>
+    <string name="draft_badge">DRAFT</string>
+    <string name="draft_explanatory_note">Note: This draft will be deleted once you scan a new document</string>
+    <string name="draft_confirm_delete_title">Discard Draft?</string>
+    <string name="draft_confirm_delete_msg">Are you sure you want to discard this draft? Unsaved changes will be lost.</string>
     <string name="cd_redo">Redo</string>
 
     <!-- ── Export as Images ─────────────────────────────────────────── -->
@@ -421,6 +430,11 @@
     <!-- ── Production AdMob IDs ──────────────────────────────────────── -->
     <string name="admob_app_id" translatable="false">ca-app-pub-6921879884284454~7792924137</string>
     <string name="admob_banner_ad_unit_id" translatable="false">ca-app-pub-6921879884284454/8435177106</string>
+    <string name="admob_interstitial_ad_unit_id" translatable="false">ca-app-pub-6921879884284454/8435177106</string>
+    <string name="admob_app_open_ad_unit_id" translatable="false">ca-app-pub-6921879884284454/8435177106</string>
+    <string name="settings_ad_inspector">Ad Inspector</string>
+    <string name="settings_ad_inspector_subtitle">Inspect mediation adapters, bidding &amp; fill rates</string>
+    <string name="ad_inspector_opening">Opening Ad Inspector…</string>
     <!-- ── PDF Tools Suite: Organise, Merge & Split ───────────────────── -->
     <string name="action_organize_pages">Organise Pages</string>
     <string name="organize_pages_title">Organise Pages</string>
